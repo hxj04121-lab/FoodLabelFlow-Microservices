@@ -7,7 +7,8 @@ owner: "M4 Zhu Wenyu"
 github: zhuwenyu04
 reviewer: "M3 Xu Feiyang"
 estimate_md: 5.0
-jira: null
+jira: STCN-14
+jira_subtasks: "STCN-78..STCN-82"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G2-M4.1 Label Workflow extraction: label versions, declarations, validation records, formula projection"

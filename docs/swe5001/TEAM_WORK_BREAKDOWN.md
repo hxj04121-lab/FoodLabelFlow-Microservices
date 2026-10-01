@@ -7,7 +7,7 @@
 > - 课程 Briefing、报告模板、答辩指南
 >
 > **工单**：[`.project-control/work-orders/`](../../.project-control/work-orders/)，G0–G3 共 20 张，和 5006 同格式。scope 里的每一条就是一个 Jira 子任务。
-> **Jira**：项目 `STCN`，每个 Gate 一个 Sprint。
+> **Jira**：项目 [`STCN`](https://hxj04121.atlassian.net/jira/software/projects/STCN/boards/34)，每个 Gate 一个 Sprint。父任务是 STCN-1 到 STCN-20，子任务是 STCN-21 到 STCN-113。
 
 ## 本周必须完成
 
@@ -100,11 +100,11 @@ proposal §6.3 的分工保持不变，本文只补上原来没有写负责人�
 
 | 工单 | 负责人 | md | 一句话 | 评审 | Jira |
 |---|---|---|---|---|---|
-| [G0-M1](../../.project-control/work-orders/G0/M1-baseline-layout-spec-form-contracts.yaml) | Huang | 1.0 | Canvas 组队并提交；基线重跑；定仓库布局、开分支保护；写 Spec/Form 契约和事件 envelope | Cai | – |
-| [G0-M2](../../.project-control/work-orders/G0/M2-compliance-contracts-test-plan.yaml) | Cai | 0.5 | Compliance 契约和 ImpactFinding schema；测试与容量计划（目标提前声明）；统一审一遍契约 | Zhu | – |
-| [G0-M3](../../.project-control/work-orders/G0/M3-ui-flows-gateway-routes.yaml) | Xu | 0.5 | 前端流程和线框图；从消费者角度审契约；Gateway 路由表和 CORS 草案 | Zhu | – |
-| [G0-M4](../../.project-control/work-orders/G0/M4-label-workflow-contracts-realm-design.yaml) | Zhu | 0.5 | LW 契约和 LabelPublished schema；Keycloak realm 设计；存储过程等价性 oracle 清单 | Xu | – |
-| [G0-M5](../../.project-control/work-orders/G0/M5-do-budget-terraform-spike.yaml) | Sun | 2.5 | DO 配额、价格和 USD 150 预算闸；DNS 和 GitHub environments；Terraform 模块在 spike 里验证，建了再毁 | Huang | – |
+| [G0-M1](../../.project-control/work-orders/G0/M1-baseline-layout-spec-form-contracts.yaml) | Huang | 1.0 | Canvas 组队并提交；基线重跑；定仓库布局、开分支保护；写 Spec/Form 契约和事件 envelope | Cai | [STCN-1](https://hxj04121.atlassian.net/browse/STCN-1) |
+| [G0-M2](../../.project-control/work-orders/G0/M2-compliance-contracts-test-plan.yaml) | Cai | 0.5 | Compliance 契约和 ImpactFinding schema；测试与容量计划（目标提前声明）；统一审一遍契约 | Zhu | [STCN-2](https://hxj04121.atlassian.net/browse/STCN-2) |
+| [G0-M3](../../.project-control/work-orders/G0/M3-ui-flows-gateway-routes.yaml) | Xu | 0.5 | 前端流程和线框图；从消费者角度审契约；Gateway 路由表和 CORS 草案 | Zhu | [STCN-3](https://hxj04121.atlassian.net/browse/STCN-3) |
+| [G0-M4](../../.project-control/work-orders/G0/M4-label-workflow-contracts-realm-design.yaml) | Zhu | 0.5 | LW 契约和 LabelPublished schema；Keycloak realm 设计；存储过程等价性 oracle 清单 | Xu | [STCN-4](https://hxj04121.atlassian.net/browse/STCN-4) |
+| [G0-M5](../../.project-control/work-orders/G0/M5-do-budget-terraform-spike.yaml) | Sun | 2.5 | DO 配额、价格和 USD 150 预算闸；DNS 和 GitHub environments；Terraform 模块在 spike 里验证，建了再毁 | Huang | [STCN-5](https://hxj04121.atlassian.net/browse/STCN-5) |
 
 可以先在分支上做 starter 和 Helm 的 spike，等 7 Oct proposal review 之后再合并。
 
@@ -114,11 +114,11 @@ proposal §6.3 的分工保持不变，本文只补上原来没有写负责人�
 
 | 工单 | 负责人 | md | 一句话 | 评审 | Jira |
 |---|---|---|---|---|---|
-| [G1-M1](../../.project-control/work-orders/G1/M1-starter-outbox-skeletons.yaml) | Huang | 3.0 | starter 基础；本地 compose；4 个服务骨架；负向测试工具；outbox 和幂等消费；Testcontainers | Cai | – |
-| [G1-M2](../../.project-control/work-orders/G1/M2-node-pool-helm-compliance-skeleton.yaml) | Cai | 2.0 | compliance 专用 CPU 节点池（与 Sun 结对）；Helm chart 模板；Compliance 骨架；k6 脚本 | Zhu | – |
-| [G1-M3](../../.project-control/work-orders/G1/M3-gateway-react-signin.yaml) | Xu | 2.5 | Spring Cloud Gateway；React 用 code + PKCE 登录；App Platform 静态站点和前端流水线 | Zhu | – |
-| [G1-M4](../../.project-control/work-orders/G1/M4-keycloak-security-module.yaml) | Zhu | 2.5 | Keycloak realm as code 和演示用户；starter 安全模块；realm 导入集群；NetworkPolicy 白名单规格；LW 骨架 | Xu | – |
-| [G1-M5](../../.project-control/work-orders/G1/M5-staging-operators-cicd.yaml) | Sun | 3.5 | apply staging；RabbitMQ 和 Keycloak operator；消息拓扑；Alloy 接 Grafana Cloud；可复用 CI/CD | Huang | – |
+| [G1-M1](../../.project-control/work-orders/G1/M1-starter-outbox-skeletons.yaml) | Huang | 3.0 | starter 基础；本地 compose；4 个服务骨架；负向测试工具；outbox 和幂等消费；Testcontainers | Cai | [STCN-6](https://hxj04121.atlassian.net/browse/STCN-6) |
+| [G1-M2](../../.project-control/work-orders/G1/M2-node-pool-helm-compliance-skeleton.yaml) | Cai | 2.0 | compliance 专用 CPU 节点池（与 Sun 结对）；Helm chart 模板；Compliance 骨架；k6 脚本 | Zhu | [STCN-7](https://hxj04121.atlassian.net/browse/STCN-7) |
+| [G1-M3](../../.project-control/work-orders/G1/M3-gateway-react-signin.yaml) | Xu | 2.5 | Spring Cloud Gateway；React 用 code + PKCE 登录；App Platform 静态站点和前端流水线 | Zhu | [STCN-8](https://hxj04121.atlassian.net/browse/STCN-8) |
+| [G1-M4](../../.project-control/work-orders/G1/M4-keycloak-security-module.yaml) | Zhu | 2.5 | Keycloak realm as code 和演示用户；starter 安全模块；realm 导入集群；NetworkPolicy 白名单规格；LW 骨架 | Xu | [STCN-9](https://hxj04121.atlassian.net/browse/STCN-9) |
+| [G1-M5](../../.project-control/work-orders/G1/M5-staging-operators-cicd.yaml) | Sun | 3.5 | apply staging；RabbitMQ 和 Keycloak operator；消息拓扑；Alloy 接 Grafana Cloud；可复用 CI/CD | Huang | [STCN-10](https://hxj04121.atlassian.net/browse/STCN-10) |
 
 依赖关系：Sun 的集群挡着所有人部署；Zhu 的 Keycloak 挡着 Xu 的登录；Huang 的 starter 挡着各服务骨架。有了本地 compose，开发不必等 staging。
 
@@ -128,11 +128,11 @@ proposal §6.3 的分工保持不变，本文只补上原来没有写负责人�
 
 | 工单 | 负责人 | md | 一句话 | 评审 | Jira |
 |---|---|---|---|---|---|
-| [G2-M1](../../.project-control/work-orders/G2/M1-specification-formulation-org-model.yaml) | Huang | 4.5 | 抽出 Spec 和 Form；组织种子和 BR-11 校验；两个事件的 producer；Formulation 消费者 | Cai | – |
-| [G2-M2](../../.project-control/work-orders/G2/M2-compliance-projections-phase1.yaml) | Cai | 4.0 | 抽出 Compliance（校验接口幂等）；三个投影；重复和过期事件测试；Phase 1（POTENTIAL） | Zhu | – |
-| [G2-M3](../../.project-control/work-orders/G2/M3-review-approval-publication-ui.yaml) | Xu | 3.0 | 审批发布页面经 Gateway 接 LW；按权限显示操作按钮；Playwright | Zhu | – |
-| [G2-M4](../../.project-control/work-orders/G2/M4-label-workflow-procedure-rewrite.yaml) | Zhu | 5.0 | 抽出 LW；3 个存储过程改成本地事务；REST API；校验客户端（2 s、熔断、幂等键）；FormulaPublished 消费者 | Xu（涉及校验契约时加 Cai） | – |
-| [G2-M5](../../.project-control/work-orders/G2/M5-databases-gates-networkpolicy.yaml) | Sun | 2.0 | 每个服务的库、用户和授权；所有门禁转绿；NetworkPolicy；secret 注入；证据绑定；DLQ 告警 | Huang | – |
+| [G2-M1](../../.project-control/work-orders/G2/M1-specification-formulation-org-model.yaml) | Huang | 4.5 | 抽出 Spec 和 Form；组织种子和 BR-11 校验；两个事件的 producer；Formulation 消费者 | Cai | [STCN-11](https://hxj04121.atlassian.net/browse/STCN-11) |
+| [G2-M2](../../.project-control/work-orders/G2/M2-compliance-projections-phase1.yaml) | Cai | 4.0 | 抽出 Compliance（校验接口幂等）；三个投影；重复和过期事件测试；Phase 1（POTENTIAL） | Zhu | [STCN-12](https://hxj04121.atlassian.net/browse/STCN-12) |
+| [G2-M3](../../.project-control/work-orders/G2/M3-review-approval-publication-ui.yaml) | Xu | 3.0 | 审批发布页面经 Gateway 接 LW；按权限显示操作按钮；Playwright | Zhu | [STCN-13](https://hxj04121.atlassian.net/browse/STCN-13) |
+| [G2-M4](../../.project-control/work-orders/G2/M4-label-workflow-procedure-rewrite.yaml) | Zhu | 5.0 | 抽出 LW；3 个存储过程改成本地事务；REST API；校验客户端（2 s、熔断、幂等键）；FormulaPublished 消费者 | Xu（涉及校验契约时加 Cai） | [STCN-14](https://hxj04121.atlassian.net/browse/STCN-14) |
+| [G2-M5](../../.project-control/work-orders/G2/M5-databases-gates-networkpolicy.yaml) | Sun | 2.0 | 每个服务的库、用户和授权；所有门禁转绿；NetworkPolicy；secret 注入；证据绑定；DLQ 告警 | Huang | [STCN-15](https://hxj04121.atlassian.net/browse/STCN-15) |
 
 ### G3 影响分析与证据（17–20 Oct）
 
@@ -140,11 +140,11 @@ proposal §6.3 的分工保持不变，本文只补上原来没有写负责人�
 
 | 工单 | 负责人 | md | 一句话 | 评审 | Jira |
 |---|---|---|---|---|---|
-| [G3-M1](../../.project-control/work-orders/G3/M1-dataset-demo-e2e-progress-report.yaml) | Huang | 1.2 | 压测数据集；soy-lecithin 演示数据；端到端联调；用 Loki 查审计链；进度报告。Should：OTel | Cai | – |
-| [G3-M2](../../.project-control/work-orders/G3/M2-phase2-load-failover.yaml) | Cai | 3.0 | Phase 2（CONFIRMED）；preview 和 inbox API；不可变版本缓存；1 对 3 副本压测；failover；瓶颈分析 | Zhu | – |
-| [G3-M3](../../.project-control/work-orders/G3/M3-impact-inbox-demo-e2e.yaml) | Xu | 3.5 | impact inbox 页面；demo 全路径写成 Playwright。Should：partner client 和 Notification（记录耗时与步骤） | Zhu | – |
-| [G3-M4](../../.project-control/work-orders/G3/M4-equivalence-review-tasks-security.yaml) | Zhu | 1.5 | 补完等价性测试；ImpactFinding → ReviewTask；LabelPublished；staging 安全证据 | Xu | – |
-| [G3-M5](../../.project-control/work-orders/G3/M5-experiment-infra-pipeline-demo.yaml) | Sun | 2.0 | 实验基础设施；演示一次改动走完流水线；监控成本。Should：HPA 和节点自动扩缩、Tempo | Huang | – |
+| [G3-M1](../../.project-control/work-orders/G3/M1-dataset-demo-e2e-progress-report.yaml) | Huang | 1.2 | 压测数据集；soy-lecithin 演示数据；端到端联调；用 Loki 查审计链；进度报告。Should：OTel | Cai | [STCN-16](https://hxj04121.atlassian.net/browse/STCN-16) |
+| [G3-M2](../../.project-control/work-orders/G3/M2-phase2-load-failover.yaml) | Cai | 3.0 | Phase 2（CONFIRMED）；preview 和 inbox API；不可变版本缓存；1 对 3 副本压测；failover；瓶颈分析 | Zhu | [STCN-17](https://hxj04121.atlassian.net/browse/STCN-17) |
+| [G3-M3](../../.project-control/work-orders/G3/M3-impact-inbox-demo-e2e.yaml) | Xu | 3.5 | impact inbox 页面；demo 全路径写成 Playwright。Should：partner client 和 Notification（记录耗时与步骤） | Zhu | [STCN-18](https://hxj04121.atlassian.net/browse/STCN-18) |
+| [G3-M4](../../.project-control/work-orders/G3/M4-equivalence-review-tasks-security.yaml) | Zhu | 1.5 | 补完等价性测试；ImpactFinding → ReviewTask；LabelPublished；staging 安全证据 | Xu | [STCN-19](https://hxj04121.atlassian.net/browse/STCN-19) |
+| [G3-M5](../../.project-control/work-orders/G3/M5-experiment-infra-pipeline-demo.yaml) | Sun | 2.0 | 实验基础设施；演示一次改动走完流水线；监控成本。Should：HPA 和节点自动扩缩、Tempo | Huang | [STCN-20](https://hxj04121.atlassian.net/browse/STCN-20) |
 
 ### Freeze（21–26 Oct）和 Report（27 Oct–16 Nov）
 

@@ -7,7 +7,8 @@ owner: "M5 Sun Huajian"
 github: SHJ-SHJ0128
 reviewer: "M1 Huang Xiangjia"
 estimate_md: 3.5
-jira: null
+jira: STCN-10
+jira_subtasks: "STCN-59..STCN-63"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G1-M5.1 Apply staging with Terraform (VPC, DOKS, Managed MySQL + standby, LB + TLS, DOCR, Spaces)"

@@ -7,7 +7,8 @@ owner: "M3 Xu Feiyang"
 github: codingbychatgpt
 reviewer: "M4 Zhu Wenyu"
 estimate_md: 3.5
-jira: null
+jira: STCN-18
+jira_subtasks: "STCN-101..STCN-104"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G3-M3.1 Impact inbox screen with POTENTIAL/CONFIRMED evidence and version links"

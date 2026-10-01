@@ -7,7 +7,8 @@ owner: "M1 Huang Xiangjia"
 github: hxj04121-lab
 reviewer: "M2 Cai Runchen"
 estimate_md: 3.0
-jira: null
+jira: STCN-6
+jira_subtasks: "STCN-41..STCN-46"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G1-M1.1 Starter base: health/readiness, canonical error envelope, correlation ID, JSON logs, metrics"

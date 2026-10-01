@@ -7,7 +7,8 @@ owner: "M2 Cai Runchen"
 github: rcncai
 reviewer: "M4 Zhu Wenyu"
 estimate_md: 3.0
-jira: null
+jira: STCN-17
+jira_subtasks: "STCN-95..STCN-100"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G3-M2.1 Phase 2: FormulaPublished -> CONFIRMED findings"

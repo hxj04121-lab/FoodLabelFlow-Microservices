@@ -7,7 +7,8 @@ owner: "M4 Zhu Wenyu"
 github: zhuwenyu04
 reviewer: "M3 Xu Feiyang"
 estimate_md: 0.5
-jira: null
+jira: STCN-4
+jira_subtasks: "STCN-33..STCN-36"
 status: READY
 scope:  # one Jira subtask per entry
   - "G0-M4.1 Label Workflow OpenAPI v1 (drafts, validations, submit, decisions, publish)"

@@ -7,7 +7,8 @@ owner: "M3 Xu Feiyang"
 github: codingbychatgpt
 reviewer: "M4 Zhu Wenyu"
 estimate_md: 3.0
-jira: null
+jira: STCN-13
+jira_subtasks: "STCN-74..STCN-77"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G2-M3.1 Draft, validate and submit screens wired to Label Workflow through the gateway"

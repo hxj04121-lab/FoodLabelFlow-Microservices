@@ -7,7 +7,8 @@ owner: "M5 Sun Huajian"
 github: SHJ-SHJ0128
 reviewer: "M1 Huang Xiangjia"
 estimate_md: 2.0
-jira: null
+jira: STCN-20
+jira_subtasks: "STCN-109..STCN-113"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G3-M5.1 Experiment infrastructure: dedicated pool scaling, k6 runner droplet, pod-kill tooling, dashboard export"

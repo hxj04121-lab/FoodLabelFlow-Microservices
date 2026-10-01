@@ -7,7 +7,8 @@ owner: "M1 Huang Xiangjia"
 github: hxj04121-lab
 reviewer: "M2 Cai Runchen"
 estimate_md: 1.2
-jira: null
+jira: STCN-16
+jira_subtasks: "STCN-89..STCN-94"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G3-M1.1 Synthetic load dataset: about 5,000 released formula versions across 20 manufacturers"

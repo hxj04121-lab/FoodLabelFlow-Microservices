@@ -7,7 +7,8 @@ owner: "M5 Sun Huajian"
 github: SHJ-SHJ0128
 reviewer: "M1 Huang Xiangjia"
 estimate_md: 2.0
-jira: null
+jira: STCN-15
+jira_subtasks: "STCN-83..STCN-88"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G2-M5.1 Per-service MySQL databases, users and grants"

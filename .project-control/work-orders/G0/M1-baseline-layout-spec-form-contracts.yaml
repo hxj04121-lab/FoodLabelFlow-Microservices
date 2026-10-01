@@ -7,7 +7,8 @@ owner: "M1 Huang Xiangjia"
 github: hxj04121-lab
 reviewer: "M2 Cai Runchen"
 estimate_md: 1.0
-jira: null
+jira: STCN-1
+jira_subtasks: "STCN-21..STCN-25"
 status: READY
 scope:  # one Jira subtask per entry
   - "G0-M1.1 Canvas team sign-up and proposal submission before 4 Oct"

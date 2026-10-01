@@ -7,7 +7,8 @@ owner: "M3 Xu Feiyang"
 github: codingbychatgpt
 reviewer: "M4 Zhu Wenyu"
 estimate_md: 0.5
-jira: null
+jira: STCN-3
+jira_subtasks: "STCN-30..STCN-32"
 status: READY
 scope:  # one Jira subtask per entry
   - "G0-M3.1 UI flows and wireframes: sign-in, impact inbox, review / approval / publication"

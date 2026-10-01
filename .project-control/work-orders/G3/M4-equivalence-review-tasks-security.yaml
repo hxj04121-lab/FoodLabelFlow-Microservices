@@ -7,7 +7,8 @@ owner: "M4 Zhu Wenyu"
 github: zhuwenyu04
 reviewer: "M3 Xu Feiyang"
 estimate_md: 1.5
-jira: null
+jira: STCN-19
+jira_subtasks: "STCN-105..STCN-108"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G3-M4.1 Complete the equivalence-oracle tests"

@@ -7,7 +7,8 @@ owner: "M4 Zhu Wenyu"
 github: zhuwenyu04
 reviewer: "M3 Xu Feiyang"
 estimate_md: 2.5
-jira: null
+jira: STCN-9
+jira_subtasks: "STCN-54..STCN-58"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G1-M4.1 Keycloak realm as code: roles, organisation mappers, clients, demo users (2 suppliers, 2 manufacturers, maker/checker)"

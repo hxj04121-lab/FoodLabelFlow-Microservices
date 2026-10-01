@@ -7,7 +7,8 @@ owner: "M5 Sun Huajian"
 github: SHJ-SHJ0128
 reviewer: "M1 Huang Xiangjia"
 estimate_md: 2.5
-jira: null
+jira: STCN-5
+jira_subtasks: "STCN-37..STCN-40"
 status: READY
 scope:  # one Jira subtask per entry
   - "G0-M5.1 DigitalOcean quotas, live prices and the USD 150 budget gate"

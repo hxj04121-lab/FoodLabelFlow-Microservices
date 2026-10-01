@@ -7,7 +7,8 @@ owner: "M2 Cai Runchen"
 github: rcncai
 reviewer: "M4 Zhu Wenyu"
 estimate_md: 2.0
-jira: null
+jira: STCN-7
+jira_subtasks: "STCN-47..STCN-50"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G1-M2.1 Dedicated-CPU compliance node pool with M5 (taints, tolerations, topology spread)"
