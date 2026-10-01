@@ -1,0 +1,34 @@
+work_order_id: G0-M5
+story_id: ST-G0-M5
+gate: G0
+window: "2026-10-01..2026-10-07"
+title: "DigitalOcean budget gate and Terraform spike"
+owner: "M5 Sun Huajian"
+github: SHJ-SHJ0128
+reviewer: "M1 Huang Xiangjia"
+estimate_md: 2.5
+jira: null
+status: READY
+scope:  # one Jira subtask per entry
+  - "G0-M5.1 DigitalOcean quotas, live prices and the USD 150 budget gate"
+  - "G0-M5.2 Team domain/DNS and the GitHub environments and secrets plan"
+  - "G0-M5.3 Terraform modules (VPC, DOKS pools, Managed MySQL, Load Balancer, DOCR, Spaces state) proven in a spike"
+  - "G0-M5.4 Create and destroy the spike environment with evidence"
+acceptance_criteria:
+  - "dedicated-CPU node quota confirmed or requested"
+  - "spike created and destroyed by Terraform only; destroy leaves no billable resources"
+  - "modules are reused for the G1 apply without a rewrite"
+required_tests:
+  - "terraform validate and plan in CI"
+architecture_impact: "implements the resource plane of architecture 8"
+db_impact: "none"
+shared_file_domain: "infra/terraform/*"
+base_contract:
+  baseline_tag: "spectrace-cn-baseline-20260926"
+  baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
+  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
+  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
+dependencies: []
+evidence_required: "plan/apply/destroy logs, cost snapshot, quota confirmation"
+human_acceptance: required

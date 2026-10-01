@@ -1,0 +1,35 @@
+work_order_id: G1-M3
+story_id: ST-G1-M3
+gate: G1
+window: "2026-10-08..2026-10-11"
+title: "Spring Cloud Gateway, React sign-in and static site"
+owner: "M3 Xu Feiyang"
+github: codingbychatgpt
+reviewer: "M4 Zhu Wenyu"
+estimate_md: 2.5
+jira: null
+status: PLANNED
+scope:  # one Jira subtask per entry
+  - "G1-M3.1 Spring Cloud Gateway: routes, JWKS validation, CORS, Bucket4j and payload limits, correlation ID"
+  - "G1-M3.2 React sign-in with authorisation code + PKCE and token propagation"
+  - "G1-M3.3 App Platform static site and frontend pipeline"
+acceptance_criteria:
+  - "unauthenticated requests get 401 at the gateway; services still re-check tokens"
+  - "rate limits are documented as per-instance protective limits, not global quotas"
+  - "the signed-in user sees the own organisation and roles from the token"
+  - "the frontend deploys from CI to the App Platform origin"
+required_tests:
+  - "gateway route and JWT tests"
+  - "Playwright sign-in smoke"
+architecture_impact: "north-south edge (architecture 6.1) and the reference consumer"
+db_impact: "none"
+shared_file_domain: "platform/gateway/*, frontend/*"
+base_contract:
+  baseline_tag: "spectrace-cn-baseline-20260926"
+  baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
+  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
+  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
+dependencies: [G0-M3, G1-M4, G1-M5]
+evidence_required: "gateway test report, Playwright trace, staging URL"
+human_acceptance: required

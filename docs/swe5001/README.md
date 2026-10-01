@@ -18,6 +18,10 @@ The [final/](final/) folder holds the final proposal package unchanged, as final
 
 Architecture changes follow §0 of the source-of-truth document: an ADR, a contract update where applicable, and an update to the source of truth.
 
+## Team work breakdown
+
+[TEAM_WORK_BREAKDOWN.md](TEAM_WORK_BREAKDOWN.md) (Chinese) assigns the 50 man-days to the five members (M1–M5, as in SWE5006), with one work order per member per gate in [`.project-control/work-orders/G0…G3/`](../../.project-control/work-orders/), report sections, presentation segments and review pairs. Reviewers are requested automatically through [`.github/CODEOWNERS`](../../.github/CODEOWNERS).
+
 ## Superseded — v2 (kept for history)
 
 The v2 documents below predate the final audit (see `final/README_FINAL.md`, "Final audit changes from the uploaded v2 package"). Do not use them for implementation.

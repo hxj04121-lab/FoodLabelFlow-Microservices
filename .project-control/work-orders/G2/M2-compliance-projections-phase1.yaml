@@ -1,0 +1,37 @@
+work_order_id: G2-M2
+story_id: ST-G2-M2
+gate: G2
+window: "2026-10-12..2026-10-16"
+title: "Compliance service, projections and Phase 1 matching"
+owner: "M2 Cai Runchen"
+github: rcncai
+reviewer: "M4 Zhu Wenyu"
+estimate_md: 4.0
+jira: null
+status: PLANNED
+scope:  # one Jira subtask per entry
+  - "G2-M2.1 Compliance extraction: allergen dictionary, ingredient-to-allergen mappings, rule sets, validation runs"
+  - "G2-M2.2 Idempotent POST /internal/validations"
+  - "G2-M2.3 Specification, formula and label projections with their consumers"
+  - "G2-M2.4 Duplicate and stale event tests"
+  - "G2-M2.5 Phase 1 matcher: SpecificationPublished -> POTENTIAL findings"
+acceptance_criteria:
+  - "a repeated Idempotency-Key returns the stored result"
+  - "UNRESOLVED ingredients yield REVIEW_REQUIRED, never a silent pass (BR-03)"
+  - "Phase 1 never changes a formula (BR-02)"
+required_tests:
+  - "baseline allergen and validation tests ported as equivalence tests"
+  - "projection consumer tests"
+  - "Phase 1 golden tests (soy-lecithin)"
+architecture_impact: "Compliance core domain"
+db_impact: "compliance schema"
+shared_file_domain: "services/compliance/*"
+base_contract:
+  baseline_tag: "spectrace-cn-baseline-20260926"
+  baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
+  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
+  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
+dependencies: [G1-M1, G1-M2, G2-M1]
+evidence_required: "CI run, golden test report"
+human_acceptance: required

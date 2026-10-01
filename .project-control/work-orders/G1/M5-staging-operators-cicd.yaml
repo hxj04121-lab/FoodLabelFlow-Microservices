@@ -1,0 +1,36 @@
+work_order_id: G1-M5
+story_id: ST-G1-M5
+gate: G1
+window: "2026-10-08..2026-10-11"
+title: "Staging apply, operators, message topology, observability and reusable CI/CD"
+owner: "M5 Sun Huajian"
+github: SHJ-SHJ0128
+reviewer: "M1 Huang Xiangjia"
+estimate_md: 3.5
+jira: null
+status: PLANNED
+scope:  # one Jira subtask per entry
+  - "G1-M5.1 Apply staging with Terraform (VPC, DOKS, Managed MySQL + standby, LB + TLS, DOCR, Spaces)"
+  - "G1-M5.2 RabbitMQ Cluster and Keycloak operators"
+  - "G1-M5.3 RabbitMQ topology as code: topic exchange, quorum queues, DLQ, one user per service"
+  - "G1-M5.4 Grafana Alloy to Grafana Cloud with base dashboards"
+  - "G1-M5.5 Reusable CI/CD workflow: build, tests, Sonar, Trivy, OWASP, DOCR push by SHA, helm upgrade, smoke"
+acceptance_criteria:
+  - "G1 exit: CI deploys a skeleton of every service to DOKS"
+  - "no secret in Git; a scoped, expiring DigitalOcean token lives in GitHub environment secrets"
+  - "no continue-on-error on blocking gates"
+required_tests:
+  - "pipeline run on a skeleton change"
+  - "smoke test through the gateway"
+architecture_impact: "resource, delivery and observability planes (architecture 8, 12, 13)"
+db_impact: "managed cluster only; per-service databases follow in G2"
+shared_file_domain: "infra/terraform/*, deploy/operators/*, .github/workflows/*"
+base_contract:
+  baseline_tag: "spectrace-cn-baseline-20260926"
+  baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
+  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
+  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
+dependencies: [G0-M5]
+evidence_required: "apply log, pipeline run, dashboard screenshot"
+human_acceptance: required
