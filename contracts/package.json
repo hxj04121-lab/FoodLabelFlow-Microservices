@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "lint": "spectral lint openapi/compliance.v1.yaml --fail-severity warn",
-    "test": "node test-contracts.mjs --scope http",
-    "check": "npm run check:http && npm run check:events && npm run check:targets",
+    "test": "node test-contracts.mjs",
+    "check": "npm run lint && npm test && npm run check:targets",
     "check:events": "node test-contracts.mjs --scope events",
     "check:http": "npm run lint && node test-contracts.mjs --scope http",
     "check:envelope": "node test-envelope-interface.mjs",
