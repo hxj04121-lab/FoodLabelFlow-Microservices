@@ -1,0 +1,59 @@
+{
+  "eventId": "10000000-0000-4000-8000-000000000004",
+  "eventType": "ImpactFinding.v1",
+  "schemaVersion": 1,
+  "occurredAt": "2026-10-01T08:00:00Z",
+  "producer": "compliance-service",
+  "organisationId": "manufacturer_01",
+  "correlationId": "corr_004",
+  "aggregateId": "finding_004",
+  "aggregateVersion": 1,
+  "payload": {
+    "findingId": "finding_004",
+    "organisationId": "manufacturer_01",
+    "kind": "POTENTIAL",
+    "outcome": "REVIEW_REQUIRED",
+    "requiredAllergens": [
+      "all_soy",
+      "all_wheat"
+    ],
+    "declaredAllergens": [
+      "all_soy",
+      "all_wheat"
+    ],
+    "missingAllergens": [],
+    "unresolvedAllergens": [
+      {
+        "formulaItemId": "item_002",
+        "specificationVersionId": "spec_001_v2",
+        "specComponentId": "component_003",
+        "ingredientId": null,
+        "rawPhrase": "unmapped ingredient",
+        "reason": "UNMAPPED"
+      }
+    ],
+    "specificationChange": {
+      "previous": {
+        "id": "spec_001_v1",
+        "versionNumber": 1
+      },
+      "candidate": {
+        "id": "spec_001_v2",
+        "versionNumber": 2
+      }
+    },
+    "formulaVersion": {
+      "id": "formula_001_v1",
+      "versionNumber": 1
+    },
+    "labelVersion": {
+      "id": "label_001_v1",
+      "versionNumber": 1
+    },
+    "ruleSetVersion": {
+      "id": "rules_us_v1",
+      "versionNumber": 1
+    },
+    "jurisdiction": "US"
+  }
+}
