@@ -1,10 +1,12 @@
-# SpecTrace-CN G0 M2 contracts — STCN-27 review scope
+# SpecTrace-CN G0 M2 contracts — STCN-26 review scope
 
 Owner: RunChen Cai (M2); reviewer: Zhu Wenyu (M4). Parent task: STCN-2.
 
 Input: unmerged [team PR #1](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/1), pinned revision **f6abf4a043b7f587c6e3315f8a2b8b78e7e40b60**. [Source manifest](source-manifest.json) pins the work order and FINAL architecture Git blobs. These source files are not copied or merged. The original consolidated preparation commit **7592ddb17afce1cf6da4471a6e77eeec1230faa2** and its October 1 parent remain preserved in the local preparation branch.
 
 This stage contains [ImpactFinding.v1](events/impact-finding.v1.schema.json), its [payload](events/impact-finding-payload.v1.schema.json), [shared wire types/ApiError](openapi/compliance-types.v1.schema.json) and actual M2 examples. [ADR-G0-M2-001](../docs/swe5001/adr/ADR-G0-M2-001-compliance-contracts.md) remains PROPOSED.
+
+STCN-26 adds the [Compliance OpenAPI](openapi/compliance.v1.yaml) and HTTP examples.
 
 Run `npm ci --ignore-scripts --no-audit --no-fund` and `npm run check` from `contracts/`. Each stage validates every file in its explicitly selected scope; missing required inputs fail. The full suite is enabled in STCN-29 when all deliverables are present.
 
