@@ -6,10 +6,11 @@
   "scripts": {
     "lint": "spectral lint openapi/compliance.v1.yaml --fail-severity warn",
     "test": "node test-contracts.mjs --scope http",
-    "check": "npm run check:http && npm run check:events",
+    "check": "npm run check:http && npm run check:events && npm run check:targets",
     "check:events": "node test-contracts.mjs --scope events",
     "check:http": "npm run lint && node test-contracts.mjs --scope http",
-    "check:envelope": "node test-envelope-interface.mjs"
+    "check:envelope": "node test-envelope-interface.mjs",
+    "check:targets": "node test-capacity-targets.mjs"
   },
   "devDependencies": {
     "@stoplight/spectral-cli": "6.16.3",

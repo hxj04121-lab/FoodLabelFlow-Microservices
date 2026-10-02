@@ -1,4 +1,4 @@
-# SpecTrace-CN G0 M2 contracts — STCN-26 review scope
+# SpecTrace-CN G0 M2 contracts — STCN-28 review scope
 
 Owner: RunChen Cai (M2); reviewer: Zhu Wenyu (M4). Parent task: STCN-2.
 
@@ -7,6 +7,8 @@ Input: unmerged [team PR #1](https://github.com/hxj04121-lab/FoodLabelFlow-Micro
 This stage contains [ImpactFinding.v1](events/impact-finding.v1.schema.json), its [payload](events/impact-finding-payload.v1.schema.json), [shared wire types/ApiError](openapi/compliance-types.v1.schema.json) and actual M2 examples. [ADR-G0-M2-001](../docs/swe5001/adr/ADR-G0-M2-001-compliance-contracts.md) remains PROPOSED.
 
 STCN-26 adds the [Compliance OpenAPI](openapi/compliance.v1.yaml) and HTTP examples.
+
+STCN-28 adds the [capacity/failover plan](../docs/swe5001/test-plan-G0-M2.md) and [predeclared targets](../docs/swe5001/test-plan-G0-M2-targets.v1.json). No runtime measurements are claimed.
 
 Run `npm ci --ignore-scripts --no-audit --no-fund` and `npm run check` from `contracts/`. Each stage validates every file in its explicitly selected scope; missing required inputs fail. The full suite is enabled in STCN-29 when all deliverables are present.
 
