@@ -39,7 +39,7 @@ GitHub Pages (React) → AWS ALB (ACM) → Spring Cloud Gateway → four domain 
 
 - **Windows:** staging runs only during Gate 1 close, Gate 2 close, the Gate 3 experiments and the presentation (about 7 running days). Terraform creates and destroys it each time.
 - **Cost:** about USD 14–16 per running day, about USD 110–140 in total.
-- **Account:** one member's AWS account. Its Free Tier credits (up to USD 200) are used first, and the account pays any remainder. It is upgraded to the Paid plan before Gate 3.
+- **Account:** Sun Huajian's AWS account (M5, who also creates and destroys every window). Its Free Tier credits (up to USD 200) are used first, and the account pays any remainder. It is upgraded to the Paid plan before Gate 3.
 
 ## Locked rules and evidence
 

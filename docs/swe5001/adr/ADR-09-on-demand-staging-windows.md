@@ -20,7 +20,7 @@ Staging exists only during evidence windows. Each window is created by `staging-
 | Gate 3 experiments | ≈ 18–20 Oct | 2–3 days | two-phase flow, 1 vs 3 replica load test, failover, pipeline demo (one window, one account) |
 | Presentation | rehearsal day + presentation day | ~2 days | live demo; destroyed right after |
 
-That is about 7 running days, or about USD 110–140, in one team member's AWS account:
+That is about 7 running days, or about USD 110–140, in Sun Huajian's AWS account (M5):
 
 - The account's Free Tier credits are used first, and the account pays any remainder.
 - AWS Budgets alerts fire at 50 %, 80 % and 100 % of the credits.

@@ -12,7 +12,7 @@ jira_subtasks: "STCN-37..STCN-40"
 status: READY
 scope:  # one Jira subtask per entry
   - "G0-M5.1 AWS budget gate: ap-southeast-1 price snapshot; projected window cost (hourly rates x planned hours + experiment node-hours) vs the account's remaining credits; runs outside the shared CI"
-  - "G0-M5.2 Staging account readiness: Free Tier credit activities, Budgets alerts at 50/80/100 %, EC2 On-Demand vCPU quota >= 16, team domain for ACM, GitHub OIDC trust"
+  - "G0-M5.2 Staging account readiness (Sun's own AWS account): Free Tier credit activities, Budgets alerts at 50/80/100 %, EC2 On-Demand vCPU quota >= 16, team domain for ACM, GitHub OIDC trust"
   - "G0-M5.3 Terraform modules (VPC in 2 AZs with 1 NAT, EKS with general and compliance node groups, RDS Multi-AZ, GitHub OIDC role, ACM, S3 state) proven in a spike"
   - "G0-M5.4 Hands-on Free plan check (EKS, RDS Multi-AZ, ALB) and spike create/destroy with evidence"
 acceptance_criteria:

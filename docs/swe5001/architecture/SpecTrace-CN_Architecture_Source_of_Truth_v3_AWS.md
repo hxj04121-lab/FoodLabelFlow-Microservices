@@ -43,7 +43,7 @@ Recommended repository transition before implementation: create an immutable tag
 |---|---|---|
 | Cloud | DigitalOcean SGP1: DOKS, Managed MySQL, DO Load Balancer, DO Container Registry, App Platform | AWS `ap-southeast-1`: EKS, RDS for MySQL Multi-AZ, ALB + ACM; GitHub Container Registry; GitHub Pages (§8, ADR-08) |
 | Staging lifetime | continuously from Gate 1 to the presentation freeze | on demand: Terraform creates it at Gate 1 and Gate 2 close, for the Gate 3 experiments and for the presentation, and destroys it after each window (§8.3, ADR-09) |
-| Funding | ≈ USD 150 project ceiling | ≈ USD 110–140 in one team member's AWS account; new-account Free Tier credits (≤ USD 200) first, that account pays any remainder (§8.4) |
+| Funding | ≈ USD 150 project ceiling | ≈ USD 110–140 in Sun Huajian's AWS account; new-account Free Tier credits (≤ USD 200) first, that account pays any remainder (§8.4) |
 | Availability claim | no availability zones in SGP1; pod and node resilience only | nodes, RabbitMQ and the RDS standby span two AZs; only pod failure is tested (§10) |
 | CI credential | scoped DigitalOcean API token | GitHub OIDC → scoped IAM role; no long-lived cloud keys (§11) |
 | Scope tiers | Must 46 + Should 4; tracing is Should | Must 47 + Should 3: +1 man-day for AWS add-ons and one-command create/destroy; tracing moves to Could (§14.2) |
@@ -401,7 +401,7 @@ Service-local ACID; cross-service eventual consistency; outbox binds state and e
 
 AWS Asia Pacific (Singapore) `ap-southeast-1` replaces DigitalOcean SGP1 (ADR-08, which supersedes ADR-07). EKS, RDS for MySQL Multi-AZ, the Application Load Balancer and ACM are managed; Spring Cloud Gateway, Keycloak and RabbitMQ still run in-cluster under operators, so the application and open-source platform stack keeps its local Docker Compose equivalents.
 
-Staging is not long-lived (ADR-09). Terraform creates the whole environment for each evidence window and destroys it afterwards; between windows only the Terraform state bucket remains. Staging runs in one team member's AWS account: its new-account Free Tier credits (up to USD 200) cover the windows first, and that account pays any remainder. The account is upgraded to the Paid plan before Gate 3, so exhausting credits cannot suspend it during the experiments or the presentation; remaining credits carry over.
+Staging is not long-lived (ADR-09). Terraform creates the whole environment for each evidence window and destroys it afterwards; between windows only the Terraform state bucket remains. Staging runs in Sun Huajian's AWS account (M5): its new-account Free Tier credits (up to USD 200) cover the windows first, and that account pays any remainder. The account is upgraded to the Paid plan before Gate 3, so exhausting credits cannot suspend it during the experiments or the presentation; remaining credits carry over.
 
 ### 8.2 Capability mapping
 
@@ -696,5 +696,5 @@ Anything not demonstrated is reported as a limitation rather than implied by a d
 | Compliance replica size | 1 vCPU / 2 GiB | Cai |
 | load-test dataset | ≈ 5,000 formula versions, 20 manufacturers | Cai |
 | AWS prices, Free plan access to EKS and RDS Multi-AZ, EC2 vCPU quota | §8.4 list prices; hands-on test in Gate 0 | Sun |
-| Staging account and its Free Tier credits | one member's account, up to USD 200; upgraded to the Paid plan before Gate 3 | account holder |
+| Staging account and its Free Tier credits | Sun Huajian's account, up to USD 200; upgraded to the Paid plan before Gate 3 | Sun |
 | team domain for TLS | ACM certificate; DNS in Route 53 or the existing registrar | Sun |

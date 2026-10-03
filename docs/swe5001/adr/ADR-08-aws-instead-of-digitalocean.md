@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (3 Oct 2026), before Proposal Review
 - **Supersedes:** ADR-07 (DigitalOcean platform decision in FINAL architecture §8.1)
-- **Owners:** Huang Xiangjia (decision), Sun Huajian (implementation)
+- **Owners:** Huang Xiangjia (decision), Sun Huajian (implementation; staging runs in Sun's AWS account)
 - **Related:** [ADR-09](ADR-09-on-demand-staging-windows.md), architecture v3 §8
 
 ## Context
