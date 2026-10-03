@@ -6,9 +6,9 @@ title: "Specification and Formulation services, organisation model and events"
 owner: "M1 Huang Xiangjia"
 github: hxj04121-lab
 reviewer: "M2 Cai Runchen"
-estimate_md: 4.5
+estimate_md: 5.0
 jira: STCN-11
-jira_subtasks: "STCN-64..STCN-68"
+jira_subtasks: "STCN-64..STCN-68, STCN-115"
 status: PLANNED
 scope:  # one Jira subtask per entry
   - "G2-M1.1 Specification service: supplier, material, ingredient vocabulary, specification versions"
@@ -16,6 +16,7 @@ scope:  # one Jira subtask per entry
   - "G2-M1.3 Organisation seed data and BR-11 ownership checks"
   - "G2-M1.4 SpecificationPublished and FormulaPublished producers via the outbox"
   - "G2-M1.5 Formulation consumer of SpecificationPublished"
+  - "G2-M1.6 Seed replay for staging-up: deterministic bootstrap events for organisations, specifications and formulas"
 acceptance_criteria:
   - "no cross-service foreign keys; references are checked against projections (architecture 7.2)"
   - "released versions stay immutable (BR-01); baseline IDs and version numbers are preserved"
@@ -32,8 +33,8 @@ shared_file_domain: "services/specification/*, services/formulation/*"
 base_contract:
   baseline_tag: "spectrace-cn-baseline-20260926"
   baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
-  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
-  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  architecture: "docs/swe5001/architecture/SpecTrace-CN_Architecture_Source_of_Truth_v3_AWS.md"
+  proposal: "docs/swe5001/proposal/01_SpecTrace-CN_SWE5001_Project_Proposal_team16_AWS.docx"
   contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
 dependencies: [G1-M1, G1-M4, G1-M5]
 evidence_required: "CI run, equivalence test report, event samples"

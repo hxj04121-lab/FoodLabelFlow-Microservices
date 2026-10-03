@@ -14,7 +14,7 @@ scope:  # one Jira subtask per entry
   - "G1-M4.1 Keycloak realm as code: roles, organisation mappers, clients, demo users (2 suppliers, 2 manufacturers, maker/checker)"
   - "G1-M4.2 Starter security module: JWT resource server, organisation context, role and organisation guards"
   - "G1-M4.3 Realm import into the cluster with the Keycloak operator"
-  - "G1-M4.4 NetworkPolicy allow-list specification"
+  - "G1-M4.4 NetworkPolicy allow-list specification (enforced by the EKS VPC CNI)"
   - "G1-M4.5 Label Workflow skeleton and Flyway root"
 acceptance_criteria:
   - "access tokens carry org_id, org_type and roles"
@@ -29,8 +29,8 @@ shared_file_domain: "deploy/keycloak/*, platform/starter security package, servi
 base_contract:
   baseline_tag: "spectrace-cn-baseline-20260926"
   baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
-  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
-  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  architecture: "docs/swe5001/architecture/SpecTrace-CN_Architecture_Source_of_Truth_v3_AWS.md"
+  proposal: "docs/swe5001/proposal/01_SpecTrace-CN_SWE5001_Project_Proposal_team16_AWS.docx"
   contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
 dependencies: [G0-M4, G1-M1, G1-M5]
 evidence_required: "realm export, token claim sample, test report"
