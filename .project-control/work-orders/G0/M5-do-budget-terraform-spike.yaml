@@ -11,12 +11,14 @@ jira: STCN-5
 jira_subtasks: "STCN-37..STCN-40"
 status: READY
 scope:  # one Jira subtask per entry
-  - "G0-M5.1 DigitalOcean quotas, live prices and the USD 150 budget gate"
+  - "G0-M5.1 DigitalOcean quotas, live prices and the project-total budget gate (staging window total <= USD 150)"
   - "G0-M5.2 Team domain/DNS and the GitHub environments and secrets plan"
   - "G0-M5.3 Terraform modules (VPC, DOKS pools, Managed MySQL, Load Balancer, DOCR, Spaces state) proven in a spike"
   - "G0-M5.4 Create and destroy the spike environment with evidence"
 acceptance_criteria:
-  - "dedicated-CPU node quota confirmed or requested"
+  - "the budget gate compares the projected total for the time-bounded staging window (hourly rates x planned hours, plus spike and experiment node-hours) with the USD 150 project ceiling (architecture 8.4); the ~USD 200/month list price is informational only, not a monthly cap"
+  - "the budget check runs outside the shared required CI (infra-path-filtered, manual or before terraform apply), so a stale price snapshot cannot turn main red"
+  - "Droplet limit request covers 7 DOKS workers, the k6 runner Droplet and an upgrade surge node (request 10); c-2 availability in SGP1 confirmed with DigitalOcean or requested"
   - "spike created and destroyed by Terraform only; destroy leaves no billable resources"
   - "modules are reused for the G1 apply without a rewrite"
 required_tests:

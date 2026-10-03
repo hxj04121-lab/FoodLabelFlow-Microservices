@@ -13,13 +13,13 @@ status: PLANNED
 scope:  # one Jira subtask per entry
   - "G3-M5.1 Experiment infrastructure: dedicated pool scaling, k6 runner droplet, pod-kill tooling, dashboard export"
   - "G3-M5.2 Pipeline demo: one change delivered end to end"
-  - "G3-M5.3 Cost watch against the USD 150 ceiling"
+  - "G3-M5.3 Cost watch against the USD 150 project ceiling (staging window total)"
   - "G3-M5.4 Should: HPA and node-pool autoscaling run with M2"
   - "G3-M5.5 Should: Tempo tracing backend"
 acceptance_criteria:
   - "k6 runs from a separate host in the same region"
   - "the pipeline demo shows tests, scans, image digest and deployment revision"
-  - "spend stays under the ceiling"
+  - "projected and actual spend for the whole staging window stay under USD 150; staging is destroyed right after the presentation"
 required_tests:
   - "dry run of the failover procedure"
 architecture_impact: "evidence infrastructure"
