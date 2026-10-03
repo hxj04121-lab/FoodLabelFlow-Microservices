@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SpecTrace-CN · G0 UI walkthrough</title>
+  <style>
+    :root { color-scheme: light; --ink:#28283f; --muted:#59586d; --line:#d9d9e2; --paper:#fff; --wash:#f5f5f8; --accent:#5940b1; font-family:'Segoe UI','Microsoft YaHei',sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--wash); font-size:16px; line-height:1.6; }
+    h1,h2,h3,p { margin:0; } h1 { font-size:2rem; line-height:1.2; } h2 { font-size:1.5rem; line-height:1.3; } h3 { font-size:1.1rem; }
+    a { color:var(--accent); text-underline-offset:3px; } a:hover { text-decoration-thickness:2px; }
+    a:focus-visible,summary:focus-visible { outline:3px solid var(--accent); outline-offset:4px; }
+    ::selection { color:#fff; background:var(--accent); }
+    code { font-size:.88em; overflow-wrap:anywhere; } p { max-width:72ch; } p+p { margin-top:12px; }
+    .skip { position:absolute; top:-100px; left:16px; padding:12px; background:#fff; z-index:2; } .skip:focus { top:12px; }
+    header { padding:28px max(24px,calc((100vw - 1120px)/2)); background:#fff; border-bottom:1px solid var(--line); }
+    header p { margin-top:12px; color:var(--muted); }
+    .notice { margin-top:16px; padding:12px 16px; background:var(--wash); border:1px solid var(--line); max-width:72ch; }
+    nav { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:18px; } nav a { font-size:.94rem; }
+    main { max-width:1168px; margin:auto; padding:32px 24px 64px; }
+    .step { margin-bottom:40px; scroll-margin-top:20px; } .step>h2 { margin-bottom:8px; } .step>.context { margin-bottom:18px; }
+    .context,.annotation { color:var(--muted); font-size:.94rem; }
+    .screen { border:1px solid #bfc0cc; background:var(--paper); }
+    .bar { padding:14px 20px; display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; border-bottom:1px solid var(--line); background:#f0f0f5; }
+    .bar strong { font-weight:650; } .bar span { color:var(--muted); font-size:.88rem; }
+    .workspace { display:grid; grid-template-columns:175px minmax(0,1fr); }
+    .rail { padding:22px 16px; border-right:1px solid var(--line); background:#fafafd; font-size:.88rem; }
+    .rail p { margin-bottom:12px; } .rail .selected { color:var(--accent); font-weight:650; }
+    .content { min-width:0; padding:24px; } .content>h3 { margin-bottom:8px; } .content>p { margin-bottom:18px; }
+    .columns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; margin:20px 0; }
+    .columns>div { min-width:0; } .columns h3 { margin-bottom:10px; }
+    .facts { display:grid; grid-template-columns:150px minmax(0,1fr); gap:8px 16px; margin:16px 0; }
+    dt { color:var(--muted); } dd { margin:0; overflow-wrap:anywhere; }
+    .tag { display:inline-block; font-size:.8rem; font-weight:650; padding:2px 8px; border:1px solid #aaaab8; background:var(--wash); margin:2px 4px 2px 0; }
+    .callout { padding:14px 16px; border:1px solid #babac8; background:var(--wash); margin:18px 0; }
+    .callout strong { display:block; margin-bottom:4px; }
+    .actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:20px 0 0; }
+    .action,button { display:inline-block; border:1px solid #9898a9; border-radius:4px; padding:9px 14px; font:inherit; font-size:.94rem; background:#fff; }
+    .action { text-decoration:none; } .action.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .action:hover { background:#f0ebff; color:var(--accent); } .action.primary:hover { background:#443089; color:#fff; }
+    button:disabled { color:#666674; background:#efeff3; border-color:#c1c1cc; cursor:not-allowed; }
+    .table-wrap { overflow-x:auto; margin:16px 0; } table { border-collapse:collapse; width:100%; font-size:.94rem; }
+    caption { text-align:left; font-weight:600; margin-bottom:8px; } th,td { padding:12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; } th { background:var(--wash); font-weight:600; }
+    .table-wrap:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+    .field { padding:10px 12px; margin:6px 0 14px; border:1px solid #bfbfcc; background:#fff; min-height:46px; }
+    .field-label { font-size:.9rem; color:var(--muted); } .annotation { margin-top:12px; max-width:80ch; }
+    details { border-top:1px solid var(--line); padding:16px 0; margin-top:18px; } summary { cursor:pointer; font-weight:600; } details p { margin-top:12px; }
+    .chain { display:flex; flex-wrap:wrap; gap:10px; margin:18px 0; padding:0; list-style:none; } .chain li { padding:8px 12px; border:1px solid #babac8; } .chain li+li::before { content:'→ '; }
+    .subscreen { margin-top:28px; padding-top:24px; border-top:1px solid var(--line); scroll-margin-top:20px; }
+    footer { padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:.94rem; }
+    @media (max-width:700px) { header { padding:24px 20px; } main { padding:24px 16px 40px; } h1 { font-size:1.65rem; } h2 { font-size:1.3rem; } .workspace,.columns { grid-template-columns:minmax(0,1fr); } .rail { border-right:0; border-bottom:1px solid var(--line); padding:12px 16px; display:flex; flex-wrap:wrap; gap:6px 16px; } .rail p { margin:0; } .content { padding:20px 16px; } .facts { grid-template-columns:120px minmax(0,1fr); gap:8px 10px; } th,td { padding:10px; } }
+    @media print { body { background:#fff; font-size:11pt; } header,main { padding:16px 0; } nav,.skip { display:none; } .step { break-before:page; margin:0; } .step:first-child { break-before:auto; } .workspace { grid-template-columns:minmax(0,1fr); } .rail { display:none; } .screen { border-color:#777; } .content { padding:16px; } .columns { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } a { color:#222; } .action.primary { background:#fff; color:#222; border-color:#444; } }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#walkthrough">Skip to walkthrough</a>
+  <header>
+    <h1>SpecTrace-CN UI walkthrough</h1>
+    <p>Sign-in and the seven-step supplier-to-manufacturer demonstration. G0 design for STCN-30 · 3 October 2026.</p>
+    <div class="notice"><strong>Local wireframes · illustrative data.</strong> Links preview the next screen; they do not sign in, publish, approve or call a service. Event delivery and validation outcomes shown here are expected examples, not measured results.</div>
+    <nav aria-label="Demo steps">
+      <a href="#sign-in">Sign-in</a><a href="#step-1">1. Specification</a><a href="#step-2">2. Propagation</a><a href="#step-3">3. Potential impact</a><a href="#step-4">4. Adoption</a><a href="#step-5">5. Confirmed impact</a><a href="#step-6">6. Review & publish</a><a href="#step-7">7. Projection</a>
+    </nav>
+  </header>
+  <main id="walkthrough">
+    <section class="step" id="sign-in" aria-labelledby="sign-in-title">
+      <h2 id="sign-in-title">Sign in to your organisation</h2>
+      <p class="context">Precondition · Keycloak authorization code + PKCE. The organisation and role come from the validated token.</p>
+      <div class="screen">
+        <div class="bar"><strong>SpecTrace-CN</strong><span>Food label workspace</span></div>
+        <div class="content">
+          <h3>Your organisation’s food label workspace</h3>
+          <p>Use your team account to review versioned specifications, assess changes and manage label publication.</p>
+          <div class="actions"><a class="action primary" href="#step-1">Preview supplier workspace</a><a class="action" href="#step-3">Preview manufacturer workspace</a></div>
+          <p class="annotation">Production action: “Continue with Keycloak”. These two links display different wireframes and are not authentication or a permission switch.</p>
+          <details><summary>Sign-in failure and session states</summary><p>Sign-in failed: return to the sign-in page and retry. If organisation information is missing, explain that the account needs configuration. When a session expires, ask the user to sign in again; preserve safe navigation context and avoid silently replaying a write.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="step" id="step-1" data-demo-step="1" aria-labelledby="step-1-title">
+      <h2 id="step-1-title">1. Publish Specification V2</h2>
+      <p class="context">Supplier · publish a new soy-lecithin specification. Released V1 remains unchanged.</p>
+      <div class="screen">
+        <div class="bar"><strong>SpecTrace-CN</strong><span>Demo supplier · Supplier editor</span></div>
+        <div class="workspace">
+          <aside class="rail" aria-label="Supplier screen context"><p>Overview</p><p class="selected">Materials & specs</p></aside>
+          <div class="content">
+            <h3>Soy-lecithin specification</h3><p><span class="tag">V1 · RELEASED</span><span class="tag">V2 · DRAFT</span> New version for the same supplier material.</p>
+            <dl class="facts"><dt>Material</dt><dd>Demo soy-lecithin</dd><dt>Version</dt><dd>demo-spec-v2 · V2</dd><dt>Organisation</dt><dd>Demo supplier</dd><dt>Components</dt><dd>Illustrative revised ingredient composition</dd><dt>Provenance</dt><dd>Supplier revision · source reference awaiting final demo seed</dd></dl>
+            <div class="callout"><strong>Confirm publication</strong>V2 becomes immutable. Manufacturers receive potential impact evidence; their formulas stay on their current versions until they choose to adopt.</div>
+            <div class="actions"><a class="action primary" href="#step-2">Preview V2 publication</a><a class="action" href="#sign-in">Back to sign-in</a></div>
+            <details><summary>Read-only, permission and conflict states</summary><p>Released versions have no edit action. Hide write actions for other organisations and read-only roles. A 403 explains the denied action; a 409 preserves input and requires reloading the version before trying again. Publication failure must not display success.</p></details>
+          </div>
+        </div>
+      </div>
+      <p class="annotation">Contract dependency: M1 Specification create/release and version-detail API. BR-01 immutability and BR-11 ownership.</p>
+    </section>
+
+    <section class="step" id="step-2" data-demo-step="2" aria-labelledby="step-2-title">
+      <h2 id="step-2-title">2. Observe SpecificationPublished propagation</h2>
+      <p class="context">System step · the demonstrator checks logs and the dashboard. The browser does not connect to RabbitMQ.</p>
+      <div class="screen">
+        <div class="bar"><strong>Demo evidence view</strong><span>Expected observation · illustrative identifiers</span></div>
+        <div class="content">
+          <h3>Specification V2 publication evidence</h3>
+          <dl class="facts"><dt>Event</dt><dd>SpecificationPublished.v1</dd><dt>Version</dt><dd>demo-spec-v2 · V2</dd><dt>Correlation ID</dt><dd>demo-spec-change-001</dd><dt>Observed in</dt><dd>Service-local audit, outbox and consumer logs</dd></dl>
+          <ol class="chain" aria-label="Event propagation path"><li>Specification outbox</li><li>RabbitMQ</li><li>Formulation / Compliance projections</li></ol>
+          <div class="callout"><strong>Waiting for projections is a valid state</strong>Keep the existing formula version visible. A publication acknowledgment alone does not prove that every consumer has processed the event.</div>
+          <div class="actions"><a class="action primary" href="#step-3">Preview manufacturer inbox</a></div>
+          <details><summary>Delivery failure evidence</summary><p>Consumer lag or a DLQ alert is investigated using the correlation ID and event ID. Do not assume an empty allergen set when data is missing. A central audit read-model API is outside Must scope.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="step" id="step-3" data-demo-step="3" aria-labelledby="step-3-title">
+      <h2 id="step-3-title">3. Review POTENTIAL impact</h2>
+      <p class="context">Manufacturer · compare the candidate specification against the current released formula and published label.</p>
+      <div class="screen">
+        <div class="bar"><strong>SpecTrace-CN</strong><span>Demo manufacturer · Formula editor</span></div>
+        <div class="workspace">
+          <aside class="rail" aria-label="Manufacturer screen context"><p>Formula versions</p><p>Labels</p><p class="selected">Change impact</p><p>Review workspace</p></aside>
+          <div class="content">
+            <h3>Impact inbox</h3><p><span class="tag">POTENTIAL</span><span class="tag">REVIEW_REQUIRED</span> If the specification is adopted, the allergen conclusion changes.</p>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Impact inbox table"><table><caption>Illustrative finding · no time field assumed</caption><thead><tr><th>Formula</th><th>Specification change</th><th>Missing</th><th>Next action</th></tr></thead><tbody><tr><td>Demo biscuit · V1<br><code>demo-formula-v1</code></td><td>Soy-lecithin V1 → V2</td><td>SOY</td><td><a href="#step-4">Review adoption</a></td></tr></tbody></table></div>
+            <div class="columns"><div><h3>Allergen conclusion</h3><dl class="facts"><dt>Required</dt><dd>WHEAT, SOY</dd><dt>Declared</dt><dd>WHEAT</dd><dt>Missing</dt><dd>SOY</dd><dt>Unresolved</dt><dd>None in this sample</dd></dl></div><div><h3>Version evidence</h3><dl class="facts"><dt>Formula</dt><dd>demo-formula-v1 · V1</dd><dt>Label</dt><dd>demo-label-v1 · V1</dd><dt>Rule set</dt><dd>demo-rules-v1 · V1</dd><dt>Jurisdiction</dt><dd>Demo configured jurisdiction</dd></dl></div></div>
+            <div class="callout"><strong>Your formula has not changed</strong>This is a potential finding. It does not open a review task. Adopting V2 requires a separate manufacturer action.</div>
+            <div class="actions"><a class="action primary" href="#step-4">Preview adoption comparison</a><a class="action" href="#step-1">View candidate specification</a></div>
+            <details><summary>Empty, unresolved and unavailable states</summary><p><strong>Empty:</strong> no findings returned for the current filters; this is not proof of NO_ACTION. Page with the server’s opaque nextCursor.</p><p><strong>UNRESOLVED:</strong> show the raw phrase, component, specification and UNMAPPED/AMBIGUOUS reason. REVIEW_REQUIRED remains in force even when missing is empty.</p><p><strong>422 / loading:</strong> exact projections are not ready; explain the wait and offer refresh. Never replace unavailable declarations with an empty set.</p></details>
+          </div>
+        </div>
+      </div>
+      <p class="annotation">Available candidate contract: GET /api/compliance/impact-findings and /{findingId}. Labels and names need owner API hydration. Filters: kind/outcome; a production filter changes the server query.</p>
+    </section>
+
+    <section class="step" id="step-4" data-demo-step="4" aria-labelledby="step-4-title">
+      <h2 id="step-4-title">4. Explicitly adopt V2 and release a new formula</h2>
+      <p class="context">Manufacturer · review every formula item. Keep the immutable released formula as history.</p>
+      <div class="screen">
+        <div class="bar"><strong>SpecTrace-CN</strong><span>Demo manufacturer · Formula editor</span></div>
+        <div class="content">
+          <h3>Demo biscuit · version comparison</h3><p>Current released formula V1 → candidate new formula V2.</p>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Formula item version comparison"><table><caption>All formula items are included</caption><thead><tr><th>Material</th><th>Current specification</th><th>Candidate specification</th><th>Change</th></tr></thead><tbody><tr><td>Soy-lecithin</td><td>demo-spec-v1 · V1</td><td>demo-spec-v2 · V2</td><td>Adopt</td></tr><tr><td>Demo wheat flour</td><td>demo-flour-v1 · V1</td><td>demo-flour-v1 · V1</td><td>Retain</td></tr></tbody></table></div>
+          <div class="callout"><strong>Confirm formula release</strong>Release a new formula version with the selected specification references. This action triggers confirmed impact analysis; it does not publish a label.</div>
+          <div class="actions"><a class="action primary" href="#step-5">Preview new formula release</a><a class="action" href="#step-3">Return to potential impact</a></div>
+          <details><summary>Adoption cannot be applied</summary><p>If the candidate is not released, belongs to another material or is not visible to the manufacturer, explain the invalid reference. If the current formula changed, reload the comparison. A failed release must leave the existing released version untouched.</p></details>
+        </div>
+      </div>
+      <p class="annotation">Contract dependency: M1 Formulation. Exact create/release paths and conflict token are not yet accepted. BR-02 no silent update; BR-03 aggregate all items.</p>
+    </section>
+
+    <section class="step" id="step-5" data-demo-step="5" aria-labelledby="step-5-title">
+      <h2 id="step-5-title">5. Open the CONFIRMED review task</h2>
+      <p class="context">Manufacturer · a released adopted formula triggers confirmed impact. Label Workflow creates the task from the event.</p>
+      <div class="screen">
+        <div class="bar"><strong>SpecTrace-CN</strong><span>Demo manufacturer · Label editor</span></div>
+        <div class="content">
+          <h3>Confirmed impact · Demo biscuit</h3><p><span class="tag">CONFIRMED</span><span class="tag">REVIEW_REQUIRED</span> Formula V2 is now released; the published label still declares WHEAT only.</p>
+          <dl class="facts"><dt>Formula</dt><dd>demo-formula-v2 · V2</dd><dt>Published label</dt><dd>demo-label-v1 · V1</dd><dt>Required</dt><dd>WHEAT, SOY</dd><dt>Declared</dt><dd>WHEAT</dd><dt>Missing</dt><dd>SOY</dd><dt>Unresolved</dt><dd>None in this sample</dd><dt>Review task</dt><dd>Illustrative ready task: demo-review-001</dd></dl>
+          <div class="actions"><a class="action primary" href="#step-6">Preview label review workspace</a></div>
+          <details><summary>Review task not ready / no action required</summary><p><strong>Pending:</strong> show “The review task is being prepared” until the owning service returns the task. Refresh the task read; do not create it in the browser.</p><p><strong>NO_ACTION:</strong> show the evidence and no review-required action. A confirmed finding alone is not enough to open a review task.</p></details>
+        </div>
+      </div>
+      <p class="annotation">Reads: Compliance finding + LW public ReviewTask contract (pending). The frontend consumes public APIs; it does not subscribe to the broker.</p>
+    </section>
+
+    <section class="step" id="step-6" data-demo-step="6" aria-labelledby="step-6-title">
+      <h2 id="step-6-title">6. Validate, review, approve and publish</h2>
+      <p class="context">Label editor → a different approver → publisher. Every write goes through Label Workflow via the Gateway.</p>
+      <div class="screen">
+        <div class="bar"><strong>SpecTrace-CN</strong><span>Demo manufacturer · Label editor A</span></div>
+        <div class="content">
+          <h3>Label V2 · draft workspace</h3><p><span class="tag">DRAFT</span> Review task demo-review-001. Example snapshot below is already corrected and validated.</p>
+          <div class="columns"><div><h3>Structured declarations</h3><p class="field-label">Contains</p><div class="field">WHEAT · SOY</div><p class="field-label">Ingredient text</p><div class="field">Illustrative ingredient text from the configured formula.</div></div><div><h3>Exact validation snapshot</h3><dl class="facts"><dt>Label / revision</dt><dd>demo-label-v2 · V2 · revision 2</dd><dt>Formula</dt><dd>demo-formula-v2 · V2</dd><dt>Rule set</dt><dd>demo-rules-v1 · V1</dd><dt>Jurisdiction</dt><dd>Demo configured jurisdiction</dd><dt>Validation</dt><dd>PASSED · zero blocking errors</dd></dl></div></div>
+          <div class="callout"><strong>Submit only this validated snapshot</strong>If declarations, draft revision, formula, rule set or jurisdiction change, validate again. A timeout or unavailable projection never counts as PASSED.</div>
+          <div class="actions"><a class="action primary" href="#reviewer">Preview submission and review</a><button disabled aria-describedby="maker-checker">Approve as creator</button></div>
+          <p id="maker-checker" class="annotation">You created this label version. Another authorised user must approve it (BR-06); the service compares creator subject with JWT sub.</p>
+          <details><summary>Validation and submit failures</summary><p><strong>FAILED / UNRESOLVED:</strong> show every blocking finding and component evidence; submission stays unavailable.</p><p><strong>Stale PASSED / 409:</strong> preserve the draft, reload the current revision and rerun validation. <strong>503:</strong> keep the draft and explain that validation is unavailable. A 403 cannot be bypassed with a different local identity header.</p></details>
+          <div class="subscreen" id="reviewer">
+            <h3>Review as approver B</h3><p><span class="tag">PENDING_REVIEW</span> The approver has the required role, belongs to the same organisation and is not creator A.</p>
+            <dl class="facts"><dt>Creator</dt><dd>Demo subject A</dd><dt>Reviewer</dt><dd>Demo subject B</dd><dt>Evidence</dt><dd>Exact PASSED snapshot + changes + structured declarations</dd></dl>
+            <div class="actions"><a class="action primary" href="#publication">Preview APPROVE decision</a><a class="action" href="#changes-state">Preview REQUEST_CHANGES</a><a class="action" href="#rejected-state">Preview REJECT</a></div>
+            <details id="changes-state"><summary>REQUEST_CHANGES outcome</summary><p>Show the decision reason and history, return the version to the editable state defined by the LW contract, and require a fresh exact validation before resubmission. Editing never alters a published version.</p></details>
+            <details id="rejected-state"><summary>REJECT outcome</summary><p>Show REJECTED with the decision reason and history. Publication is unavailable; any future replacement follows the LW contract.</p></details>
+          </div>
+          <div class="subscreen" id="publication">
+            <h3>Publish as an authorised publisher</h3><p><span class="tag">APPROVED</span> Label V2 has an APPROVE decision. Read the latest version before confirming publication.</p>
+            <div class="callout"><strong>Confirm current-label replacement</strong>Publish V2 for this product and jurisdiction. V1 stays in history and is superseded. The owning service atomically publishes, resolves the review task and writes local audit + outbox.</div>
+            <div class="actions"><a class="action primary" href="#step-7">Preview successful publication</a><a class="action" href="#step-5">Return to finding</a></div>
+          </div>
+        </div>
+      </div>
+      <p class="annotation">M4 public contracts pending. The browser never calls POST /internal/validations; LW calls Compliance and stores its local validation record. Exact role codes and post-decision state names remain owner-defined.</p>
+    </section>
+
+    <section class="step" id="step-7" data-demo-step="7" aria-labelledby="step-7-title">
+      <h2 id="step-7-title">7. Observe LabelPublished and the updated projection</h2>
+      <p class="context">Read current publication from Label Workflow. Observe eventual propagation separately from the publication transaction.</p>
+      <div class="screen">
+        <div class="bar"><strong>SpecTrace-CN</strong><span>Demo manufacturer · Published-label view</span></div>
+        <div class="content">
+          <h3>Demo biscuit · current label</h3><p><span class="tag">V2 · PUBLISHED</span><span class="tag">CURRENT</span> Read from the Label Workflow owner.</p>
+          <dl class="facts"><dt>Declarations</dt><dd>WHEAT, SOY</dd><dt>Formula</dt><dd>demo-formula-v2 · V2</dd><dt>Previous label</dt><dd>V1 · superseded, retained in history</dd><dt>Review task</dt><dd>Resolved by the publication transaction</dd></dl>
+          <ol class="chain" aria-label="Label event propagation path"><li>Label Workflow outbox</li><li>LabelPublished.v1</li><li>Compliance label projection</li></ol>
+          <div class="callout"><strong>Keep historical findings intact</strong>First wait for the exact V2 label projection. A later re-evaluation may return NO_ACTION with required WHEAT/SOY, declared WHEAT/SOY, missing empty and unresolved empty. It is a new evaluation, not an in-place rewrite of the original finding.</div>
+          <div class="actions"><a class="action" href="#step-3">Return to inbox wireframe</a><a class="action" href="#sign-in">Restart walkthrough</a></div>
+          <details><summary>Audit, resilience and pipeline demonstration</summary><p>Use event/version/correlation identifiers to reconstruct the local audit chain in logs. Then the team shows the measured scale-out/failover dashboard and CI/CD change. This design does not introduce a central audit API or claim measured performance.</p></details>
+        </div>
+      </div>
+    </section>
+    <footer><p>Local G0 design · Owner: M3 Xu Feiyang · Reviewer: M4 Zhu Wenyu. <a href="README.md">Flow mapping and walkthrough checks</a> · <a href="consumer-contract-review.md">Consumer contract review</a> · <a href="../gateway-routes.md">Gateway routes and CORS draft</a>.</p></footer>
+  </main>
+</body>
+</html>
