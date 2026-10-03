@@ -11,12 +11,12 @@ jira: STCN-7
 jira_subtasks: "STCN-47..STCN-50"
 status: PLANNED
 scope:  # one Jira subtask per entry
-  - "G1-M2.1 Dedicated-CPU compliance node pool with M5 (taints, tolerations, topology spread)"
+  - "G1-M2.1 Compute-optimized compliance node group (c6i.large, 1-4) with M5 (taints, tolerations, spread across 2 AZs)"
   - "G1-M2.2 Helm chart template with probes, resources, NetworkPolicy and HPA stanzas"
   - "G1-M2.3 Compliance service skeleton and Flyway root"
   - "G1-M2.4 k6 open arrival-rate scripts against the impact-preview contract"
 acceptance_criteria:
-  - "Compliance pods schedule only on the dedicated pool with 1 vCPU / 2 GiB limits"
+  - "Compliance pods schedule only on the c6i.large node group with 1 vCPU / 2 GiB limits"
   - "every service deploys from the same chart with values only"
   - "k6 scripts run locally against a stub"
 required_tests:
@@ -28,8 +28,8 @@ shared_file_domain: "deploy/helm/*, services/compliance/*, perf/k6/*"
 base_contract:
   baseline_tag: "spectrace-cn-baseline-20260926"
   baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
-  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
-  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  architecture: "docs/swe5001/architecture/SpecTrace-CN_Architecture_Source_of_Truth_v3_AWS.md"
+  proposal: "docs/swe5001/proposal/01_SpecTrace-CN_SWE5001_Project_Proposal_team16_AWS.docx"
   contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
 dependencies: [G0-M2, G0-M5, G1-M1]
 evidence_required: "helm lint output, pod placement, k6 dry-run output"
