@@ -19,6 +19,11 @@ The AWS deployment figure is redrawn in Gate 0 (G0-M5). Until then, the text top
 
 Architecture changes follow §0 of the source-of-truth document: an ADR, a contract update where applicable, and an update to the source of truth.
 
+## Working rules and evidence
+
+- [REPOSITORY_LAYOUT.md](REPOSITORY_LAYOUT.md): target repository layout, build conventions, branch/PR rules and the intended branch protection (G0-M1.3).
+- [evidence/](evidence/): gate evidence, starting with the [baseline re-run at the frozen tag](evidence/G0-M1-baseline-rerun.md) (G0-M1.2).
+
 ## Team work breakdown
 
 [TEAM_WORK_BREAKDOWN.md](TEAM_WORK_BREAKDOWN.md) (Chinese) is the team's work breakdown. It does the following:
