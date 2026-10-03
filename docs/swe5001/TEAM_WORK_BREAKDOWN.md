@@ -104,7 +104,7 @@ proposal §6.3 的分工保持不变，本文只补上原来没有写负责人�
 | [G0-M2](../../.project-control/work-orders/G0/M2-compliance-contracts-test-plan.yaml) | Cai | 0.5 | Compliance 契约和 ImpactFinding schema；测试与容量计划（目标提前声明）；统一审一遍契约 | Zhu | [STCN-2](https://hxj04121.atlassian.net/browse/STCN-2) |
 | [G0-M3](../../.project-control/work-orders/G0/M3-ui-flows-gateway-routes.yaml) | Xu | 0.5 | 前端流程和线框图；从消费者角度审契约；Gateway 路由表和 CORS 草案 | Zhu | [STCN-3](https://hxj04121.atlassian.net/browse/STCN-3) |
 | [G0-M4](../../.project-control/work-orders/G0/M4-label-workflow-contracts-realm-design.yaml) | Zhu | 0.5 | LW 契约和 LabelPublished schema；Keycloak realm 设计；存储过程等价性 oracle 清单 | Xu | [STCN-4](https://hxj04121.atlassian.net/browse/STCN-4) |
-| [G0-M5](../../.project-control/work-orders/G0/M5-do-budget-terraform-spike.yaml) | Sun | 2.5 | DO 配额、价格和 USD 150 预算闸；DNS 和 GitHub environments；Terraform 模块在 spike 里验证，建了再毁 | Huang | [STCN-5](https://hxj04121.atlassian.net/browse/STCN-5) |
+| [G0-M5](../../.project-control/work-orders/G0/M5-do-budget-terraform-spike.yaml) | Sun | 2.5 | DO 配额、价格和预算闸（staging 窗口总额 ≤ USD 150，不是每月上限）；Droplet 上限申请到 10；DNS 和 GitHub environments；Terraform 模块在 spike 里验证，建了再毁 | Huang | [STCN-5](https://hxj04121.atlassian.net/browse/STCN-5) |
 
 可以先在分支上做 starter 和 Helm 的 spike，等 7 Oct proposal review 之后再合并。
 
