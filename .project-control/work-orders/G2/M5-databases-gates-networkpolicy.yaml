@@ -11,9 +11,9 @@ jira: STCN-15
 jira_subtasks: "STCN-83..STCN-88"
 status: PLANNED
 scope:  # one Jira subtask per entry
-  - "G2-M5.1 Per-service MySQL databases, users and grants"
+  - "G2-M5.1 Per-service databases, users and grants on RDS"
   - "G2-M5.2 All pipeline gates green for every service"
-  - "G2-M5.3 Default-deny NetworkPolicies with allow-lists"
+  - "G2-M5.3 Default-deny NetworkPolicies with allow-lists, plus security groups (ALB 443 only, RDS reachable from nodes only)"
   - "G2-M5.4 Secrets injection from GitHub environments"
   - "G2-M5.5 Evidence bound to commit SHA and image digest"
   - "G2-M5.6 Alerts on DLQ depth and error spikes"
@@ -21,6 +21,7 @@ acceptance_criteria:
   - "each service user can read only its own database"
   - "pods outside the allow-list cannot reach a service"
   - "every deployed image traces back to a commit and a green pipeline"
+  - "the G2-close window is created, used for the gate demo and destroyed"
 required_tests:
   - "cross-schema access denied test"
   - "NetworkPolicy probe"
@@ -31,8 +32,8 @@ shared_file_domain: "infra/*, deploy/*, .github/workflows/*"
 base_contract:
   baseline_tag: "spectrace-cn-baseline-20260926"
   baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
-  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
-  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  architecture: "docs/swe5001/architecture/SpecTrace-CN_Architecture_Source_of_Truth_v3_AWS.md"
+  proposal: "docs/swe5001/proposal/01_SpecTrace-CN_SWE5001_Project_Proposal_team16_AWS.docx"
   contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
 dependencies: [G1-M5]
 evidence_required: "grant listing, NetworkPolicy probe output, evidence index"
