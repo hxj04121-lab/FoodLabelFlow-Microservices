@@ -1,0 +1,39 @@
+work_order_id: G2-M4
+story_id: ST-G2-M4
+gate: G2
+window: "2026-10-12..2026-10-16"
+title: "Label Workflow service and stored-procedure rewrite"
+owner: "M4 Zhu Wenyu"
+github: zhuwenyu04
+reviewer: "M3 Xu Feiyang"
+estimate_md: 5.0
+jira: STCN-14
+jira_subtasks: "STCN-78..STCN-82"
+status: PLANNED
+scope:  # one Jira subtask per entry
+  - "G2-M4.1 Label Workflow extraction: label versions, declarations, validation records, formula projection"
+  - "G2-M4.2 submit / decision / publish as local Java transactions (BR-05, BR-06, BR-08, BR-09)"
+  - "G2-M4.3 Workflow REST API"
+  - "G2-M4.4 Validation client: 2 s timeout, circuit breaker, idempotency key, one retry, fail closed"
+  - "G2-M4.5 FormulaPublished consumer"
+acceptance_criteria:
+  - "publication is atomic and keeps one current label per product and jurisdiction"
+  - "a draft without a PASSED validation record cannot be submitted"
+  - "the equivalence-oracle tests pass against the Java implementation"
+required_tests:
+  - "equivalence tests from the oracle inventory"
+  - "MySQL integration and rollback tests"
+  - "401/403/cross-organisation tests"
+architecture_impact: "Label Workflow bounded context"
+db_impact: "label_workflow schema; product.current_published_label_version_id retired"
+shared_file_domain: "services/label-workflow/*"
+base_contract:
+  baseline_tag: "spectrace-cn-baseline-20260926"
+  baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
+  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
+  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
+dependencies: [G1-M1, G1-M4, G2-M2]
+evidence_required: "CI run, equivalence report"
+note: "Team-authored SWE5006 Sprint 3 code may be ported; cite the upstream-5006 commit SHA in the commit message"
+human_acceptance: required

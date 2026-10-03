@@ -1,0 +1,39 @@
+work_order_id: G2-M5
+story_id: ST-G2-M5
+gate: G2
+window: "2026-10-12..2026-10-16"
+title: "Per-service databases, green gates, NetworkPolicies and evidence binding"
+owner: "M5 Sun Huajian"
+github: SHJ-SHJ0128
+reviewer: "M1 Huang Xiangjia"
+estimate_md: 2.0
+jira: STCN-15
+jira_subtasks: "STCN-83..STCN-88"
+status: PLANNED
+scope:  # one Jira subtask per entry
+  - "G2-M5.1 Per-service MySQL databases, users and grants"
+  - "G2-M5.2 All pipeline gates green for every service"
+  - "G2-M5.3 Default-deny NetworkPolicies with allow-lists"
+  - "G2-M5.4 Secrets injection from GitHub environments"
+  - "G2-M5.5 Evidence bound to commit SHA and image digest"
+  - "G2-M5.6 Alerts on DLQ depth and error spikes"
+acceptance_criteria:
+  - "each service user can read only its own database"
+  - "pods outside the allow-list cannot reach a service"
+  - "every deployed image traces back to a commit and a green pipeline"
+required_tests:
+  - "cross-schema access denied test"
+  - "NetworkPolicy probe"
+  - "staging smoke through the gateway"
+architecture_impact: "security and delivery planes"
+db_impact: "per-service databases and users on the managed cluster"
+shared_file_domain: "infra/*, deploy/*, .github/workflows/*"
+base_contract:
+  baseline_tag: "spectrace-cn-baseline-20260926"
+  baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
+  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
+  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
+dependencies: [G1-M5]
+evidence_required: "grant listing, NetworkPolicy probe output, evidence index"
+human_acceptance: required

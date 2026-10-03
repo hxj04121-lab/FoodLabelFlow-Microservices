@@ -1,0 +1,37 @@
+work_order_id: G0-M2
+story_id: ST-G0-M2
+gate: G0
+window: "2026-10-01..2026-10-07"
+title: "Compliance contracts v1, test and capacity plan, contract review"
+owner: "M2 Cai Runchen"
+github: rcncai
+reviewer: "M4 Zhu Wenyu"
+estimate_md: 0.5
+jira: STCN-2
+jira_subtasks: "STCN-26..STCN-29"
+status: READY
+scope:  # one Jira subtask per entry
+  - "G0-M2.1 Compliance OpenAPI v1 (/internal/validations, impact-previews, impact-findings)"
+  - "G0-M2.2 ImpactFinding.v1 JSON Schema"
+  - "G0-M2.3 Test and capacity plan: SLO, dataset, k6 open arrival-rate method, failover procedure, pre-declared targets"
+  - "G0-M2.4 Contract steward review of all v1 contracts (error envelope, IDs, organisationId, correlationId)"
+acceptance_criteria:
+  - "validation request carries the draft snapshot and an Idempotency-Key (architecture 6.2)"
+  - "ImpactFinding carries kind, outcome, required/declared/missing/unresolved allergens and version references"
+  - "targets are fixed before any measurement: 3 replicas >= 2x 1 replica at p95 <= 2 s and errors < 1%; failover targets per architecture 10"
+  - "every v1 contract uses the canonical error envelope and event envelope"
+required_tests:
+  - "OpenAPI lint"
+  - "JSON Schema validation of example findings"
+architecture_impact: "fixes the Compliance published language and the evidence method"
+db_impact: "none"
+shared_file_domain: "contracts/openapi/compliance*, contracts/events/impact-finding*, docs/swe5001/test-plan*"
+base_contract:
+  baseline_tag: "spectrace-cn-baseline-20260926"
+  baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
+  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
+  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
+dependencies: []
+evidence_required: "merged contract and test-plan PRs, contract review notes"
+human_acceptance: required

@@ -1,0 +1,36 @@
+work_order_id: G0-M4
+story_id: ST-G0-M4
+gate: G0
+window: "2026-10-01..2026-10-07"
+title: "Label Workflow contracts v1, Keycloak realm design and equivalence-oracle inventory"
+owner: "M4 Zhu Wenyu"
+github: zhuwenyu04
+reviewer: "M3 Xu Feiyang"
+estimate_md: 0.5
+jira: STCN-4
+jira_subtasks: "STCN-33..STCN-36"
+status: READY
+scope:  # one Jira subtask per entry
+  - "G0-M4.1 Label Workflow OpenAPI v1 (drafts, validations, submit, decisions, publish)"
+  - "G0-M4.2 LabelPublished.v1 JSON Schema"
+  - "G0-M4.3 Keycloak realm design: roles, org_id/org_type mappers, web (PKCE) and partner clients"
+  - "G0-M4.4 Equivalence-oracle inventory: baseline tests that call the label procedures mapped to target Java transactions"
+acceptance_criteria:
+  - "workflow API covers the BR-05/06/08/09 transitions with explicit error codes"
+  - "every user belongs to exactly one SUPPLIER or MANUFACTURER organisation (BR-11)"
+  - "sp_submit_label_for_review, sp_record_label_decision and sp_publish_label each have their oracle tests listed"
+required_tests:
+  - "OpenAPI lint"
+  - "JSON Schema validation of example events"
+architecture_impact: "fixes the Label Workflow published language and the identity claims"
+db_impact: "none"
+shared_file_domain: "contracts/openapi/label-workflow*, contracts/events/label-published*, docs/swe5001/security/*"
+base_contract:
+  baseline_tag: "spectrace-cn-baseline-20260926"
+  baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
+  architecture: "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md"
+  proposal: "docs/swe5001/final/01_SpecTrace-CN_SWE5001_Project_Proposal_SUBMIT.docx"
+  contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
+dependencies: []
+evidence_required: "merged contract PR, realm design, oracle inventory"
+human_acceptance: required
