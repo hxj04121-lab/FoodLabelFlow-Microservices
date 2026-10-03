@@ -11,3 +11,13 @@ Run `npm ci --ignore-scripts --no-audit --no-fund` and `npm run check` from `con
 The event's local EnvelopeInterface is the M2 consumer expectation from FINAL, not M1's canonical artifact. Run `npm run check:envelope -- --schema <actual M1 contract-relative path>` when M1 provides it. The suggested `events/event-envelope.v1.schema.json` does not exist; absence exits BLOCKED (code 2), never a substitute pass. After owner agreement, replace the local interface reference with the approved shared reference and rerun checks.
 
 Review order: STCN-27 → STCN-26 → STCN-28 → STCN-29. Each dependent PR is stacked on the preceding branch for a focused subtask diff and must be retargeted to main after prerequisites merge. M1 envelope/peer contracts, M4 wire/plan/ADR review, green CI and merged PR evidence remain necessary; no Done or v1 freeze is claimed.
+
+## M1 contracts (G0-M1.4/1.5, STCN-24/25)
+
+Owner: Huang Xiangjia (M1); steward/reviewer: RunChen Cai (M2). Stacked on STCN-27.
+
+- [Canonical event envelope](events/event-envelope.v1.schema.json) at the path proposed in ADR-G0-M2-001 item 5; `check:envelope` now runs against it and accepts every ImpactFinding example.
+- [SpecificationPublished.v1](events/specification-published.v1.schema.json) and [FormulaPublished.v1](events/formula-published.v1.schema.json) with payload schemas and examples in `examples/specification` and `examples/formulation`.
+- [Specification API](openapi/specification.v1.yaml) (`/api/specifications/**`) and [Formulation API](openapi/formulation.v1.yaml) (`/api/formulations/**`), reusing `compliance-types.v1` IDs, VersionReference and ApiError.
+
+Run `npm run check:m1`. It lints both OpenAPI files and checks the envelope, both events (including aggregate/tenant semantics) and the two-phase story against the M2 ImpactFinding examples.

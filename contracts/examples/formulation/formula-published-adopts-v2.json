@@ -1,0 +1,23 @@
+{
+  "eventId": "30000000-0000-4000-8000-000000000002",
+  "eventType": "FormulaPublished.v1",
+  "schemaVersion": 1,
+  "occurredAt": "2026-10-02T03:00:00Z",
+  "producer": "formulation-service",
+  "organisationId": "manufacturer_01",
+  "correlationId": "corr_002",
+  "aggregateId": "prod_001",
+  "aggregateVersion": 2,
+  "payload": {
+    "organisationId": "manufacturer_01",
+    "product": { "productId": "prod_001", "productDescription": "Dark chocolate biscuit" },
+    "formulaVersion": { "id": "formula_001_v2", "versionNumber": 2 },
+    "previousFormulaVersion": { "id": "formula_001_v1", "versionNumber": 1 },
+    "releasedAt": "2026-10-02T03:00:00Z",
+    "items": [
+      { "sequenceNo": 1, "materialId": "mat_001", "specificationVersion": { "id": "spec_001_v2", "versionNumber": 2 }, "quantity": 12.5, "unit": "kg" },
+      { "sequenceNo": 2, "materialId": "mat_002", "specificationVersion": { "id": "spec_002_v1", "versionNumber": 1 }, "quantity": null, "unit": null }
+    ],
+    "provenance": { "provenanceId": "prov_project_seed", "sourceType": "PROJECT_SEEDED" }
+  }
+}

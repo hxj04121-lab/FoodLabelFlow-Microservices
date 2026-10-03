@@ -9,7 +9,9 @@
     "check": "npm run check:events",
     "check:events": "node test-contracts.mjs --scope events",
     "check:http": "npm run lint && node test-contracts.mjs --scope http",
-    "check:envelope": "node test-envelope-interface.mjs"
+    "check:envelope": "node test-envelope-interface.mjs",
+    "lint:m1": "spectral lint openapi/specification.v1.yaml openapi/formulation.v1.yaml --fail-severity warn",
+    "check:m1": "npm run lint:m1 && node test-m1-contracts.mjs"
   },
   "devDependencies": {
     "@stoplight/spectral-cli": "6.16.3",

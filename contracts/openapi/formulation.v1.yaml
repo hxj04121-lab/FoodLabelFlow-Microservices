@@ -1,0 +1,816 @@
+openapi: 3.1.0
+info:
+  title: SpecTrace-CN Formulation API
+  version: 1.0.0
+  description: 'G0-M1.4 (STCN-24) target contract for formulation-service, extracted from the baseline
+    /api/catalog product and formula endpoints. Owner: M1 Huang Xiangjia; contract steward: M2 Cai Runchen.
+    Manufacturer-private data (BR-11). Releases publish FormulaPublished.v1 (../events/formula-published.v1.schema.json).'
+servers:
+- url: http://localhost:8080
+  description: Local contract placeholder; staging exists only during ADR-09 windows.
+tags:
+- name: products
+  description: Manufacturer-owned products.
+- name: released-specifications
+  description: Projection of released supplier specifications.
+- name: formula-versions
+  description: Versioned product formulas.
+security:
+- bearerAuth: []
+paths:
+  /api/formulations/products:
+    get:
+      tags:
+      - products
+      operationId: listProducts
+      summary: List the caller's products.
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
+        get 404.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Product page.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPage'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/formulations/products/{productId}:
+    get:
+      tags:
+      - products
+      operationId: getProduct
+      summary: Read one product and its current formula pointer.
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
+        get 404.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: productId
+        in: path
+        required: true
+        description: Product ID.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      responses:
+        '200':
+          description: Product.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/formulations/products/{productId}/formula-versions:
+    get:
+      tags:
+      - formula-versions
+      operationId: listProductFormulaVersions
+      summary: List a product's formula versions, newest first.
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
+        get 404.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: productId
+        in: path
+        required: true
+        description: Product ID.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Formula version page.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormulaVersionPage'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/formulations/released-specifications:
+    get:
+      tags:
+      - released-specifications
+      operationId: listReleasedSpecifications
+      summary: List released specification versions known to Formulation.
+      description: Reads the local projection fed by SpecificationPublished.v1; it may lag Specification
+        and never substitutes a newer version for a referenced one.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: materialId
+        in: query
+        description: Only versions of this material.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Released specification page.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleasedSpecificationPage'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/formulations/formula-versions:
+    post:
+      tags:
+      - formula-versions
+      operationId: createFormulaDraft
+      summary: Create a draft formula version.
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
+        get 404. Requires FORMULA_AUTHOR. Every item must reference a released, effective specification
+        of the same material in the projection (422 SPECIFICATION_NOT_RELEASED, SPECIFICATION_MATERIAL_MISMATCH,
+        SPECIFICATION_NOT_EFFECTIVE or SPECIFICATION_PROJECTION_UNAVAILABLE). Quantity and unit are both
+        set or both null.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '201':
+          description: Draft created.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormulaVersion'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableReference'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFormulaRequest'
+  /api/formulations/formula-versions/{formulaVersionId}:
+    get:
+      tags:
+      - formula-versions
+      operationId: getFormulaVersion
+      summary: Read one formula version with its items.
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
+        get 404.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: formulaVersionId
+        in: path
+        required: true
+        description: Formula version ID.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      responses:
+        '200':
+          description: Formula version.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormulaVersion'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/formulations/formula-versions/{formulaVersionId}/release:
+    post:
+      tags:
+      - formula-versions
+      operationId: releaseFormulaVersion
+      summary: Release a draft formula and make it the product's current formula.
+      description: 'Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
+        get 404. Requires FORMULA_RELEASER. In one local transaction: the expected current pointer is
+        checked under lock (409 CURRENT_FORMULA_CHANGED), the draft becomes RELEASED and current, the
+        previous current formula stays immutable, local audit is written and FormulaPublished.v1 is added
+        to the outbox (BR-01, BR-02, BR-10). A second release returns 409 VERSION_IMMUTABLE with no writes.'
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: formulaVersionId
+        in: path
+        required: true
+        description: Formula version ID.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      responses:
+        '200':
+          description: Released formula version.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormulaVersion'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableReference'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReleaseFormulaRequest'
+  /api/formulations/formula-versions/{formulaVersionId}/trace:
+    get:
+      tags:
+      - formula-versions
+      operationId: traceFormulaVersion
+      summary: Trace a formula version to the exact specification versions and suppliers it uses.
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
+        get 404.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: formulaVersionId
+        in: path
+        required: true
+        description: Formula version ID.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      responses:
+        '200':
+          description: Formula trace.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormulaTrace'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Keycloak JWT; services re-check roles, org_id and org_type.
+  parameters:
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: true
+      description: Created at the gateway and propagated to the service, audit and outbox event.
+      schema:
+        $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    Limit:
+      name: limit
+      in: query
+      description: Page size.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from the previous page's nextCursor.
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    Product:
+      type: object
+      additionalProperties: false
+      required:
+      - productId
+      - organisationId
+      - productDescription
+      - brandOwner
+      - normalizedCategory
+      - currentFormulaVersion
+      properties:
+        productId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        organisationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        productDescription:
+          type: string
+          minLength: 1
+          maxLength: 600
+        brandOwner:
+          type: string
+          minLength: 1
+          maxLength: 240
+        normalizedCategory:
+          type: string
+          minLength: 1
+          maxLength: 120
+        currentFormulaVersion:
+          oneOf:
+          - $ref: ./compliance-types.v1.schema.json#/$defs/VersionReference
+          - type: 'null'
+    ProductPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - nextCursor
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Product'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    ReleasedSpecification:
+      type: object
+      additionalProperties: false
+      required:
+      - specificationVersion
+      - materialId
+      - supplierId
+      - supplierOrganisationId
+      - effectiveDate
+      - receivedAt
+      properties:
+        specificationVersion:
+          $ref: ./compliance-types.v1.schema.json#/$defs/VersionReference
+        materialId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        supplierId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        supplierOrganisationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        effectiveDate:
+          type: string
+          format: date
+        receivedAt:
+          type: string
+          format: date-time
+          pattern: Z$
+          description: When the projection applied SpecificationPublished.v1; exposes projection lag.
+    ReleasedSpecificationPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - nextCursor
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ReleasedSpecification'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    FormulaItemInput:
+      type: object
+      additionalProperties: false
+      required:
+      - materialId
+      - specificationVersionId
+      - quantity
+      - unit
+      properties:
+        materialId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        specificationVersionId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        quantity:
+          type:
+          - number
+          - 'null'
+          exclusiveMinimum: 0
+          maximum: 99999999.9999
+        unit:
+          type:
+          - string
+          - 'null'
+          minLength: 1
+          maxLength: 40
+      oneOf:
+      - properties:
+          quantity:
+            type: number
+          unit:
+            type: string
+      - properties:
+          quantity:
+            type: 'null'
+          unit:
+            type: 'null'
+    FormulaItem:
+      type: object
+      additionalProperties: false
+      required:
+      - sequenceNo
+      - materialId
+      - specificationVersion
+      - quantity
+      - unit
+      properties:
+        sequenceNo:
+          type: integer
+          minimum: 1
+        materialId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        specificationVersion:
+          $ref: ./compliance-types.v1.schema.json#/$defs/VersionReference
+        quantity:
+          type:
+          - number
+          - 'null'
+          exclusiveMinimum: 0
+        unit:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+    CreateFormulaRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - productId
+      - provenanceId
+      - items
+      properties:
+        productId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        provenanceId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/FormulaItemInput'
+    FormulaVersion:
+      type: object
+      additionalProperties: false
+      required:
+      - formulaVersionId
+      - organisationId
+      - productId
+      - versionNumber
+      - lifecycleStatus
+      - isCurrentReleased
+      - createdBySubject
+      - releasedBySubject
+      - releasedAt
+      - provenanceId
+      - items
+      properties:
+        formulaVersionId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        organisationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        productId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        versionNumber:
+          type: integer
+          minimum: 1
+        lifecycleStatus:
+          type: string
+          enum:
+          - DRAFT
+          - RELEASED
+          - RETIRED
+        isCurrentReleased:
+          type: boolean
+        createdBySubject:
+          type: string
+          minLength: 1
+          maxLength: 255
+        releasedBySubject:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+        releasedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          pattern: Z$
+        provenanceId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/FormulaItem'
+    FormulaVersionPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - nextCursor
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/FormulaVersion'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    ReleaseFormulaRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - expectedCurrentFormulaVersionId
+      properties:
+        expectedCurrentFormulaVersionId:
+          oneOf:
+          - $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          - type: 'null'
+          description: Current formula pointer read from GET product; null only when the product has no
+            released formula.
+    FormulaTrace:
+      type: object
+      additionalProperties: false
+      required:
+      - formulaVersion
+      - productId
+      - items
+      properties:
+        formulaVersion:
+          $ref: ./compliance-types.v1.schema.json#/$defs/VersionReference
+        productId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - sequenceNo
+            - materialId
+            - specificationVersion
+            - supplierId
+            - supplierOrganisationId
+            - effectiveDate
+            properties:
+              sequenceNo:
+                type: integer
+                minimum: 1
+              materialId:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+              specificationVersion:
+                $ref: ./compliance-types.v1.schema.json#/$defs/VersionReference
+              supplierId:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+              supplierOrganisationId:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+              effectiveDate:
+                type: string
+                format: date
+  responses:
+    InvalidRequest:
+      description: Invalid request shape or values (INVALID_REQUEST).
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    AuthenticationRequired:
+      description: Missing or invalid JWT.
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    AuthorizationDenied:
+      description: Missing role or organisation ownership (AUTHORIZATION_DENIED, BR-07/BR-11).
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    ResourceNotFound:
+      description: The resource does not exist or is not visible to the caller's organisation (RESOURCE_NOT_FOUND).
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    RateLimited:
+      description: Protective per-instance rate limit reached.
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    InternalError:
+      description: Unexpected failure without internal details.
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    ServiceUnavailable:
+      description: Service or its database is unavailable; callers must not assume success.
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    Conflict:
+      description: CURRENT_FORMULA_CHANGED (stale expected pointer) or VERSION_IMMUTABLE (release of a
+        non-draft).
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    UnprocessableReference:
+      description: SPECIFICATION_NOT_RELEASED, SPECIFICATION_MATERIAL_MISMATCH, SPECIFICATION_NOT_EFFECTIVE
+        or SPECIFICATION_PROJECTION_UNAVAILABLE; nothing is written.
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
