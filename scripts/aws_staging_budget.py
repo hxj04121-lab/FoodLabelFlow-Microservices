@@ -221,7 +221,7 @@ def main():
     parser.add_argument("--hours", type=Decimal)
     parser.add_argument("--experiment-hours", type=Decimal)
     parser.add_argument("--k6-hours", type=Decimal)
-    parser.add_argument("--available-credit-usd", type=Decimal, default=os.getenv("AVAILABLE_CREDIT_USD"))
+    parser.add_argument("--available-credit-usd", type=Decimal, default=os.getenv("AVAILABLE_CREDIT_USD") or None)
     parser.add_argument("--require-gate", action="store_true", help="fail unless available credit is supplied and the cost fits")
     parser.add_argument("command", nargs="?", choices=("estimate", "quota", "refresh-pricing"), default="estimate")
     args = parser.parse_args()
