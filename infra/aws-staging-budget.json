@@ -1,0 +1,177 @@
+{
+  "schema_version": 3,
+  "project": "SpecTrace-CN SWE5001 staging",
+  "environment": "staging",
+  "region": "ap-southeast-1",
+  "window_defaults": {
+    "hours": 24,
+    "experiment_hours": 4,
+    "k6_hours": 2
+  },
+  "available_credit_usd": null,
+  "resources": {
+    "general_nodes": 3,
+    "compliance_baseline_nodes": 1,
+    "compliance_scaleout_max_nodes": 3,
+    "k6_instance_type": "c6i.large",
+    "rds_class": "db.t3.small",
+    "rds_multi_az": true,
+    "rds_storage_type": "gp3",
+    "rds_gp3_gib": 20
+  },
+  "required_standard_vcpu": 16,
+  "recommended_standard_vcpu": 20,
+  "quota_note": "t3.medium, c6i.large compliance, and c6i.large k6 use Running On-Demand Standard instances. Required maximum is 16 vCPU; recommended quota request is 20 vCPU. Account-applied quota evidence belongs to STCN-38.",
+  "assumptions": {
+    "alb_lcu_hours_per_window_hour": 1,
+    "alb_lcu_note": "Assume 1 billed Application Load Balancer LCU for each planned staging hour; calibrate with STCN-40 Cost Explorer usage.",
+    "nat_data_gib_per_hour": 0.5,
+    "nat_data_note": "Assume 0.5 GiB processed by NAT per deployment hour; calibrate after STCN-40.",
+    "s3_state_gib": 1,
+    "s3_note": "Assume 1 GiB of S3 Standard Terraform state storage for the planned window; request charges are excluded.",
+    "internet_egress_gib_per_hour": 0.5,
+    "internet_egress_usd_per_gib_assumption": "0.12",
+    "internet_egress_source_url": "https://aws.amazon.com/ec2/pricing/on-demand/",
+    "internet_egress_note": "Assume 0.5 GiB outbound per deployment hour at USD 0.12/GiB as a conservative planning rate based on AWS data transfer pricing; validate the applicable tier and calibrate after STCN-40.",
+    "public_ipv4_address_count": 3,
+    "ebs_gib_per_node": 20,
+    "volume_note": "Assume one 20 GiB gp3 root volume per EC2 node, including compliance scale-out and k6."
+  },
+  "pricing_source": "AWS Price List Bulk API regional CSV files; public HTTPS retrieval, no AWS credentials required.",
+  "pricing_max_age_hours": 168,
+  "pricing_retrieved_at": "2026-10-04T13:08:50+00:00",
+  "prices": {
+    "alb-application-hour": {
+      "service": "AWSELB",
+      "product": "$0.0252 per Application LoadBalancer-hour (or partial hour)",
+      "sku": "UXD3JNG6UAM79CW6",
+      "region": "ap-southeast-1",
+      "unit": "Hrs",
+      "price_usd": "0.0252000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSELB/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:45+00:00"
+    },
+    "alb-application-lcu-hour": {
+      "service": "AWSELB",
+      "product": "$0.008 per used Application load balancer capacity unit-hour (or partial hour)",
+      "sku": "45KY3J5YX2QM6KS7",
+      "region": "ap-southeast-1",
+      "unit": "LCU-Hrs",
+      "price_usd": "0.0080000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSELB/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:45+00:00"
+    },
+    "ec2-t3-medium-linux-hour": {
+      "service": "AmazonEC2",
+      "product": "$0.0528 per On Demand Linux t3.medium Instance Hour",
+      "sku": "USWP83ASNCY4BSQF",
+      "region": "ap-southeast-1",
+      "unit": "Hrs",
+      "price_usd": "0.0528000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:48+00:00"
+    },
+    "ec2-c6i-large-linux-hour": {
+      "service": "AmazonEC2",
+      "product": "$0.098 per On Demand Linux c6i.large Instance Hour",
+      "sku": "UPYXX6A6MGP4W9X7",
+      "region": "ap-southeast-1",
+      "unit": "Hrs",
+      "price_usd": "0.0980000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:48+00:00"
+    },
+    "ebs-gp3-gib-month": {
+      "service": "AmazonEC2",
+      "product": "$0.096 per GB-month of General Purpose (gp3) provisioned storage - Asia Pacific (Singapore)",
+      "sku": "X8SY8CJFS8WV7VQN",
+      "region": "ap-southeast-1",
+      "unit": "GB-Mo",
+      "price_usd": "0.0960000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:48+00:00"
+    },
+    "nat-gateway-hour": {
+      "service": "AmazonEC2",
+      "product": "$0.059 per NAT Gateway Hour",
+      "sku": "98TA3WPUP3A4AH4Y",
+      "region": "ap-southeast-1",
+      "unit": "Hrs",
+      "price_usd": "0.0590000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:48+00:00"
+    },
+    "nat-data-gib": {
+      "service": "AmazonEC2",
+      "product": "$0.059 per GB Data Processed by NAT Gateways",
+      "sku": "E9U985ZGMWKXKT47",
+      "region": "ap-southeast-1",
+      "unit": "GB",
+      "price_usd": "0.0590000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:48+00:00"
+    },
+    "eks-standard-cluster-hour": {
+      "service": "AmazonEKS",
+      "product": "Amazon EKS cluster usage in Asia Pacific (Singapore)",
+      "sku": "FCCKZFRYQFAGPWQN",
+      "region": "ap-southeast-1",
+      "unit": "Hours",
+      "price_usd": "0.1000000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEKS/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:49+00:00"
+    },
+    "rds-mysql-db-t3-small-multi-az-hour": {
+      "service": "AmazonRDS",
+      "product": "USD 0.104 per db.t3.small Multi-AZ instance hour (or partial hour) running MySQL",
+      "sku": "2WYUG2VKMU9X3N37",
+      "region": "ap-southeast-1",
+      "unit": "Hrs",
+      "price_usd": "0.1040000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:49+00:00"
+    },
+    "rds-mysql-gp3-multi-az-gib-month": {
+      "service": "AmazonRDS",
+      "product": "$0.276 per GB-month of provisioned GP3 storage for Multi-AZ deployments running MySQL",
+      "sku": "W5CHCRSKW24CVYPR",
+      "region": "ap-southeast-1",
+      "unit": "GB-Mo",
+      "price_usd": "0.2760000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:49+00:00"
+    },
+    "s3-standard-gib-month": {
+      "service": "AmazonS3",
+      "product": "$0.025 per GB - first 50 TB / month of storage used",
+      "sku": "M6MTARCQFUQBQ2V3",
+      "region": "ap-southeast-1",
+      "unit": "GB-Mo",
+      "price_usd": "0.0250000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:50+00:00"
+    },
+    "public-ipv4-hour": {
+      "service": "AmazonVPC",
+      "product": "$0.005 per In-use public IPv4 address per hour",
+      "sku": "C8D8VMQRDHMB9KRU",
+      "region": "ap-southeast-1",
+      "unit": "Hrs",
+      "price_usd": "0.0050000000",
+      "currency": "USD",
+      "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonVPC/current/ap-southeast-1/index.csv",
+      "retrieved_at": "2026-10-04T13:08:50+00:00"
+    }
+  }
+}
