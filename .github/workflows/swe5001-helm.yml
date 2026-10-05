@@ -1,0 +1,30 @@
+name: SWE5001 Helm template
+on:
+  pull_request:
+    paths: ['deploy/helm/**', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/swe5001-helm.yml']
+  push:
+    branches: ['feature/stcn-48-*']
+    paths: ['deploy/helm/**', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/swe5001-helm.yml']
+permissions:
+  contents: read
+jobs:
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: deploy/helm/package-lock.json
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.0
+      - name: Lint and test shared chart locally
+        working-directory: deploy/helm
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: helm-template-evidence
+          path: deploy/helm/.evidence/

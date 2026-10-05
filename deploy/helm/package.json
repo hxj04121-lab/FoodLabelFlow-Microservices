@@ -1,0 +1,7 @@
+{
+  "name": "spectrace-cn-helm-checks",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node test-templates.mjs"},
+  "devDependencies": {"yaml": "2.9.1"}
+}

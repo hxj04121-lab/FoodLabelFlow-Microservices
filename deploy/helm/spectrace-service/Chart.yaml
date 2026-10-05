@@ -1,0 +1,7 @@
+apiVersion: v2
+name: spectrace-service
+description: Shared SpecTrace-CN service template for G1 local review
+type: application
+version: 0.1.0
+appVersion: "0.0.0"
+kubeVersion: ">=1.30.0-0"

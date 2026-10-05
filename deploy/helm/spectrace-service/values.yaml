@@ -1,0 +1,36 @@
+serviceName: example
+replicaCount: 1
+image:
+  repository: example.invalid/spectrace/service
+  tag: replace-with-commit-sha
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+containerPort: 8080
+service:
+  port: 8080
+resources:
+  requests: {cpu: "100m", memory: "256Mi"}
+  limits: {cpu: "500m", memory: "512Mi"}
+nodeSelector:
+  eks.amazonaws.com/nodegroup: general
+tolerations: []
+spread:
+  enabled: true
+  minimumZones: 2
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 60
+probes:
+  readinessPath: /actuator/health/readiness
+  livenessPath: /actuator/health/liveness
+  startupFailureThreshold: 30
+terminationGracePeriodSeconds: 30
+env: []
+envFrom: []
+networkPolicy:
+  enabled: true
+  ingressFromServices: [gateway]
+  allowDNS: true
+  egressRules: []
