@@ -1,0 +1,37 @@
+# SWE5001 SpecTrace-CN — owner first, then the designated reviewer
+# (the consumer of an interface reviews its provider).
+# See docs/swe5001/TEAM_WORK_BREAKDOWN.md. Later matches take precedence.
+
+*                               @hxj04121-lab
+/deploy/                        @SHJ-SHJ0128 @hxj04121-lab
+
+# M1 Huang Xiangjia — reviewed by M2 Cai Runchen
+/services/specification/        @hxj04121-lab @rcncai
+/services/formulation/          @hxj04121-lab @rcncai
+/platform/starter/              @hxj04121-lab @rcncai
+/backend/                       @hxj04121-lab @rcncai
+/docs/swe5001/                  @hxj04121-lab @rcncai
+/.project-control/              @hxj04121-lab @rcncai
+
+# M2 Cai Runchen — reviewed by M4 Zhu Wenyu
+/services/compliance/           @rcncai @zhuwenyu04
+/perf/                          @rcncai @SHJ-SHJ0128
+/deploy/helm/                   @rcncai @SHJ-SHJ0128
+
+# Contracts — owned by the contract steward (M2); changes also need an ADR
+/contracts/                     @rcncai @hxj04121-lab
+
+# M3 Xu Feiyang — reviewed by M4 Zhu Wenyu
+/frontend/                      @codingbychatgpt @zhuwenyu04
+/platform/gateway/              @codingbychatgpt @zhuwenyu04
+/clients/                       @codingbychatgpt @zhuwenyu04
+/services/notification/         @codingbychatgpt @zhuwenyu04
+
+# M4 Zhu Wenyu — reviewed by M3 Xu Feiyang (+ M2 for the validation contract)
+/services/label-workflow/       @zhuwenyu04 @codingbychatgpt @rcncai
+/deploy/keycloak/               @zhuwenyu04 @codingbychatgpt
+/platform/starter/**/security/  @zhuwenyu04 @hxj04121-lab
+
+# M5 Sun Huajian — reviewed by M1 Huang Xiangjia
+/infra/                         @SHJ-SHJ0128 @hxj04121-lab
+/.github/                       @SHJ-SHJ0128 @hxj04121-lab

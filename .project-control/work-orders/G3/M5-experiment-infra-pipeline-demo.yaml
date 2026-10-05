@@ -1,0 +1,36 @@
+work_order_id: G3-M5
+story_id: ST-G3-M5
+gate: G3
+window: "2026-10-17..2026-10-20"
+title: "Experiment infrastructure, pipeline demo and cost watch"
+owner: "M5 Sun Huajian"
+github: SHJ-SHJ0128
+reviewer: "M1 Huang Xiangjia"
+estimate_md: 1.5
+jira: STCN-20
+jira_subtasks: "STCN-109..STCN-113"
+status: PLANNED
+scope:  # one Jira subtask per entry
+  - "G3-M5.1 Experiment infrastructure: c6i.large node group scaling, k6 runner on EC2, pod-kill tooling, dashboard export"
+  - "G3-M5.2 Pipeline demo: one change delivered end to end"
+  - "G3-M5.3 Cost watch against the staging account's remaining credits; account upgraded to the Paid plan before Gate 3"
+  - "G3-M5.4 Should: HPA and Cluster Autoscaler run with M2"
+  - "G3-M5.5 Could (not planned, moved from Should by ADR-08): Tempo tracing backend"
+acceptance_criteria:
+  - "k6 runs from a separate EC2 host in ap-southeast-1"
+  - "the pipeline demo shows tests, scans, image digest and deployment revision"
+  - "spend stays within the account's credits (expected USD 110-140 in total); staging is destroyed after every window and right after the presentation"
+required_tests:
+  - "dry run of the failover procedure"
+architecture_impact: "evidence infrastructure"
+db_impact: "none"
+shared_file_domain: "infra/*, deploy/*, perf/infra/*"
+base_contract:
+  baseline_tag: "spectrace-cn-baseline-20260926"
+  baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
+  architecture: "docs/swe5001/architecture/SpecTrace-CN_Architecture_Source_of_Truth_v3_AWS.md"
+  proposal: "docs/swe5001/proposal/01_SpecTrace-CN_SWE5001_Project_Proposal_team16_AWS.docx"
+  contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
+dependencies: [G2-M5]
+evidence_required: "dashboards, pipeline run, cost report"
+human_acceptance: required
