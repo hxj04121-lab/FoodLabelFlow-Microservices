@@ -70,6 +70,21 @@
     "sloRecoverySecondsMaximum": 300
   },
   "execution": "Not run. No provisioning, spend, deployment or destructive cluster action is authorized by this artifact.",
-  "sourceAlignmentDate": "2026-10-02",
-  "sourceState": "unmerged PR #1; declaredAt and numeric experiment targets unchanged"
+  "sourceAlignmentDate": "2026-10-05",
+  "sourceState": "October 1 declaration retained as history; current AWS execution authority below",
+  "currentAuthority": {
+    "commit": "56931b460029abe04ec3d61a35de106e36b6008e",
+    "architecture": "docs/swe5001/architecture/SpecTrace-CN_Architecture_Source_of_Truth_v3_AWS.md",
+    "cloud": "AWS",
+    "region": "ap-southeast-1",
+    "nodeGroup": "compliance",
+    "instanceType": "c6i.large",
+    "nodeCount": {
+      "min": 1,
+      "max": 4
+    },
+    "availabilityZones": 2,
+    "lifetime": "on-demand evidence windows, ADR-09",
+    "measurementScope": "One-pod failover only. No node/AZ/region availability measurement claimed."
+  }
 }
