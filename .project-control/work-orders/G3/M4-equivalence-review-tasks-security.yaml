@@ -1,0 +1,36 @@
+work_order_id: G3-M4
+story_id: ST-G3-M4
+gate: G3
+window: "2026-10-17..2026-10-20"
+title: "Equivalence completion, review tasks and security evidence"
+owner: "M4 Zhu Wenyu"
+github: zhuwenyu04
+reviewer: "M3 Xu Feiyang"
+estimate_md: 1.5
+jira: STCN-19
+jira_subtasks: "STCN-105..STCN-108"
+status: PLANNED
+scope:  # one Jira subtask per entry
+  - "G3-M4.1 Complete the equivalence-oracle tests"
+  - "G3-M4.2 ImpactFinding consumer -> ReviewTask"
+  - "G3-M4.3 LabelPublished producer"
+  - "G3-M4.4 Security evidence on staging: 401/403/cross-organisation, NetworkPolicy, secret scan"
+acceptance_criteria:
+  - "a review task opens only for CONFIRMED + REVIEW_REQUIRED (BR-04)"
+  - "LabelPublished updates the Compliance projection"
+  - "the security evidence pack is ready for report section 4.3"
+required_tests:
+  - "consumer tests"
+  - "negative tests through the gateway on staging"
+architecture_impact: "closes the two-phase loop"
+db_impact: "review_task table"
+shared_file_domain: "services/label-workflow/*, docs/swe5001/security/*"
+base_contract:
+  baseline_tag: "spectrace-cn-baseline-20260926"
+  baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
+  architecture: "docs/swe5001/architecture/SpecTrace-CN_Architecture_Source_of_Truth_v3_AWS.md"
+  proposal: "docs/swe5001/proposal/01_SpecTrace-CN_SWE5001_Project_Proposal_team16_AWS.docx"
+  contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
+dependencies: [G2-M4, G3-M2]
+evidence_required: "test reports, security evidence pack"
+human_acceptance: required
