@@ -33,3 +33,17 @@ The canonical artifact's proposed handoff path is `contracts/events/event-envelo
 The only local check failure found during migration was a duplicated fixture-directory segment in the test resolver; it was corrected, and the full check passed again after the clean lockfile install. Publication CI uses Node 22 and runs explicit scopes on STCN-27/26/28 plus the full 38-check scope on STCN-29. Actual remote run URLs and results are recorded in the PRs and Jira after publication; this historical local evidence does not claim a remote pass. No baseline Java/browser rerun, scale-out/failover measurement, cloud resource or deployment is claimed.
 
 M4 ADR/wire/plan approval, real M1 canonical-envelope conformance, remaining M1/M4 target contract review, publication CI and merged evidence are pending. See [steward review](G0-M2-contract-review.md) and [proposed publication scope](G0-M2-publication-scope.md). Human acceptance remains required; STCN-2 is not complete merely because local checks pass.
+
+## 5 October 2026 update
+
+This section supersedes the earlier source/candidate availability assessment; earlier runs remain historical evidence.
+
+- Current merged architecture/work-order authority: AWS v3, main `56931b460029abe04ec3d61a35de106e36b6008e`.
+- PR2 actual Sonar annotation: `test-contracts.mjs` default alphabetical sort; fixed by an explicit comparator without removing assertions.
+- PR4 actual failed condition: 60% new-code duplication (limit 3%). Both entry points now call `capacity-targets.mjs`; the standalone and full suite preserve every original assertion and full/events/http scope boundary.
+- Updated G0 local validation: strict OpenAPI lint; HTTP 18, events 24 and full suite 38 pass. Target declaration date and all original numeric experiment values are retained.
+- Exact unmodified M1 PR8 candidate `a788fa5fc815c34cb23cf219d5194d92a51937bb`: two OpenAPI lint checks, 34 M1 checks, 24 M2 event checks and actual canonical conformance pass (4 examples, 10 required-field negatives, 4 format/version negatives).
+- Baseline run 37135297709 independently verified at frozen `a3520e1`: backend/frontend/containers/security success. OWASP/Trivy steps executed. SonarQube analysis skipped. This does not establish the new G0 heads' checks.
+- New remote head validation is recorded separately in the PR/Jira publication receipt. Historical skipped security/Sonar checks are not executed passes.
+
+No runtime load/failover measurement, deployment, provisioning, paid action or M4 acceptance is claimed.

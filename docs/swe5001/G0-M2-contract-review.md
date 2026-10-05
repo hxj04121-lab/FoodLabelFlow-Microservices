@@ -1,36 +1,30 @@
-# G0 M2 contract steward review — FINAL-aligned candidate
+# G0 M2 contract steward review — 5 October 2026
 
-Owner/steward: RunChen Cai (M2); peer reviewer: Zhu Wenyu (M4). Original work: 1 October 2026; read-only source reconciliation and local alignment: 2 October 2026. Identified inputs: unmerged PR #1 revision `f6abf4a043b7f587c6e3315f8a2b8b78e7e40b60`; base main `c09d498fd5a88ef675c9e2b720db1a2ecc3ae1fe`. [Source manifest](../../contracts/source-manifest.json); [proposed ADR](adr/ADR-G0-M2-001-compliance-contracts.md).
+Steward: RunChen Cai (M2); reviewer of M2 deliverables: Zhu Wenyu (M4). Current authority: merged AWS v3 main `56931b460029abe04ec3d61a35de106e36b6008e`, ADR-08/09 and G0-M2 work order. Original October 1 source and declarations remain pinned in [source-manifest.json](../../contracts/source-manifest.json).
 
-The earlier source gap is resolved: G0/FINAL files are readable on the team branch. They remain unmerged and absent from main. Publication changes only the M2 deliverables and CI routing for their draft PRs. Source files, peer contracts and security configuration are preserved. Jira progress is recorded separately with actual PR and validation links.
-
-| Available contract | Error envelope | IDs/versions | Organisation/correlation | Disposition |
-|---|---|---|---|---|
-| `docs/contracts/allergen-validation-api-v1.yaml` | Baseline canonical code/message/traceId/evidenceId | Exact label/rule-set IDs | Legacy identity headers; no target tenant/JWT/correlation contract | Preserve regression oracle; not target Compliance v1 |
-| `docs/contracts/label-declarations-api-v1.yaml` | References baseline ApiError | Exact label/formula/rule-set bindings | Legacy seam; target tenant/actor propagation pending | Preserve oracle; M4 target contract still missing |
-| `docs/contracts/label-derived-allergens-api-v1.yaml` | References baseline ApiError | Exact versions, derivation paths and unresolved evidence | Legacy seam; target tenant/JWT/correlation pending | Preserve evidence/fail-closed semantics during extraction |
-| `contracts/openapi/compliance.v1.yaml` | Every failure shares baseline-compatible ApiError | Full snapshot/revision and version references | JWT organisation ownership and correlation headers | Local candidate; M4 acceptance pending |
-| `contracts/events/impact-finding.v1.schema.json` | Domain event separate from HTTP error | UUID eventId, positive aggregate/version refs, opaque domain IDs | Required FINAL envelope fields; tenant/aggregate/set relations checked | Local M2 envelope interface validates examples; M1 canonical-artifact conformance pending |
-
-## Cross-team blockers
-
-| Artifact/decision | Owner | Required evidence |
+| Contract/evidence | Inspected source | Result |
 |---|---|---|
-| Canonical event envelope | M1 G0-M1.5; M2 steward | Actual owner schema and agreed path; `npm run check:envelope -- --schema <path>` green; replace M2 local envelope reference with accepted shared `$ref` |
-| Specification/Formulation OpenAPI v1 and SpecificationPublished/FormulaPublished.v1 | M1 | Canonical errors/envelope, tenant ownership/visibility, exact adopted references and vocabulary/provenance; owner examples validated |
-| Label Workflow OpenAPI v1 and LabelPublished.v1 | M4 | Full validation tuple, stored local result, maker-checker, current published declarations, tenant/correlation and canonical wire consistency |
-| Proposed wire details and evidence definitions | M4; M1 for envelope | Review of ADR-G0-M2-001; idempotency revision/key/status details; event-interface compatibility; fixed measurement definitions |
-| Publication/acceptance | Designated reviewers | One subtask per PR, green CI, one approval, merged contract/test-plan evidence; G0 human acceptance |
+| Baseline ApiError and label APIs | frozen `a3520e1` and unchanged `docs/contracts/` | Preserve regression oracle and `{code,message,traceId,evidenceId}`; legacy identity seam is not target JWT/tenant enforcement |
+| Compliance OpenAPI/ImpactFinding | updated PR2–5 stack | Strict lint, HTTP/event examples and negative tenant/version/set cases pass; exact draft snapshot and Idempotency-Key remain required |
+| M1 canonical Envelope | PR8 `a788fa5fc815c34cb23cf219d5194d92a51937bb`, blob `909f043f68257c8c767a94bb396491ad9d2aa2b3` | Actual candidate accepts all four M2 examples and rejects ten missing fields plus four invalid UUID/UTC/version cases; M2 companion adopts the canonical `$ref` |
+| Specification/Formulation APIs and events | same PR8 head | Both OpenAPI files lint with warnings blocking; all 34 owner checks pass, including shared ApiError/correlation, release/version semantics and cross-owner two-phase examples |
+| Baseline rerun/layout | PR9 `1630d2b6a8bb70841fd1eeb1583afdccc5adc924` | Actions [37135297709](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/37135297709) independently reports frozen head `a3520e1f1d450796a694b6930d7792dda0f2b512`, backend/frontend/containers/security success; OWASP and Trivy executed; SonarQube analysis skipped on that branch push |
+| Label Workflow OpenAPI/LabelPublished | absent from merged main and available candidate branches at inspection | M4 artifact remains needed for all-v1 review; no substitute is authored |
 
-No target peer contracts or canonical envelope are present in main or source PR #1 at inspection. All-v1 review is **pending peer artifacts**, not complete. The existing M2 common envelope definition has been removed from the shared primitives: the event now describes its own consumer interface without pretending to publish M1's artifact.
+M1 candidates are supplied and executable, so the former “absent M1 artifact” blocker is superseded. PR8 and PR9 are still unmerged. M2 conformance is an executed technical result; it is not M4 acceptance of M2, a G0 freeze or merged evidence.
 
-## Checks when peers arrive
+## Wire decisions and outstanding integration
 
-1. All HTTP failures use the agreed ApiError fields and real evidence/correlation; 401, role/tenant 403 and projection failures are explicit with no internal leakage.
-2. Stable opaque domain IDs and pinned versions prevent silent latest/current substitution; eventId UUID, occurredAt UTC and aggregateVersion positive.
-3. Private data matches JWT org_id; service ownership checks remain enforced; manufacturer access to released supplier specifications follows BR-11.
-4. Every event has the ten FINAL envelope fields and validates against the accepted canonical artifact; correlation propagates through HTTP/audit/outbox/consumer.
-5. Consumers deduplicate eventId and discard stale aggregateVersion; state/audit/outbox atomicity and at-least-once semantics are explicit. Only CONFIRMED + REVIEW_REQUIRED opens a task.
-6. Review actual owner examples and negative tenant/version/event cases at exact commits; record human outcome and merged links.
+- HTTP errors retain canonical code/message/traceId/evidenceId with required X-Correlation-ID. Opaque IDs, exact positive version references, UUID event IDs and UTC timestamps remain consistent.
+- M1 owns the common Envelope; M2 owns the ImpactFinding payload/profile. Shared wire primitives stay in their current file during G0. The companion adoption deletes the duplicate local EnvelopeInterface and composes the M1 schema with the M2 payload/type/producer constraints. Its merge/integration depends on PR8; it does not mutate M1's branch.
+- Supplier publication remains POTENTIAL; adoption remains CONFIRMED; only CONFIRMED + REVIEW_REQUIRED opens Label Workflow review. Event organisation and payload organisation must match. Delivery is at least once; duplicate/stale handling remains runtime evidence for later gates.
+- M4 must confirm realm role names against SPEC_AUTHOR/SPEC_RELEASER and FORMULA_AUTHOR/FORMULA_RELEASER, and review the snapshot/idempotency tuple, fail-closed validation, ADR-G0-M2-001 and measurement definitions. M4 Label Workflow contracts are still required.
+- G0 completion still requires designated reviewer approval, merged contract/test-plan PRs, integrated shared Envelope and complete available/all-v1 review. STCN-2/26..29 remain In Progress.
 
-M4 approval: **pending**. M1 canonical conformance: **blocked on absent artifact**. All-v1 review: **incomplete**. The work-order source gap is no longer reported as an unavailable-input blocker.
+## Platform review relevant to M2 preparation
+
+AWS `ap-southeast-1` supersedes historical DO/SGP1 planning. Compliance uses c6i.large nodes (1–4), fixed 1 CPU / 2 GiB per replica; workers span two AZs. Fixed 1-vs-3 tests disable HPA. The predeclared numeric targets and October 1 date are unchanged. The one-pod test supplies no node/AZ/region failure evidence.
+
+M5 PR10 at `9af885c5bfb51a61490174cb4a3e2a8dd8dffd7c` contains a budget workflow condition `EVENT_NAME = workflow_call`. GitHub's [reusable workflow reference](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#github-context) states that the github context is associated with the caller. A caller triggered by workflow_dispatch or push therefore does not satisfy that condition. With credit omitted, the script returns success unless `--require-gate` is passed. This is a concrete fail-open integration risk: use an explicit enforced input or separate estimate/enforcement entry points, and test omitted/insufficient credit through a real caller. M2 records this review; M5's branch is preserved. No cloud execution is authorized or performed.
+
+G1 Helm/k6 preparation can be reviewed locally. M5 Terraform labels/taints/subnets and M1 platform/starter are absent from current main/candidates; node placement and Compliance skeleton acceptance remain blocked on their owners and the gate prerequisites. G2/G3 runtime and paid/cloud actions are not inferred from local preparation.
