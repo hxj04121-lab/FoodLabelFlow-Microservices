@@ -86,5 +86,12 @@
     "availabilityZones": 2,
     "lifetime": "on-demand evidence windows, ADR-09",
     "measurementScope": "One-pod failover only. No node/AZ/region availability measurement claimed."
+  },
+  "measurementClarification": {
+    "declaredAt": "2026-10-05",
+    "latencyClock": "actual iteration start through validated response",
+    "limitation": "scheduled-arrival timestamp is not directly exposed by k6; dropped arrivals and generator health are checked separately",
+    "numericTargetsUnchanged": true,
+    "review": "M4 pending before runtime acceptance"
   }
 }
