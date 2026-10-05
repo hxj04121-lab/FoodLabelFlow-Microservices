@@ -3,7 +3,7 @@
   "title": "ImpactFinding.v1 domain event",
   "allOf": [
     {
-      "$ref": "#/$defs/EnvelopeInterface"
+      "$ref": "event-envelope.v1.schema.json"
     },
     {
       "type": "object",
@@ -20,71 +20,5 @@
       }
     }
   ],
-  "description": "M2 ImpactFinding.v1 contract. EnvelopeInterface expresses the FINAL section 6.3 consumer requirements within this event. M1 owns the separate canonical envelope artifact; its conformance is checked when available with npm run check:envelope -- --schema <M1-file>. No M1 schema is fabricated.",
-  "$defs": {
-    "EnvelopeInterface": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "eventId",
-        "eventType",
-        "schemaVersion",
-        "occurredAt",
-        "producer",
-        "organisationId",
-        "correlationId",
-        "aggregateId",
-        "aggregateVersion",
-        "payload"
-      ],
-      "properties": {
-        "eventId": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "eventType": {
-          "type": "string",
-          "minLength": 1
-        },
-        "schemaVersion": {
-          "type": "integer",
-          "const": 1
-        },
-        "occurredAt": {
-          "type": "string",
-          "format": "date-time",
-          "pattern": "Z$"
-        },
-        "producer": {
-          "type": "string",
-          "minLength": 1
-        },
-        "organisationId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^\\S+$"
-        },
-        "correlationId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^\\S+$"
-        },
-        "aggregateId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^\\S+$"
-        },
-        "aggregateVersion": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "payload": {
-          "type": "object"
-        }
-      }
-    }
-  }
+  "description": "M2 ImpactFinding.v1 profile composes the M1 canonical event-envelope.v1 schema with the M2 payload, event type and producer constraints. Shared Envelope owner: M1; exact candidate source: PR8 a788fa5fc815c34cb23cf219d5194d92a51937bb. Candidate conformance does not establish merge or M4 acceptance."
 }

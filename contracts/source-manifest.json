@@ -7,15 +7,56 @@
   "inspectedMainCommit": "c09d498fd5a88ef675c9e2b720db1a2ecc3ae1fe",
   "originalLocalCommit": "1cf0c255077648828ce4a20337751021d2dee5e7",
   "alignmentDate": "2026-10-02",
-  "assignment": {"workOrder": "G0-M2", "jira": "STCN-2", "subtasks": ["STCN-26", "STCN-27", "STCN-28", "STCN-29"], "originalWindow": "2026-10-01..2026-10-07"},
+  "assignment": {
+    "workOrder": "G0-M2",
+    "jira": "STCN-2",
+    "subtasks": [
+      "STCN-26",
+      "STCN-27",
+      "STCN-28",
+      "STCN-29"
+    ],
+    "originalWindow": "2026-10-01..2026-10-07"
+  },
   "files": [
-    {"path": ".project-control/work-orders/G0/M2-compliance-contracts-test-plan.yaml", "gitBlobSha": "ef0354025280833d06bfee518adfee269d0d0cd7"},
-    {"path": "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md", "gitBlobSha": "fe14d89e7bdee3f0a2ab5dd297dc2c511f0d5d89"},
-    {"path": ".project-control/work-orders/G0/M1-baseline-layout-spec-form-contracts.yaml", "gitBlobSha": "0e186f69a2d6705207f47a4f50d8664cd33518d0"},
-    {"path": "docs/swe5001/TEAM_WORK_BREAKDOWN.md", "gitBlobSha": "bad3fecee69810d4ba9774058e6a1221587b1a7c"}
+    {
+      "path": ".project-control/work-orders/G0/M2-compliance-contracts-test-plan.yaml",
+      "gitBlobSha": "ef0354025280833d06bfee518adfee269d0d0cd7"
+    },
+    {
+      "path": "docs/swe5001/final/03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md",
+      "gitBlobSha": "fe14d89e7bdee3f0a2ab5dd297dc2c511f0d5d89"
+    },
+    {
+      "path": ".project-control/work-orders/G0/M1-baseline-layout-spec-form-contracts.yaml",
+      "gitBlobSha": "0e186f69a2d6705207f47a4f50d8664cd33518d0"
+    },
+    {
+      "path": "docs/swe5001/TEAM_WORK_BREAKDOWN.md",
+      "gitBlobSha": "bad3fecee69810d4ba9774058e6a1221587b1a7c"
+    }
   ],
   "canonicalEnvelopeOwner": "M1 Huang Xiangjia (G0-M1.5)",
-  "canonicalEnvelopeState": "not supplied by main or source PR; M2 consumer interface only",
-  "canonicalEnvelopeFields": ["eventId", "eventType", "schemaVersion", "occurredAt", "producer", "organisationId", "correlationId", "aggregateId", "aggregateVersion", "payload"],
-  "validation": "Local M2 schema validation does not establish M1 conformance, human acceptance or merged evidence."
+  "canonicalEnvelopeState": "M1 exact open candidate supplied and referenced by M2; merge and M4 acceptance remain pending",
+  "canonicalEnvelopeFields": [
+    "eventId",
+    "eventType",
+    "schemaVersion",
+    "occurredAt",
+    "producer",
+    "organisationId",
+    "correlationId",
+    "aggregateId",
+    "aggregateVersion",
+    "payload"
+  ],
+  "validation": "Local M2 schema validation does not establish M1 conformance, human acceptance or merged evidence.",
+  "canonicalEnvelopeCandidate": {
+    "pullRequest": 8,
+    "commit": "a788fa5fc815c34cb23cf219d5194d92a51937bb",
+    "path": "contracts/events/event-envelope.v1.schema.json",
+    "gitBlobSha": "909f043f68257c8c767a94bb396491ad9d2aa2b3",
+    "state": "open unmerged candidate"
+  },
+  "historicalSourceNote": "Original sourceState/commit are retained as the October 2 assessment on which the M1 candidate was built. Current cloud/deployment/cost authority is merged AWS v3 main 56931b460029abe04ec3d61a35de106e36b6008e."
 }

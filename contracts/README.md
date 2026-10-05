@@ -21,3 +21,7 @@ Owner: Huang Xiangjia (M1); steward/reviewer: RunChen Cai (M2). Stacked on STCN-
 - [Specification API](openapi/specification.v1.yaml) (`/api/specifications/**`) and [Formulation API](openapi/formulation.v1.yaml) (`/api/formulations/**`), reusing `compliance-types.v1` IDs, VersionReference and ApiError.
 
 Run `npm run check:m1`. It lints both OpenAPI files and checks the envelope, both events (including aggregate/tenant semantics) and the two-phase story against the M2 ImpactFinding examples.
+
+## M2 canonical reference adoption — 5 October 2026
+
+This companion branch is based on exact M1 PR8 head a788fa5fc815c34cb23cf219d5194d92a51937bb. ImpactFinding composes the actual M1 `event-envelope.v1.schema.json` via `$ref`; the duplicate local EnvelopeInterface is removed. `check:events` verifies the reference and all required fields, and `check:envelope` validates actual M1 conformance. Both owners' checks must remain green. This branch changes M2 files only and preserves the M1 branch. Original text above describes historical preparation; supplied candidate status here supersedes absence claims. Review/merge and M4 G0 acceptance remain pending.

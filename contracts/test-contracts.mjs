@@ -47,8 +47,8 @@ function semantics(event) {
   const p = event.payload;
   assert.equal(event.organisationId, p.organisationId, 'Envelope/payload tenant must match');
   assert.equal(event.aggregateId, p.findingId, 'Aggregate is the persisted finding');
-  const missing = p.requiredAllergens.filter((a) => !p.declaredAllergens.includes(a)).sort();
-  assert.deepEqual([...p.missingAllergens].sort(), missing, 'missing = required minus declared');
+  const missing = p.requiredAllergens.filter((a) => !p.declaredAllergens.includes(a)).sort((left, right) => left.localeCompare(right, 'en'));
+  assert.deepEqual([...p.missingAllergens].sort((left, right) => left.localeCompare(right, 'en')), missing, 'missing = required minus declared');
   const outcome = missing.length || p.unresolvedAllergens.length ? 'REVIEW_REQUIRED' : 'NO_ACTION';
   assert.equal(p.outcome, outcome);
 }
@@ -132,11 +132,12 @@ check('FINAL input and work-order provenance pinned', () => {
   assert(source.files.some((file) => file.path.endsWith('03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md')));
   assert(source.files.every((file) => /^[0-9a-f]{40}$/.test(file.gitBlobSha)));
 });
-check('M2 envelope interface has every FINAL envelope field', () => {
+check('M2 profile references the M1 canonical envelope and every required field', () => {
   const event = json('events/impact-finding.v1.schema.json');
   const fields = json('source-manifest.json').canonicalEnvelopeFields;
-  assert.deepEqual(event.$defs.EnvelopeInterface.required, fields);
-  assert.equal(event.allOf[0].$ref, '#/$defs/EnvelopeInterface');
+  assert.equal(event.allOf[0].$ref, 'event-envelope.v1.schema.json');
+  assert.equal(event.$defs?.EnvelopeInterface, undefined);
+  assert.deepEqual(json('events/event-envelope.v1.schema.json').required, fields);
   assert.equal(json('openapi/compliance-types.v1.schema.json').$defs.EventEnvelope, undefined);
   for (const field of fields) {
     const bad = clone(source);
@@ -184,4 +185,4 @@ check('all local M2 schema references resolve at their final paths', () => {
     visit(json(`${directory}/${name}`));
   }
 });
-console.log(`${count} local M2 contract checks passed (scope: ${mode}). M1 canonical-envelope conformance and human approval remain pending.`);
+console.log(`${count} local M2 contract checks passed (scope: ${mode}). Run check:envelope for the actual canonical artifact; human approval remains separate.`);
