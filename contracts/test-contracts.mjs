@@ -47,8 +47,9 @@ function semantics(event) {
   const p = event.payload;
   assert.equal(event.organisationId, p.organisationId, 'Envelope/payload tenant must match');
   assert.equal(event.aggregateId, p.findingId, 'Aggregate is the persisted finding');
-  const missing = p.requiredAllergens.filter((a) => !p.declaredAllergens.includes(a)).sort();
-  assert.deepEqual([...p.missingAllergens].sort(), missing, 'missing = required minus declared');
+  const compareAllergenIds = (left, right) => left.localeCompare(right, 'en');
+  const missing = p.requiredAllergens.filter((a) => !p.declaredAllergens.includes(a)).sort(compareAllergenIds);
+  assert.deepEqual([...p.missingAllergens].sort(compareAllergenIds), missing, 'missing = required minus declared');
   const outcome = missing.length || p.unresolvedAllergens.length ? 'REVIEW_REQUIRED' : 'NO_ACTION';
   assert.equal(p.outcome, outcome);
 }
@@ -126,7 +127,9 @@ check('ApiError preserves baseline canonical wire fields', () => {
 check('FINAL input and work-order provenance pinned', () => {
   const source = json('source-manifest.json');
   assert.equal(source.sourceCommit, 'f6abf4a043b7f587c6e3315f8a2b8b78e7e40b60');
-  assert.equal(source.sourceState, 'unmerged identified input');
+  assert.equal(source.history.originalSourceState, 'unmerged identified input');
+  assert.equal(source.currentAuthority.commit, source.inspectedMainCommit);
+  assert(source.currentAuthority.architecture.endsWith('SpecTrace-CN_Architecture_Source_of_Truth_v3_AWS.md'));
   assert.equal(source.assignment.workOrder, 'G0-M2');
   assert.deepEqual(source.assignment.subtasks, ['STCN-26', 'STCN-27', 'STCN-28', 'STCN-29']);
   assert(source.files.some((file) => file.path.endsWith('03_SpecTrace-CN_Architecture_Source_of_Truth_FINAL.md')));
