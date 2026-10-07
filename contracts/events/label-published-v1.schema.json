@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "label-published-v1.schema.json",
+  "title": "LabelPublished.v1",
+  "description": "Current published structured declarations projection emitted by Label Workflow.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "schemaVersion",
+    "occurredAt",
+    "producer",
+    "organisationId",
+    "correlationId",
+    "aggregateId",
+    "aggregateVersion",
+    "payload"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "const": "LabelPublished.v1" },
+    "schemaVersion": { "const": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "producer": { "type": "string", "minLength": 1 },
+    "organisationId": { "type": "string", "minLength": 1 },
+    "correlationId": { "type": "string", "minLength": 1 },
+    "aggregateId": { "type": "string", "minLength": 1 },
+    "aggregateVersion": { "type": "integer", "minimum": 1 },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "productId",
+        "labelVersionId",
+        "formulaVersionId",
+        "ruleSetVersionId",
+        "jurisdictionCode",
+        "declarations"
+      ],
+      "properties": {
+        "productId": { "type": "string", "minLength": 1 },
+        "labelVersionId": { "type": "string", "minLength": 1 },
+        "formulaVersionId": { "type": "string", "minLength": 1 },
+        "ruleSetVersionId": { "type": "string", "minLength": 1 },
+        "jurisdictionCode": { "type": "string", "minLength": 1 },
+        "declarations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/AllergenDeclaration" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "AllergenDeclaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allergenId",
+        "declarationType",
+        "declarationSource",
+        "displayText"
+      ],
+      "properties": {
+        "allergenId": { "type": "string", "minLength": 1 },
+        "declarationType": { "const": "CONTAINS" },
+        "declarationSource": {
+          "enum": [
+            "MIGRATED_PUBLIC_LABEL",
+            "FORMULA_DERIVED",
+            "SYSTEM_PROPOSED",
+            "USER_ENTERED"
+          ]
+        },
+        "displayText": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,551 @@
+openapi: 3.1.0
+info:
+  title: SpecTrace Label Workflow API
+  version: 1.0.0
+  description: >-
+    Label drafts, exact-version validation, review submission, decisions and
+    publication. Workflow state changes follow the target architecture BR-05,
+    BR-06, BR-08 and BR-09. Successful responses return the resource directly;
+    all errors use the shared ApiError envelope.
+tags:
+  - name: labels
+    description: Draft label versions and their structured declarations.
+  - name: label-validation
+    description: Validation runs bound to an exact label draft snapshot.
+  - name: label-review
+    description: Submission and review decision history.
+  - name: label-publication
+    description: Publication of approved label versions.
+servers:
+  - url: /
+    description: Relative to the API gateway origin.
+security:
+  - bearerAuth: []
+paths:
+  /api/labels/drafts:
+    post:
+      tags: [labels]
+      operationId: createLabelDraft
+      summary: Create a draft for a product and jurisdiction.
+      description: >-
+        The authenticated subject and organisation are taken from the validated
+        access token. Actor identifiers and organisation identifiers are not
+        accepted in the request body.
+      x-required-permission: LABEL.CREATE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLabelDraft'
+      responses:
+        '201':
+          description: Draft created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelDraft'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/LabelNotFound'
+        '409':
+          $ref: '#/components/responses/LabelVersionConflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/labels/{labelVersionId}:
+    parameters:
+      - $ref: '#/components/parameters/LabelVersionId'
+    get:
+      tags: [labels]
+      operationId: getLabelVersion
+      summary: Get an exact label version visible to the caller's organisation.
+      responses:
+        '200':
+          description: The requested label version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelDraft'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/LabelNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/labels/{labelVersionId}/declarations:
+    parameters:
+      - $ref: '#/components/parameters/LabelVersionId'
+    get:
+      tags: [labels]
+      operationId: getLabelDeclarations
+      summary: Get structured declarations for the exact label version.
+      responses:
+        '200':
+          description: Declarations bound to the requested label and formula versions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelDeclarationFacts'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/LabelNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/labels/{labelVersionId}/validations:
+    parameters:
+      - $ref: '#/components/parameters/LabelVersionId'
+    post:
+      tags: [label-validation]
+      operationId: validateLabelDraft
+      summary: Validate the exact current draft against its bound rule set.
+      description: >-
+        Label Workflow sends the draft snapshot to Compliance with an
+        Idempotency-Key derived from labelVersionId and draft revision. It
+        stores the returned validation binding locally. A completed run with
+        blocking ERROR findings is returned as FAILED; it cannot satisfy the
+        BR-05 submit guard.
+      x-required-permission: LABEL.VALIDATE
+      responses:
+        '201':
+          description: Persisted validation run and findings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelValidationRecord'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/LabelNotFound'
+        '409':
+          $ref: '#/components/responses/LabelVersionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationPreconditionFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/labels/{labelVersionId}/submit:
+    parameters:
+      - $ref: '#/components/parameters/LabelVersionId'
+    post:
+      tags: [label-review]
+      operationId: submitLabelForReview
+      summary: Submit a validated draft for review.
+      description: >-
+        BR-05 permits DRAFT -> PENDING_REVIEW only when a PASSED validation
+        exists for the exact labelVersionId, formulaVersionId,
+        ruleSetVersionId and jurisdictionCode tuple and it has zero blocking
+        ERROR findings. Validation state, label state, audit and outbox changes
+        commit atomically within Label Workflow.
+      x-required-permission: LABEL.SUBMIT_REVIEW
+      responses:
+        '200':
+          description: The label is now pending review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelDraft'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/LabelNotFound'
+        '409':
+          $ref: '#/components/responses/SubmitGuardFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/labels/{labelVersionId}/decisions:
+    parameters:
+      - $ref: '#/components/parameters/LabelVersionId'
+    get:
+      tags: [label-review]
+      operationId: listLabelDecisions
+      summary: List the decision history for the exact label version.
+      responses:
+        '200':
+          description: Decision history in chronological order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LabelDecision'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/LabelNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [label-review]
+      operationId: recordLabelDecision
+      summary: Record an approval, request for changes, or rejection.
+      description: >-
+        A decision requires a pending review task and is appended to local
+        decision history in the same transaction as the state and audit/outbox
+        changes. BR-06 prohibits the creator from approving their own label
+        version; the creator comparison does not prohibit request changes or
+        rejection. Under BR-09, REJECT transitions the label to REJECTED.
+      x-required-permission: LABEL.APPROVE, LABEL.REQUEST_CHANGES, or LABEL.REJECT according to decision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordLabelDecision'
+      responses:
+        '201':
+          description: Decision recorded and appended to decision history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelDecision'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/LabelNotFound'
+        '409':
+          $ref: '#/components/responses/ReviewTaskRequired'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/labels/{labelVersionId}/publish:
+    parameters:
+      - $ref: '#/components/parameters/LabelVersionId'
+    post:
+      tags: [label-publication]
+      operationId: publishLabel
+      summary: Publish an approved label version.
+      description: >-
+        BR-08 requires an APPROVED label with an APPROVE decision. One local
+        Label Workflow transaction supersedes the current publication for the
+        same product and jurisdiction, publishes the label, records the
+        PublicationRecord, resolves the review task, and commits local audit
+        and the LabelPublished.v1 outbox event together. The retired
+        product.current_published_label_version_id is not used.
+      x-required-permission: LABEL.PUBLISH
+      responses:
+        '201':
+          description: Publication committed and LabelPublished.v1 queued in the outbox.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelPublication'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/LabelNotFound'
+        '409':
+          $ref: '#/components/responses/PublishGuardFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    LabelVersionId:
+      name: labelVersionId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  responses:
+    InvalidRequest:
+      description: Request syntax or required field is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: INVALID_REQUEST
+            message: The request is invalid.
+            traceId: null
+            evidenceId: null
+    AuthenticationRequired:
+      description: Credentials are absent, invalid, or do not map to an active identity.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: AUTHENTICATION_REQUIRED
+            message: Authentication is required.
+            traceId: null
+            evidenceId: null
+    AuthorizationDenied:
+      description: The actor lacks the required permission or fails BR-06 maker-checker.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: AUTHORIZATION_DENIED
+            message: The actor is not permitted to perform this action.
+            traceId: null
+            evidenceId: null
+    LabelNotFound:
+      description: The exact label version does not exist or is not visible to this organisation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: LABEL_NOT_FOUND
+            message: The requested label version was not found.
+            traceId: null
+            evidenceId: null
+    LabelVersionConflict:
+      description: The requested state transition is invalid or the label is no longer current.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: LABEL_VERSION_CONFLICT
+            message: The label version cannot make the requested transition.
+            traceId: null
+            evidenceId: null
+    SubmitGuardFailed:
+      description: BR-05 exact-tuple validation is not PASSED or has a blocking ERROR finding.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: LABEL_VALIDATION_REQUIRED
+            message: A passing validation for the exact label binding is required before submission.
+            traceId: null
+            evidenceId: null
+    ReviewTaskRequired:
+      description: A pending review task is required before a decision can be recorded.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: LABEL_REVIEW_TASK_REQUIRED
+            message: A pending review task is required for this decision.
+            traceId: null
+            evidenceId: null
+    PublishGuardFailed:
+      description: The label must be APPROVED and have an APPROVE decision; REJECTED is not publishable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: LABEL_APPROVAL_REQUIRED
+            message: An approved label with an APPROVE decision is required for publication.
+            traceId: null
+            evidenceId: null
+    ValidationPreconditionFailed:
+      description: Required canonical validation inputs are unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: VALIDATION_PRECONDITION_FAILED
+            message: The label cannot be evaluated from the available canonical inputs.
+            traceId: null
+            evidenceId: null
+    InternalError:
+      description: Unexpected failure; implementation details are not exposed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: INTERNAL_ERROR
+            message: An unexpected error occurred.
+            traceId: null
+            evidenceId: null
+  schemas:
+    ApiError:
+      $ref: '../../docs/contracts/allergen-validation-api-v1.yaml#/components/schemas/ApiError'
+    Identifier:
+      type: string
+      minLength: 1
+    CreateLabelDraft:
+      type: object
+      additionalProperties: false
+      required: [productId, jurisdictionCode]
+      properties:
+        productId:
+          $ref: '#/components/schemas/Identifier'
+        jurisdictionCode:
+          $ref: '#/components/schemas/Identifier'
+    LabelDraft:
+      type: object
+      additionalProperties: false
+      required:
+        - labelVersionId
+        - productId
+        - formulaVersionId
+        - ruleSetVersionId
+        - jurisdictionCode
+        - versionNumber
+        - lifecycleStatus
+      properties:
+        labelVersionId:
+          $ref: '#/components/schemas/Identifier'
+        productId:
+          $ref: '#/components/schemas/Identifier'
+        formulaVersionId:
+          $ref: '#/components/schemas/Identifier'
+        ruleSetVersionId:
+          $ref: '#/components/schemas/Identifier'
+        jurisdictionCode:
+          $ref: '#/components/schemas/Identifier'
+        versionNumber:
+          type: integer
+          minimum: 1
+        lifecycleStatus:
+          type: string
+          enum: [DRAFT, PENDING_REVIEW, APPROVED, REJECTED, PUBLISHED, SUPERSEDED]
+    LabelDeclarationFacts:
+      type: object
+      additionalProperties: false
+      required: [labelVersionId, formulaVersionId, ruleSetVersionId, jurisdictionCode, declarations]
+      properties:
+        labelVersionId:
+          $ref: '#/components/schemas/Identifier'
+        formulaVersionId:
+          $ref: '#/components/schemas/Identifier'
+        ruleSetVersionId:
+          $ref: '#/components/schemas/Identifier'
+        jurisdictionCode:
+          $ref: '#/components/schemas/Identifier'
+        declarations:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllergenDeclaration'
+    AllergenDeclaration:
+      type: object
+      additionalProperties: false
+      required: [allergenId, declarationType, declarationSource, displayText]
+      properties:
+        allergenId:
+          $ref: '#/components/schemas/Identifier'
+        declarationType:
+          type: string
+          enum: [CONTAINS]
+        declarationSource:
+          type: string
+          enum: [MIGRATED_PUBLIC_LABEL, FORMULA_DERIVED, SYSTEM_PROPOSED, USER_ENTERED]
+        displayText:
+          type: [string, 'null']
+    LabelValidationRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - validationRunId
+        - labelVersionId
+        - formulaVersionId
+        - ruleSetVersionId
+        - jurisdictionCode
+        - status
+        - findings
+      properties:
+        validationRunId:
+          $ref: '#/components/schemas/Identifier'
+        labelVersionId:
+          $ref: '#/components/schemas/Identifier'
+        formulaVersionId:
+          $ref: '#/components/schemas/Identifier'
+        ruleSetVersionId:
+          $ref: '#/components/schemas/Identifier'
+        jurisdictionCode:
+          $ref: '#/components/schemas/Identifier'
+        status:
+          type: string
+          enum: [PASSED, FAILED]
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationFinding'
+    ValidationFinding:
+      type: object
+      required: [resultCode, severity, passed, blocking, message]
+      properties:
+        ruleDefinitionId:
+          type: [string, 'null']
+        resultCode:
+          $ref: '#/components/schemas/Identifier'
+        severity:
+          type: string
+          enum: [INFO, WARNING, ERROR]
+        passed:
+          type: boolean
+        blocking:
+          type: boolean
+        message:
+          type: string
+          minLength: 1
+    RecordLabelDecision:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [APPROVE, REQUEST_CHANGES, REJECT]
+        comments:
+          type: [string, 'null']
+          maxLength: 1000
+    LabelDecision:
+      type: object
+      additionalProperties: false
+      required: [decisionId, labelVersionId, decision, decidedAt]
+      properties:
+        decisionId:
+          $ref: '#/components/schemas/Identifier'
+        labelVersionId:
+          $ref: '#/components/schemas/Identifier'
+        decision:
+          type: string
+          enum: [APPROVE, REQUEST_CHANGES, REJECT]
+        decidedAt:
+          type: string
+          format: date-time
+        comments:
+          type: [string, 'null']
+    LabelPublication:
+      type: object
+      additionalProperties: false
+      required: [publicationRecordId, labelVersionId, lifecycleStatus, publishedAt]
+      properties:
+        publicationRecordId:
+          $ref: '#/components/schemas/Identifier'
+        labelVersionId:
+          $ref: '#/components/schemas/Identifier'
+        lifecycleStatus:
+          type: string
+          const: PUBLISHED
+        publishedAt:
+          type: string
+          format: date-time
