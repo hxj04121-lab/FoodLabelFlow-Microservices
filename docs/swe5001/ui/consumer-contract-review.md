@@ -58,8 +58,8 @@
 
 | 编号 | 对象 / 精确位置 | 发现与需要的决定 | 对前端的影响 |
 |---|---|---|---|
-| C-01 | M2 PR #3：`ImpactFindingPage` / `ImpactFinding` 与 listImpactFindings 描述 | 描述按 creation time + findingId 排序，但 response 没有 createdAt。请确定是 opaque cursor 足够且 UI 不显示时间，还是加入明确时间字段；不用暴露 cursor 内部结构。 | 当前线框不显示伪造时间；若需“最新影响”时间列则待定 |
-| C-02，部分解决 | M2 PR #3 ImpactFinding；M1 PR #8 FormulaVersion、Material、Supplier、Component | 已可经 formulaVersion → productId → Product 获取产品说明，经 specificationVersion → materialId → Material → Supplier 获取名称。仍缺 allergen 字典、provenance 详情入口；M2 unresolved 含 specComponentId，但 M1 public Component 只有 sequenceNo、ingredientId 等，需确定如何定位同一 component。列表可先显示 ID，并按可见条目去重取详情，避免无界 fan-out。 | 产品/材料上下文可设计；allergen 名称与完整证据定位仍未关闭 |
+| C-01，采纳 M2 的 G0 展示建议 | M2 PR #3：`ImpactFindingPage` / `ImpactFinding` 与 listImpactFindings 描述 | 保持 opaque-cursor 分页及完整 finding payload，G0 界面展示现有证据/版本引用而不显示时间列。`items` 不是 ID 数组，显示 ID 只是一种界面呈现；不从 cursor、event occurredAt 或 projection receivedAt 推算 finding 时间。以后若需要时间列，须单独决定契约字段。 | 当前线框不显示时间，wire shape 保持不变 |
+| C-02，部分解决 | M2 PR #3 ImpactFinding；M1 PR #8 FormulaVersion、Material、Supplier、Component | 已可经 formulaVersion → productId → Product 获取产品说明，经 specificationVersion → materialId → Material → Supplier 获取名称。仍缺 allergen 字典、provenance 详情入口；M2 unresolved 要求 formulaItemId 和 specComponentId，但 M1 public DTO 及发布事件的 item/component 只暴露 sequenceNo 等字段，没有这两个 ID。两种身份/lookup 映射均需 owner 明确约定；不能默认为 sequenceNo 就是任一 ID。界面可展示响应中的版本 ID，并按可见条目去重取详情，避免无界 fan-out。 | 产品/材料上下文可设计；allergen 名称与 formula item/component 的完整证据定位仍未关闭 |
 | C-03 | M2 PR #3：`/api/compliance/**` paths；架构 §6.1 derived allergens | 候选 paths 只有 preview/findings 和 internal validations；架构还列了 derived allergens。请与 M4 明确 UI 通过 LW validation record 获取还是需要公开只读 derivation/rule-set/allergen 字典端点，并给出契约。 | 基线 `/api/v1/...` 不可直接照搬为 target；声明选择与派生证据尚缺确定入口 |
 | C-04 | M4 待提供的 public label validation DTO；M2 ValidationRun | 基线前端使用 `jurisdictionCode`、`results`、createdByUserId；M2 internal 用 `jurisdiction`、`findings`、draftRevision，maker-checker 用 creator subject。请规定 LW public wire 和明确 adapter，包含完整 exact tuple。 | 不能直接复用基线类型，否则字段丢失、旧校验误显示有效或错误 maker-checker |
 | C-05 | M4 Label Workflow 契约 | 请覆盖 ReviewTask 查询、草稿变更/校验/submit、三种 decision、publication/current label/history、creator subject、状态/权限与409语义。并说明因异步 finding 到达而任务尚未就绪时的读取结果。 | G2 实际写入与 G3 inbox → task 跳转的阻塞项 |
@@ -69,13 +69,15 @@
 
 ### 建议给 M2 的评审文本
 
-> M3 consumer review against PR #3 at e89233a and M1 PR #8 at a788fa5: the three previously reviewed M2 HTTP/payload/types files are unchanged from caa825f. Core inbox evidence and exact validation snapshots remain covered. M1 now supplies version and product/material/supplier lookups, so that part of C-02/C-06 is covered in the candidate. Remaining decisions: finding timestamp or an ID-only list; allergen/provenance hydration and specComponentId-to-public-Component mapping; the derived-allergen read surface or LW public validation record; and M1's cross-organisation 404 versus architecture/M2 403. The browser will not call /internal/validations. M4 contracts and claims remain pending; this is partial consumer review, not v1 freeze.
+> M3 consumer review against PR #3 at e89233a and M1 PR #8 at a788fa5: the three previously reviewed M2 HTTP/payload/types files are unchanged from caa825f. Core inbox evidence and exact validation snapshots remain covered. M1 supplies version and product/material/supplier lookups, covering that part of C-02/C-06. G0 follows M2's opaque-cursor recommendation: keep full finding payloads, display current evidence/version references and omit the timestamp column; UI ID display does not change items to an ID array. A later finding-time field remains a separate contract decision, never inferred from cursor internals, event occurredAt or projection receivedAt. Remaining decisions are allergen/provenance hydration, both formulaItemId and specComponentId mappings, the derived-allergen read surface or LW public validation record, and M1's cross-organisation 404 versus architecture/M2 403. The browser will not call /internal/validations. M4 contracts and claims remain pending; this is partial consumer review, not v1 freeze.
 
 ### 建议给 M4/M1 的交接文本
 
 > The seven-step UI walkthrough is ready for review. PR #8 covers the Specification/Formulation version reads, create/release path and expected-current-pointer check needed by steps 1/4. M1/M2 should clarify the cross-organisation 404/403 policy and the public component evidence mapping. M4 still needs to provide Label Workflow public validation/review/decision/publication responses and realm claims. Baseline jurisdictionCode/results/createdByUserId must not be silently treated as target jurisdiction/findings/creator subject. Candidate role names remain subject to M4 alignment.
 
 ## 关闭 STCN-31 之前
+
+M2 已在 [PR #15 的技术评审](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/15#issuecomment-6034570932)、[PR #3 的提供方回复](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/3#issuecomment-6034527151) 和 [PR #8 的交接](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/8#issuecomment-6034521572) 记录上述展示建议和未决身份映射。本文件已据此修正 C-01/C-02；这些是 M2 技术结论，不能替代 M4 人工验收，M3 尚未在提供方 PR 直接发表自己的消费者评审。
 
 1. 等待并评审 M4 的目标契约；跟进 M1/M2 候选合并与 C-02/C-08 决定，更新页面字段映射。
 2. 用户授权外部协作后，把相关意见发表到实际 contract PR，保存 permalink；当前文件不是已发表的评论。
