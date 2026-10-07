@@ -25,7 +25,8 @@ paths:
       operationId: validateDraftSnapshot
       summary: Evaluate and persist the exact draft snapshot.
       description: Label Workflow forwards the real actor JWT. organisationId must
-        match org_id and LABEL.VALIDATE role is required. Idempotency-Key is labelVersionId:draftRevision,
+        match org_id and LABEL.VALIDATE permission is required through the agreed
+        realm-role mapping. Idempotency-Key is labelVersionId:draftRevision,
         scoped by organisationId and bound to the complete canonical snapshot. First
         completion commits run, findings and local audit atomically. Same key and
         snapshot returns the stored result; a changed snapshot returns 409. A completed
@@ -97,7 +98,7 @@ paths:
       - impact
       operationId: previewSpecificationImpact
       summary: Preview a released specification substitution over owned released formulas.
-      description: Manufacturer role and organisationId matching JWT org_id are required.
+      description: JWT org_type MANUFACTURER and organisationId matching JWT org_id are required.
         Read-only Phase 1 over local projections of released immutable versions. previous
         and candidate must belong to the same material. Aggregate all formula items;
         compare required allergens with exact current published-label declarations.
@@ -208,7 +209,7 @@ paths:
       - impact
       operationId: getImpactFinding
       summary: Read exact persisted finding evidence.
-      description: Require manufacturer role and ownership. Cross-manufacturer access
+      description: Require JWT org_type MANUFACTURER and ownership. Cross-manufacturer access
         returns 403 per BR-11; no evidence is disclosed.
       parameters:
       - $ref: '#/components/parameters/CorrelationId'
