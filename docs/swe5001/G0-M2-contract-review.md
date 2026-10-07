@@ -13,12 +13,21 @@ Steward: RunChen Cai (M2); reviewer of M2 deliverables: Zhu Wenyu (M4). Current 
 
 M1 candidates are supplied and executable, so the former “absent M1 artifact” blocker is superseded. PR8 and PR9 are still unmerged. M2 conformance is an executed technical result; it is not M4 acceptance of M2, a G0 freeze or merged evidence.
 
+## October 7 update
+
+M4 supplied PR16 at `f02a6f5238c1211c0a1cce8272a955717215b942` on October 7.
+The October 5 absence above is historical. See the
+[pinned M4 review supplement](G0-M2-M4-contract-review-20261007.md) for the
+executed native validation, confirmed cross-canonical incompatibility,
+revision/public-interface mapping and outstanding owner decisions. The
+candidate's arrival does not establish reviewer acceptance or a v1 freeze.
+
 ## Wire decisions and outstanding integration
 
 - HTTP errors retain canonical code/message/traceId/evidenceId with required X-Correlation-ID. Opaque IDs, exact positive version references, UUID event IDs and UTC timestamps remain consistent.
 - M1 owns the common Envelope; M2 owns the ImpactFinding payload/profile. Shared wire primitives stay in their current file during G0. The companion adoption deletes the duplicate local EnvelopeInterface and composes the M1 schema with the M2 payload/type/producer constraints. Its merge/integration depends on PR8; it does not mutate M1's branch.
 - Supplier publication remains POTENTIAL; adoption remains CONFIRMED; only CONFIRMED + REVIEW_REQUIRED opens Label Workflow review. Event organisation and payload organisation must match. Delivery is at least once; duplicate/stale handling remains runtime evidence for later gates.
-- M4 must confirm realm role names against SPEC_AUTHOR/SPEC_RELEASER and FORMULA_AUTHOR/FORMULA_RELEASER, and review the snapshot/idempotency tuple, fail-closed validation, ADR-G0-M2-001 and measurement definitions. M4 Label Workflow contracts are still required.
+- M4 must confirm realm role names against SPEC_AUTHOR/SPEC_RELEASER and FORMULA_AUTHOR/FORMULA_RELEASER, and review the snapshot/idempotency tuple, fail-closed validation, ADR-G0-M2-001 and measurement definitions. M4's October 7 Label Workflow candidate is supplied; the supplement records its remaining compatibility and integration decisions.
 - G0 completion still requires designated reviewer approval, merged contract/test-plan PRs, integrated shared Envelope and complete available/all-v1 review. STCN-2/26..29 remain In Progress.
 
 ## Platform review relevant to M2 preparation
