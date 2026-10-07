@@ -1,7 +1,7 @@
 # G0-M3：前端流程与线框图
 
-日期：2026-10-03。负责人：M3 Xu Feiyang；评审：M4 Zhu Wenyu。
-对应 [STCN-30](https://hxj04121.atlassian.net/browse/STCN-30)。本地交付，待团队评审；不代表运行系统或 Jira 人工验收完成。
+更新：2026-10-07。负责人：M3 Xu Feiyang；评审：M4 Zhu Wenyu。
+对应 [STCN-30](https://hxj04121.atlassian.net/browse/STCN-30)。G0 设计成果，待团队评审；不代表运行系统或 Jira 人工验收完成。
 
 ## 查看成果
 
@@ -26,7 +26,7 @@ python -m http.server 8765 --bind 127.0.0.1 --directory docs/swe5001
 | [G0-M3 工单](../../../.project-control/work-orders/G0/M3-ui-flows-gateway-routes.yaml) | 流程、消费者评审、路由草案的范围和验收 |
 | `frontend/src/app/Shell.tsx`、`frontend/src/api/labels.ts` | 现有导航与基线 DTO；不当作目标契约 |
 
-来源仓库版本：`6c757a62c04486ca9074714567930b028f9ee238`。设计不修改架构、契约或领域状态机；精确接口方法、角色码和字段名仍由对应契约确定。
+初稿依据 `6c757a62c04486ca9074714567930b028f9ee238`；10 月 7 日复核 main `56931b460029abe04ec3d61a35de106e36b6008e`，相关架构/工单未变。补审 M1 [PR #8](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/8) 的 `a788fa5fc815c34cb23cf219d5194d92a51937bb`，具体端点写入下表。所有候选契约仍待冻结，M4 角色/Label Workflow 契约尚缺。
 
 ## 登录前置流程
 
@@ -39,14 +39,14 @@ python -m http.server 8765 --bind 127.0.0.1 --directory docs/swe5001
 
 ## 七步演示映射
 
-接口列使用架构指定的路由域。除已提供的 Compliance 候选契约外，具体端点未定，避免把设计建议误当作已接受 API。
+接口列使用架构指定的路由域及 M1/M2 已提供的候选端点。它们仍在未合并 PR 中；M4 的具体端点未定。
 
 | 步骤 | proposal §6.7 内容 | 线框锚点 / 操作者 | 屏幕或 API / 系统观察点 | 下一步与约束 |
 |---|---|---|---|---|
-| 1 | 供应商发布 soy-lecithin Specification V2 | `#step-1` / 供应商 | Materials & specs；`/api/specifications/**` 的版本发布操作，方法待 M1 契约 | V1 只读，另建 V2；仅本组织可发布 |
+| 1 | 供应商发布 soy-lecithin Specification V2 | `#step-1` / 供应商 | `POST /api/specifications/versions` 创建；`POST /api/specifications/versions/{specificationVersionId}/release` 发布（PR #8 候选） | V1 只读，另建 V2；服务分配版本号，仅本组织可发布 |
 | 2 | SpecificationPublished 传播 | `#step-2` / 系统，由演示人员观察 | 展示事件证据与关联 ID；从日志/看板核对 outbox → RabbitMQ → 投影 | 浏览器不直连 broker，不引入中心审计 API；投影延迟显示等待 |
 | 3 | 匹配使用 V1 的配方，显示 POTENTIAL | `#step-3` / 制造商 | `GET /api/compliance/impact-findings` 和 `GET /api/compliance/impact-findings/{findingId}` | 显示 required/declared/missing/unresolved；不自动改配方，不创建 ReviewTask |
-| 4 | 制造商发布采用 V2 的配方 | `#step-4` / 制造商 | Formula versions；`/api/formulations/**` 的创建/发布操作，方法待 M1 契约 | 其他物料保留各自版本；显式确认后生成新配方版本 |
+| 4 | 制造商发布采用 V2 的配方 | `#step-4` / 制造商 | `POST /api/formulations/formula-versions` 创建；`POST /api/formulations/formula-versions/{formulaVersionId}/release` 发布（PR #8 候选） | 完整保留其他 item；发布 body 带读取到的 expectedCurrentFormulaVersionId；冲突后重新确认 |
 | 5 | CONFIRMED + REVIEW_REQUIRED 打开审核任务 | `#step-5` / 制造商 | Compliance finding 详情 + `/api/labels/**` 下的 ReviewTask 查询，待 M4 契约 | 由 Label Workflow 消费事件建任务；到达前显示等待，不在前端伪造任务 |
 | 6 | 草稿、校验、提交、maker-checker 审批、原子发布 | `#step-6`、`#reviewer`、`#publication` / 标签编辑者、不同审批人、发布者 | 所有用户操作经 `/api/labels/**`；LW 内部调用 `POST /internal/validations` | 精确版本元组 PASSED 才提交；创建者不能批准自己；APPROVED 才发布 |
 | 7 | LabelPublished 更新 Compliance 投影 | `#step-7` / 系统，由演示人员观察 | 当前标签由 LW 读取；事件与关联 ID 在日志/看板取证，随后刷新 finding | 历史 finding 不改写；投影就绪后重新评估，不能声称原 finding 被即时清除 |
@@ -64,6 +64,8 @@ python -m http.server 8765 --bind 127.0.0.1 --directory docs/swe5001
 | 事件观察 | 等待、已消费、处理失败 / DLQ | 保持旧的有效版本，展示延迟；团队从日志/看板排查，不把缺数据当空集合 |
 
 错误展示保留 `code`、`message`、`traceId`、`evidenceId`（后两项可为空）；响应关联 ID 单独显示用于支持排查。429 按服务返回的 Retry-After（若有）等待，避免自动重放写操作。
+
+PR #8 的 Formulation 隐藏跨组织资源时返回404，与架构的403要求尚未统一。UI 对404显示“资源不存在或不可访问”，对403显示权限不足；两者都不能展示目标内容。确定状态码后再固定负向 E2E 断言。配方每项 quantity/unit 必须同时有值或同时为 null；当前候选不提供草稿 PUT/PATCH，不能把线框说明解释成已有保存编辑 API。
 
 ## 线框走查脚本
 
@@ -96,9 +98,11 @@ python -m http.server 8765 --bind 127.0.0.1 --directory docs/swe5001
 
 这些检查验证设计稿的完整性与可浏览性，不替代 G1/G2/G3 的运行测试。STCN-30/32 本地成果可供 M4 评审；STCN-31 仍是部分评审，PR 评论尚未发表。
 
+2026-10-07 补审检查：PR #8 的10个 Specification、8个 Formulation 候选操作已用于字段/流程核对；本次39个本地链接/锚点、22个唯一 HTML ID、七步顺序和六组架构路由检查通过，`git diff --check` 通过。M2 的三份已审 HTTP/payload/types 文件与10月3日版本无差异。此次仅更新文档与线框注释，未重跑10月3日浏览器走查，也未执行后端或真实认证测试。
+
 ## 尚需团队决定
 
-- M1：规格/配方公开 DTO、版本详情端点、adoption 请求和最终 demo 种子。
+- M1：PR #8 候选已覆盖规格/配方公开 DTO、版本详情与 create/release；跟进合并、跨组织404/403及 component 证据定位，确认最终 demo 种子。
 - M2：inbox 列表的时间字段/显示名称策略；更多字段见消费者核对表。
 - M4：角色/claim 映射，LW 草稿、校验、ReviewTask、decision、publication 契约。
 - M5：Pages 实际 origin、固定网关域名、staging 窗口；见路由草案。

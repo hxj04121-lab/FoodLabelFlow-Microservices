@@ -95,7 +95,7 @@
           </div>
         </div>
       </div>
-      <p class="annotation">Contract dependency: M1 Specification create/release and version-detail API. BR-01 immutability and BR-11 ownership.</p>
+      <p class="annotation">PR #8 candidate a788fa5: POST /api/specifications/versions, then POST /api/specifications/versions/{specificationVersionId}/release; GET the same version path for details. Awaiting contract acceptance. BR-01 immutability and BR-11 ownership.</p>
     </section>
 
     <section class="step" id="step-2" data-demo-step="2" aria-labelledby="step-2-title">
@@ -144,10 +144,10 @@
           <div class="table-wrap" tabindex="0" role="region" aria-label="Formula item version comparison"><table><caption>All formula items are included</caption><thead><tr><th>Material</th><th>Current specification</th><th>Candidate specification</th><th>Change</th></tr></thead><tbody><tr><td>Soy-lecithin</td><td>demo-spec-v1 · V1</td><td>demo-spec-v2 · V2</td><td>Adopt</td></tr><tr><td>Demo wheat flour</td><td>demo-flour-v1 · V1</td><td>demo-flour-v1 · V1</td><td>Retain</td></tr></tbody></table></div>
           <div class="callout"><strong>Confirm formula release</strong>Release a new formula version with the selected specification references. This action triggers confirmed impact analysis; it does not publish a label.</div>
           <div class="actions"><a class="action primary" href="#step-5">Preview new formula release</a><a class="action" href="#step-3">Return to potential impact</a></div>
-          <details><summary>Adoption cannot be applied</summary><p>If the candidate is not released, belongs to another material or is not visible to the manufacturer, explain the invalid reference. If the current formula changed, reload the comparison. A failed release must leave the existing released version untouched.</p></details>
+            <details><summary>Adoption cannot be applied</summary><p>If the candidate is not released, belongs to another material or is not visible to the manufacturer, explain the invalid reference. If the current formula changed, reload the comparison and ask for confirmation again. A failed release must leave the existing released version untouched. A 404 says “Resource not found or unavailable to your organisation”; a 403 says the action is not permitted.</p></details>
         </div>
       </div>
-      <p class="annotation">Contract dependency: M1 Formulation. Exact create/release paths and conflict token are not yet accepted. BR-02 no silent update; BR-03 aggregate all items.</p>
+      <p class="annotation">PR #8 candidate a788fa5: POST /api/formulations/formula-versions, then POST /api/formulations/formula-versions/{formulaVersionId}/release with expectedCurrentFormulaVersionId read from the product. Quantity/unit are both set or both null. Awaiting contract acceptance. BR-02 no silent update; BR-03 aggregate all items.</p>
     </section>
 
     <section class="step" id="step-5" data-demo-step="5" aria-labelledby="step-5-title">
