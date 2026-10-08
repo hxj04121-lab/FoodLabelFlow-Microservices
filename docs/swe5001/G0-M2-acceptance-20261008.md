@@ -18,11 +18,29 @@ Owner: RunChen Cai/M2. Designated reviewer: Zhu Wenyu/M4. Authoritative scope: `
 ## Specific owner decisions
 
 1. M4 validates the server-owned snapshot adapter: use JWT org_id for organisationId, store the aggregate draftRevision separately from immutable versionNumber, copy jurisdictionCode to the internal jurisdiction without changing its value, and project public declarations to the existing `{allergenId,declarationType}` internal fields. `created_by_subject` remains private Label Workflow state for BR-06; no public creator field is required by the M2 snapshot. Missing private revision or unsettled exact projections fail closed. Exposing draftRevision/creator in public UI DTOs is a separate interface choice, not a missing field in the already implemented M2 request.
-2. M1/M4 record whether the four M1 capability names are service aliases mapped to existing baseline role/permission codes or new realm role codes. The current realm design selects the baseline codes; do not silently assume aliases are issued JWT roles. This decision must precede security/starter integration. M2 has not provisioned roles or changed policy.
+2. M1/M4 record whether the four M1 capability names are service aliases mapped to existing baseline role/permission codes or new realm role codes. The current realm design selects the baseline codes; do not silently assume aliases are issued JWT roles. The concrete baseline-preserving option is below, grounded in `CatalogService.java` (AWS authority commit `56931b4`, lines 49-99) and M4's existing ADMIN_DATA_MAINTENANCE mapping:
+
+| M1 capability name | Existing baseline permission | Additional target ownership guard |
+|---|---|---|
+| SPEC_AUTHOR | DATA.MAINTAIN | SUPPLIER and own material/specification |
+| SPEC_RELEASER | DATA.MAINTAIN | SUPPLIER and own material/specification |
+| FORMULA_AUTHOR | DATA.MAINTAIN | MANUFACTURER and own product/formula |
+| FORMULA_RELEASER | FORMULA.RELEASE | MANUFACTURER and own product/formula |
+
+This is the proposed alias option, not a granted role or a runtime authorization change. The alternative is four newly reviewed realm role codes. M1/M4 explicitly accept one mapping; no realm configuration is performed. This decision must precede security/starter integration. M2 has not provisioned roles or changed policy.
 3. M4 reviews PR17's actual canonical Envelope profile and LabelPublished producer correction. The original M4 candidate fails the actual canonical producer constraint; the repair passes all 44 published-event/profile/provenance cases. Provider acceptance is recorded by M4; M3 remains the designated reviewer for full M4 G0.
 
 ## Closing these tasks
 
 PR2 has now been merged by M1 to main at `d438f637e7b5990cc977653dabc9c2c11774a465` on 8 October 08:19 UTC, incorporating the current M2 `c35140711aef6b9c496c8a55dcb26043fb7570dd` author update. Its complete actual PR CI 37748001771 and contract CI 37748001845 passed, including executed canonical conformance. This records merged implementation evidence, not an unrecorded designated M4 decision.
 
-Review order: combined PR2 (STCN-26/27), PR4 (STCN-28), PR5 (STCN-29). Each current candidate must pass applicable CI and be normally merged through actual protection; the M4 reviewer must record the decisions above. Runtime capacity/failover measurements, G1 starter and cloud/account/provisioning work do not belong to this G0 closing checklist. Until actual approvals/merges are recorded, statuses remain In Progress and this ADR remains PROPOSED. No owner acceptance or Done is fabricated.
+Review order: combined PR2 (STCN-26/27), PR4 (STCN-28), PR5 (STCN-29). Each current candidate must pass applicable CI and be normally merged through actual protection; the M4 reviewer must record the G0 snapshot/plan/steward/ADR acceptance. Realm binding and runtime/UI implementation choices are tracked at their actual owner gates and do not substitute for these bounded G0 decisions. Runtime capacity/failover measurements, G1 starter and cloud/account/provisioning work do not belong to this G0 closing checklist. Until actual approvals/merges are recorded, statuses remain In Progress and this ADR remains PROPOSED. No owner acceptance or Done is fabricated.
+
+
+## Completed local follow-through pending publication
+
+The updated PR4 candidate passes 18 HTTP / 25 event / 14 source checks, fixed-target provenance/numeric validation and actual canonical Envelope conformance. The updated PR5 candidate passes the complete 39-case suite, 14 source checks, numeric validation and actual Envelope conformance. Original target JSON bytes are unchanged.
+
+The additional isolated PR17 HTTP repair now passes 44 canonical event/profile cases and 32 HTTP compatibility cases. It fixes required correlation headers, architectural 403, PASSED/FAILED/blocking invariants and the documented server-owned snapshot adapter while preserving public DTO fields, producer/payload bytes, existing permission boundaries and every already locked package entry. These additional HTTP changes are local and are not claimed as a remote CI result or owner adoption.
+
+Desktop GitHub HTTPS/SSH publication is currently unavailable (TLS/connection closure); the connected GitHub integration rejects writes with 403 Resource not accessible by integration. Full tested local commits, focused patches and a verified Git bundle are retained so the current candidates can be published through an existing authorized connection. No force push, new token, permission or security setting change is performed.
