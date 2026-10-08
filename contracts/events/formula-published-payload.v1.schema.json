@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "FormulaPublished.v1 payload",
-  "description": "A manufacturer released a new immutable formula version, which becomes the product's current released formula (BR-01, BR-02). Every item references the exact released specification version it adopts; consumers never substitute a newer version. previousFormulaVersion is the formula this release superseded (null for the first release). Consumers: Compliance (Phase 2 CONFIRMED findings) and Label Workflow (formula projection). Owner: M1 (G0-M1.5).",
+  "description": "A manufacturer released a new immutable formula version, which becomes the product's current released formula (BR-01, BR-02). Every item references the exact released specification version it adopts; consumers never substitute a newer version. previousFormulaVersion is the formula this release superseded (null for the first release). Consumers: Compliance (Phase 2 CONFIRMED findings) and Label Workflow (formula projection). Owner: M1 (G0-M1.5). Items carry stable formulaItemId values so Compliance evidence can point at the exact formula line.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -21,10 +21,19 @@
     "product": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["productId", "productDescription"],
+      "required": [
+        "productId",
+        "productDescription"
+      ],
       "properties": {
-        "productId": { "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id" },
-        "productDescription": { "type": "string", "minLength": 1, "maxLength": 600 }
+        "productId": {
+          "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id"
+        },
+        "productDescription": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        }
       }
     },
     "formulaVersion": {
@@ -32,11 +41,19 @@
     },
     "previousFormulaVersion": {
       "oneOf": [
-        { "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/VersionReference" },
-        { "type": "null" }
+        {
+          "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/VersionReference"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
-    "releasedAt": { "type": "string", "format": "date-time", "pattern": "Z$" },
+    "releasedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
     "items": {
       "type": "array",
       "minItems": 1,
@@ -44,27 +61,67 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["sequenceNo", "materialId", "specificationVersion", "quantity", "unit"],
+        "required": [
+          "formulaItemId",
+          "sequenceNo",
+          "materialId",
+          "specificationVersion",
+          "quantity",
+          "unit"
+        ],
         "properties": {
-          "sequenceNo": { "type": "integer", "minimum": 1 },
-          "materialId": { "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id" },
+          "formulaItemId": {
+            "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id",
+            "description": "Stable server-assigned ID, unique and immutable within this released formula version. Several items may reference the same specification version; the item ID, not the specification, identifies the line. M2 UNRESOLVED evidence references it."
+          },
+          "sequenceNo": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "materialId": {
+            "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id"
+          },
           "specificationVersion": {
             "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/VersionReference"
           },
           "quantity": {
-            "type": ["number", "null"],
+            "type": [
+              "number",
+              "null"
+            ],
             "exclusiveMinimum": 0,
             "maximum": 99999999.9999,
             "description": "DECIMAL(12,4); null only together with a null unit."
           },
-          "unit": { "type": ["string", "null"], "minLength": 1, "maxLength": 40 }
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 40
+          }
         },
         "oneOf": [
           {
-            "properties": { "quantity": { "type": "number" }, "unit": { "type": "string" } }
+            "properties": {
+              "quantity": {
+                "type": "number"
+              },
+              "unit": {
+                "type": "string"
+              }
+            }
           },
           {
-            "properties": { "quantity": { "type": "null" }, "unit": { "type": "null" } }
+            "properties": {
+              "quantity": {
+                "type": "null"
+              },
+              "unit": {
+                "type": "null"
+              }
+            }
           }
         ]
       }

@@ -3,10 +3,10 @@
   "sourcePullRequest": 1,
   "sourceBranch": "docs/swe5001-team-work-breakdown",
   "sourceCommit": "f6abf4a043b7f587c6e3315f8a2b8b78e7e40b60",
-  "sourceState": "unmerged identified input",
-  "inspectedMainCommit": "c09d498fd5a88ef675c9e2b720db1a2ecc3ae1fe",
+  "sourceState": "historical FINAL input merged; current AWS authority recorded separately",
+  "inspectedMainCommit": "56931b460029abe04ec3d61a35de106e36b6008e",
   "originalLocalCommit": "1cf0c255077648828ce4a20337751021d2dee5e7",
-  "alignmentDate": "2026-10-02",
+  "alignmentDate": "2026-10-08",
   "assignment": {
     "workOrder": "G0-M2",
     "jira": "STCN-2",
@@ -37,7 +37,7 @@
     }
   ],
   "canonicalEnvelopeOwner": "M1 Huang Xiangjia (G0-M1.5)",
-  "canonicalEnvelopeState": "M1 exact open candidate supplied and referenced by M2; merge and M4 acceptance remain pending",
+  "canonicalEnvelopeState": "M1 exact current open candidate supplied and referenced by M2; merged evidence and M4 acceptance remain pending",
   "canonicalEnvelopeFields": [
     "eventId",
     "eventType",
@@ -50,13 +50,47 @@
     "aggregateVersion",
     "payload"
   ],
-  "validation": "Local M2 schema validation does not establish M1 conformance, human acceptance or merged evidence.",
+  "validation": "Local M2 and exact M1 candidate conformance do not establish reviewer acceptance, merge evidence, runtime performance or deployment.",
+  "history": {
+    "originalSourceCommit": "f6abf4a043b7f587c6e3315f8a2b8b78e7e40b60",
+    "originalSourceState": "unmerged identified input",
+    "originalInspectedMainCommit": "c09d498fd5a88ef675c9e2b720db1a2ecc3ae1fe",
+    "originalAlignmentDate": "2026-10-02",
+    "originalLocalCommit": "1cf0c255077648828ce4a20337751021d2dee5e7"
+  },
+  "currentAuthority": {
+    "commit": "56931b460029abe04ec3d61a35de106e36b6008e",
+    "architecture": "docs/swe5001/architecture/SpecTrace-CN_Architecture_Source_of_Truth_v3_AWS.md",
+    "cloud": "AWS",
+    "region": "ap-southeast-1",
+    "adr": [
+      "ADR-08",
+      "ADR-09"
+    ],
+    "files": [
+      {
+        "path": "docs/swe5001/architecture/SpecTrace-CN_Architecture_Source_of_Truth_v3_AWS.md",
+        "gitBlobSha": "e53809b318c33456fd72b91b648e1b17ab263582"
+      },
+      {
+        "path": ".project-control/work-orders/G0/M2-compliance-contracts-test-plan.yaml",
+        "gitBlobSha": "c56b55d6cf4a574daa9184745320700bc5cb9b94"
+      },
+      {
+        "path": ".project-control/work-orders/G1/M2-node-pool-helm-compliance-skeleton.yaml",
+        "gitBlobSha": "4cc5ec36031347aaea0673b1c67eaacc01818b5e"
+      }
+    ],
+    "scope": "Cloud/deployment/cost authority supersedes FINAL. Published wire fields and pre-measurement numeric targets remain unchanged."
+  },
   "canonicalEnvelopeCandidate": {
     "pullRequest": 8,
-    "commit": "a788fa5fc815c34cb23cf219d5194d92a51937bb",
+    "commit": "0fb42667d6d94fbab66ec29347d83e7b1a00d0e5",
     "path": "contracts/events/event-envelope.v1.schema.json",
     "gitBlobSha": "909f043f68257c8c767a94bb396491ad9d2aa2b3",
-    "state": "open unmerged candidate"
+    "state": "open unmerged candidate",
+    "referenceAdoption": "adopted by this M2 review candidate against the exact M1 Git blob; G0 stack/provider merge and human acceptance remain pending",
+    "previousCapturedCommit": "a788fa5fc815c34cb23cf219d5194d92a51937bb"
   },
   "historicalSourceNote": "Original sourceState/commit are retained as the October 2 assessment on which the M1 candidate was built. Current cloud/deployment/cost authority is merged AWS v3 main 56931b460029abe04ec3d61a35de106e36b6008e."
 }
