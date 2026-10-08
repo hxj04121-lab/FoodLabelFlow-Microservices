@@ -97,5 +97,11 @@
     "commit": "d438f637e7b5990cc977653dabc9c2c11774a465",
     "mergedPR": 2,
     "alignment": "normal merge into this isolated M1/M2 adoption candidate; provider branch untouched"
+  },
+  "integrationCandidates": {
+    "m1M2Companion": "faa87b39207c0223e45f867e408a8318c67e64c7",
+    "labelM2Companion": "2b5dfa8485da7f259f7050c35bd276e7dd5df7e7",
+    "m2CompletePlanSteward": "6e67d02cf267c5031f2023ff8cb3c8ecb22cfbd6",
+    "scope": "Complete G0 M2 deliverables plus exact unchanged M1/M4 contracts; actual reviewer acceptance remains separate"
   }
 }
