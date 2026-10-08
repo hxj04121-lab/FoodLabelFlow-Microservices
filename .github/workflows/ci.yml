@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "chore/**", "feature/**"]
   pull_request:
-    branches: [main, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*']
+    branches: [main, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-1-g0-m1-contracts', 'g0-m4-label-workflow-contracts']
 
 permissions:
   contents: read
