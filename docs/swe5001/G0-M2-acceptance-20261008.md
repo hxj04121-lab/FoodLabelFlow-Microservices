@@ -23,4 +23,6 @@ Owner: RunChen Cai/M2. Designated reviewer: Zhu Wenyu/M4. Authoritative scope: `
 
 ## Closing these tasks
 
+PR2 has now been merged by M1 to main at `d438f637e7b5990cc977653dabc9c2c11774a465` on 8 October 08:19 UTC, incorporating the current M2 `c35140711aef6b9c496c8a55dcb26043fb7570dd` author update. Its complete actual PR CI 37748001771 and contract CI 37748001845 passed, including executed canonical conformance. This records merged implementation evidence, not an unrecorded designated M4 decision.
+
 Review order: combined PR2 (STCN-26/27), PR4 (STCN-28), PR5 (STCN-29). Each current candidate must pass applicable CI and be normally merged through actual protection; the M4 reviewer must record the decisions above. Runtime capacity/failover measurements, G1 starter and cloud/account/provisioning work do not belong to this G0 closing checklist. Until actual approvals/merges are recorded, statuses remain In Progress and this ADR remains PROPOSED. No owner acceptance or Done is fabricated.
