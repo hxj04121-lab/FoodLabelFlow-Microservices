@@ -1,0 +1,610 @@
+openapi: 3.1.0
+info:
+  title: SpecTrace-CN Compliance API
+  version: 1.0.0
+  description: 'G0 M2 review candidate aligned to STCN-2 and the G0-M2 work order
+    / FINAL architecture from unmerged team PR #1 at f6abf4a043b7f587c6e3315f8a2b8b78e7e40b60.
+    Defines target contracts; runtime implementation and human acceptance remain pending.
+    See ../README.md and the proposed ADR-G0-M2-001. No teammate-owned contract is
+    supplied by this package.'
+servers:
+- url: http://localhost:8080
+  description: Local contract placeholder; no staging endpoint is provisioned.
+tags:
+- name: validation
+  description: Service-local synchronous draft validation.
+- name: impact
+  description: Manufacturer-owned impact previews and findings.
+security:
+- bearerAuth: []
+paths:
+  /internal/validations:
+    post:
+      tags:
+      - validation
+      operationId: validateDraftSnapshot
+      summary: Evaluate and persist the exact draft snapshot.
+      description: Label Workflow forwards the real actor JWT. organisationId must
+        match org_id and LABEL.VALIDATE permission is required through the agreed
+        realm-role mapping. Idempotency-Key is labelVersionId:draftRevision,
+        scoped by organisationId and bound to the complete canonical snapshot. First
+        completion commits run, findings and local audit atomically. Same key and
+        snapshot returns the stored result; a changed snapshot returns 409. A completed
+        blocking evaluation returns FAILED, not a transport error. No upstream database
+        reads or synchronous fan-out. Caller timeout is 2 s, at most one bounded retry
+        using the same key. Without an exact PASSED record Label Workflow cannot submit.
+        Service-local ingress only (architecture 6.2).
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        description: Exact labelVersionId:draftRevision; reuse for the one bounded
+          retry.
+        schema:
+          type: string
+          minLength: 3
+          maxLength: 256
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftSnapshot'
+      responses:
+        '201':
+          description: First completed persisted evaluation (PASSED or FAILED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationRun'
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        '200':
+          description: Idempotent replay of the stored evaluation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationRun'
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/ProjectionUnavailable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/compliance/impact-previews:
+    post:
+      tags:
+      - impact
+      operationId: previewSpecificationImpact
+      summary: Preview a released specification substitution over owned released formulas.
+      description: JWT org_type MANUFACTURER and organisationId matching JWT org_id are required.
+        Read-only Phase 1 over local projections of released immutable versions. previous
+        and candidate must belong to the same material. Aggregate all formula items;
+        compare required allergens with exact current published-label declarations.
+        Return only relevant formulas whose allergen conclusion changes, including
+        unresolved component evidence. Every finding has kind POTENTIAL. No formula
+        adoption, event publication or ReviewTask creation occurs. Missing exact projections
+        return 422 rather than assuming an empty declaration or allergen list.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpactPreviewRequest'
+      responses:
+        '200':
+          description: Potential findings with exact version evidence.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactPreview'
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '422':
+          $ref: '#/components/responses/ProjectionUnavailable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/compliance/impact-findings:
+    get:
+      tags:
+      - impact
+      operationId: listImpactFindings
+      summary: List findings belonging to the authenticated manufacturer.
+      description: Derive the tenant from JWT org_id; every returned organisationId
+        must match. Stable cursor pagination ordered by creation time and findingId.
+        Only CONFIRMED + REVIEW_REQUIRED drives Label Workflow ReviewTask.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum:
+          - POTENTIAL
+          - CONFIRMED
+      - name: outcome
+        in: query
+        schema:
+          type: string
+          enum:
+          - NO_ACTION
+          - REVIEW_REQUIRED
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: cursor
+        in: query
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '200':
+          description: Owned findings and opaque next cursor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactFindingPage'
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/compliance/impact-findings/{findingId}:
+    get:
+      tags:
+      - impact
+      operationId: getImpactFinding
+      summary: Read exact persisted finding evidence.
+      description: Require JWT org_type MANUFACTURER and ownership. Cross-manufacturer access
+        returns 403 per BR-11; no evidence is disclosed.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: findingId
+        in: path
+        required: true
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      responses:
+        '200':
+          description: Owned finding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactFinding'
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Keycloak JWT; services re-check roles, org_id and org_type.
+  parameters:
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: true
+      description: Created at gateway and propagated to the service, audit and event.
+      schema:
+        $ref: ./compliance-types.v1.schema.json#/$defs/Id
+  schemas:
+    DraftSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+      - organisationId
+      - labelVersionId
+      - versionNumber
+      - draftRevision
+      - formulaVersionId
+      - jurisdiction
+      - ruleSetVersionId
+      - declarations
+      properties:
+        organisationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        labelVersionId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        versionNumber:
+          type: integer
+          minimum: 1
+        draftRevision:
+          type: integer
+          minimum: 1
+        formulaVersionId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        jurisdiction:
+          type: string
+          minLength: 1
+        ruleSetVersionId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        declarations:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - allergenId
+            - declarationType
+            properties:
+              allergenId:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+              declarationType:
+                type: string
+                enum:
+                - CONTAINS
+    ValidationRun:
+      type: object
+      additionalProperties: false
+      required:
+      - validationRunId
+      - organisationId
+      - correlationId
+      - labelVersionId
+      - versionNumber
+      - draftRevision
+      - formulaVersionId
+      - jurisdiction
+      - ruleSetVersionId
+      - status
+      - ranAt
+      - findings
+      properties:
+        validationRunId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        organisationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        correlationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        labelVersionId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        versionNumber:
+          type: integer
+          minimum: 1
+        draftRevision:
+          type: integer
+          minimum: 1
+        formulaVersionId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        jurisdiction:
+          type: string
+          minLength: 1
+        ruleSetVersionId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        status:
+          type: string
+          enum:
+          - PASSED
+          - FAILED
+        ranAt:
+          type: string
+          format: date-time
+          pattern: Z$
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationFinding'
+      allOf:
+      - if:
+          properties:
+            status:
+              const: PASSED
+          required:
+          - status
+        then:
+          properties:
+            findings:
+              items:
+                not:
+                  properties:
+                    blocking:
+                      const: true
+                  required:
+                  - blocking
+      - if:
+          properties:
+            status:
+              const: FAILED
+          required:
+          - status
+        then:
+          properties:
+            findings:
+              contains:
+                properties:
+                  blocking:
+                    const: true
+                required:
+                - blocking
+    ValidationFinding:
+      type: object
+      additionalProperties: false
+      required:
+      - resultCode
+      - severity
+      - passed
+      - blocking
+      - message
+      properties:
+        resultCode:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        severity:
+          type: string
+          enum:
+          - INFO
+          - WARNING
+          - ERROR
+        passed:
+          type: boolean
+        blocking:
+          type: boolean
+        message:
+          type: string
+          minLength: 1
+      allOf:
+      - if:
+          properties:
+            blocking:
+              const: true
+          required:
+          - blocking
+        then:
+          properties:
+            severity:
+              const: ERROR
+            passed:
+              const: false
+    ImpactPreviewRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - organisationId
+      - specificationChange
+      - ruleSetVersionId
+      - jurisdiction
+      properties:
+        organisationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        specificationChange:
+          type: object
+          additionalProperties: false
+          required:
+          - previous
+          - candidate
+          properties:
+            previous:
+              $ref: ./compliance-types.v1.schema.json#/$defs/VersionReference
+            candidate:
+              $ref: ./compliance-types.v1.schema.json#/$defs/VersionReference
+        ruleSetVersionId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        jurisdiction:
+          type: string
+          minLength: 1
+    ImpactFinding:
+      $ref: ../events/impact-finding-payload.v1.schema.json
+    ImpactPreview:
+      type: object
+      additionalProperties: false
+      required:
+      - organisationId
+      - correlationId
+      - findings
+      properties:
+        organisationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        correlationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        findings:
+          type: array
+          items:
+            allOf:
+            - $ref: '#/components/schemas/ImpactFinding'
+            - type: object
+              properties:
+                kind:
+                  const: POTENTIAL
+    ImpactFindingPage:
+      type: object
+      additionalProperties: false
+      required:
+      - organisationId
+      - items
+      - nextCursor
+      properties:
+        organisationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ImpactFinding'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+  responses:
+    InvalidRequest:
+      description: Invalid request shape or values.
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    AuthenticationRequired:
+      description: Missing or invalid JWT.
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    AuthorizationDenied:
+      description: Missing role or organisation mismatch (including tenant-private
+        reads).
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    ResourceNotFound:
+      description: The requested owned resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    IdempotencyConflict:
+      description: The same tenant-scoped idempotency key was used with a different
+        snapshot.
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    ProjectionUnavailable:
+      description: Exact version projection or published-label input is unavailable;
+        no empty-success fallback.
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    RateLimited:
+      description: Rate limit reached.
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    InternalError:
+      description: Unexpected failure without internal details.
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    ServiceUnavailable:
+      description: Service unavailable; Label Workflow must fail closed.
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id

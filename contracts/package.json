@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "lint": "spectral lint openapi/compliance.v1.yaml --fail-severity warn",
-    "test": "node test-contracts.mjs --scope events",
-    "check": "npm run check:events",
-    "check:events": "node test-contracts.mjs --scope events",
+    "test": "node test-contracts.mjs --scope http",
+    "check": "npm run check:http && npm run check:events",
+    "check:events": "node test-contracts.mjs --scope events && npm run check:unresolved-source",
     "check:http": "npm run lint && node test-contracts.mjs --scope http",
     "check:envelope": "node test-envelope-interface.mjs",
+    "check:unresolved-source": "node test-unresolved-source.mjs",
     "lint:m1": "spectral lint openapi/specification.v1.yaml openapi/formulation.v1.yaml --fail-severity warn",
     "check:m1": "npm run lint:m1 && node test-m1-contracts.mjs"
   },

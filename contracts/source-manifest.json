@@ -6,7 +6,7 @@
   "sourceState": "historical FINAL input merged; current AWS authority recorded separately",
   "inspectedMainCommit": "56931b460029abe04ec3d61a35de106e36b6008e",
   "originalLocalCommit": "1cf0c255077648828ce4a20337751021d2dee5e7",
-  "alignmentDate": "2026-10-05",
+  "alignmentDate": "2026-10-08",
   "assignment": {
     "workOrder": "G0-M2",
     "jira": "STCN-2",
@@ -37,7 +37,7 @@
     }
   ],
   "canonicalEnvelopeOwner": "M1 Huang Xiangjia (G0-M1.5)",
-  "canonicalEnvelopeState": "M1 candidate supplied in open unmerged PR8; canonical conformance and reference adoption reviewed separately",
+  "canonicalEnvelopeState": "Actual canonical Envelope supplied by M1 is included in merged PR2/main; current M1 API/event candidate and human acceptance remain separate",
   "canonicalEnvelopeFields": [
     "eventId",
     "eventType",
@@ -85,10 +85,17 @@
   },
   "canonicalEnvelopeCandidate": {
     "pullRequest": 8,
-    "commit": "a788fa5fc815c34cb23cf219d5194d92a51937bb",
+    "commit": "0fb42667d6d94fbab66ec29347d83e7b1a00d0e5",
     "path": "contracts/events/event-envelope.v1.schema.json",
     "gitBlobSha": "909f043f68257c8c767a94bb396491ad9d2aa2b3",
     "state": "open unmerged candidate",
-    "referenceAdoption": "blocked in G0 stack until M1 artifact is available on its branch; companion adoption can be validated against the exact candidate"
+    "referenceAdoption": "adopted by this M2 review candidate against the exact M1 Git blob; G0 stack/provider merge and human acceptance remain pending",
+    "previousCapturedCommit": "a788fa5fc815c34cb23cf219d5194d92a51937bb"
+  },
+  "historicalSourceNote": "Original sourceState/commit are retained as the October 2 assessment on which the M1 candidate was built. Current cloud/deployment/cost authority is merged AWS v3 main 56931b460029abe04ec3d61a35de106e36b6008e.",
+  "integrationMain": {
+    "commit": "d438f637e7b5990cc977653dabc9c2c11774a465",
+    "mergedPR": 2,
+    "alignment": "normal merge into this isolated M1/M2 adoption candidate; provider branch untouched"
   }
 }
