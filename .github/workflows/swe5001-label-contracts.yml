@@ -20,4 +20,4 @@ jobs:
           cache-dependency-path: contracts/package-lock.json
       - name: Validate Label Workflow and canonical LabelPublished
         working-directory: contracts
-        run: npm ci --ignore-scripts --no-audit --no-fund && npm run validate
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm run check:integration

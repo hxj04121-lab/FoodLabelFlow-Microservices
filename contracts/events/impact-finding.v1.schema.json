@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ImpactFinding.v1 domain event",
+  "allOf": [
+    {
+      "$ref": "event-envelope.v1.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "ImpactFinding.v1"
+        },
+        "producer": {
+          "const": "compliance-service"
+        },
+        "payload": {
+          "$ref": "impact-finding-payload.v1.schema.json"
+        }
+      }
+    }
+  ],
+  "description": "M2 ImpactFinding.v1 profile composes the M1 canonical event-envelope.v1 schema with the M2 payload, event type and producer constraints. Shared Envelope owner: M1; exact candidate source: PR8 0fb42667d6d94fbab66ec29347d83e7b1a00d0e5. Candidate conformance does not establish merge or M4 acceptance."
+}
