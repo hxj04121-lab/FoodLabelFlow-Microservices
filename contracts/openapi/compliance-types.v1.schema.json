@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Compliance v1 IDs, version references and baseline-compatible ApiError",
+  "$defs": {
+    "Id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^\\S+$"
+    },
+    "VersionReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "versionNumber"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^\\S+$"
+        },
+        "versionNumber": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "ApiError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "traceId",
+        "evidenceId"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "traceId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidenceId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "description": "M2 wire primitives, proposed in ADR-G0-M2-001; not a replacement for M1's event envelope."
+}
