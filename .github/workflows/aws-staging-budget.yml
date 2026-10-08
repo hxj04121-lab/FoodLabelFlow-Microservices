@@ -1,4 +1,4 @@
-name: AWS staging window budget gate
+name: AWS staging window estimate
 
 on:
   push:
@@ -7,12 +7,16 @@ on:
       - "scripts/aws_staging_budget.py"
       - "tests/test_aws_staging_budget.py"
       - ".github/workflows/aws-staging-budget.yml"
+      - ".github/workflows/aws-staging-budget-gate.yml"
+      - ".github/workflows/aws-staging-budget-contract.yml"
   pull_request:
     paths:
       - "infra/**"
       - "scripts/aws_staging_budget.py"
       - "tests/test_aws_staging_budget.py"
       - ".github/workflows/aws-staging-budget.yml"
+      - ".github/workflows/aws-staging-budget-gate.yml"
+      - ".github/workflows/aws-staging-budget-contract.yml"
   workflow_dispatch:
     inputs:
       window_hours:
@@ -35,28 +39,6 @@ on:
         required: false
         default: ""
         type: string
-  workflow_call:
-    inputs:
-      window_hours:
-        description: Planned deployment window in hours
-        required: true
-        default: "24"
-        type: string
-      experiment_hours:
-        description: Compliance scale-out experiment hours
-        required: true
-        default: "4"
-        type: string
-      k6_hours:
-        description: k6 load-generator hours
-        required: true
-        default: "2"
-        type: string
-      available_credit_usd:
-        description: Explicit available AWS credit
-        required: false
-        default: ""
-        type: string
 
 permissions:
   contents: read
@@ -73,7 +55,6 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_aws_staging_budget.py' -v
       - name: Estimate or enforce budget gate
         env:
-          EVENT_NAME: ${{ github.event_name }}
           WINDOW_HOURS: ${{ inputs.window_hours || '24' }}
           EXPERIMENT_HOURS: ${{ inputs.experiment_hours || '4' }}
           K6_HOURS: ${{ inputs.k6_hours || '2' }}
@@ -82,8 +63,5 @@ jobs:
           args=(--hours "$WINDOW_HOURS" --experiment-hours "$EXPERIMENT_HOURS" --k6-hours "$K6_HOURS")
           if [ -n "$AVAILABLE_CREDIT_USD" ]; then
             args+=(--available-credit-usd "$AVAILABLE_CREDIT_USD")
-          fi
-          if [ "$EVENT_NAME" = "workflow_call" ]; then
-            args+=(--require-gate)
           fi
           python scripts/aws_staging_budget.py "${args[@]}"

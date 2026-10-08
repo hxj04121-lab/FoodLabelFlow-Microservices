@@ -129,6 +129,9 @@ def load_config(path, now=None):
 
 
 def estimate(data, hours, experiment_hours, k6_hours):
+    hours = decimal(hours, "hours")
+    experiment_hours = decimal(experiment_hours, "experiment_hours")
+    k6_hours = decimal(k6_hours, "k6_hours")
     for name, value in (("hours", hours), ("experiment_hours", experiment_hours), ("k6_hours", k6_hours)):
         if value < 0 or (name == "hours" and value == 0):
             raise ValueError(f"{name} must be {'positive' if name == 'hours' else 'non-negative'}")

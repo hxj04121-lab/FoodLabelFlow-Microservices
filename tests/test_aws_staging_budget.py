@@ -3,6 +3,9 @@ import copy
 import io
 import json
 import unittest
+import os
+import subprocess
+import sys
 from decimal import Decimal
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -90,6 +93,53 @@ class AwsStagingBudgetTests(unittest.TestCase):
                     load_config(path)
             finally:
                 path.unlink(missing_ok=True)
+
+    def test_non_finite_or_missing_hours_fail_closed(self):
+        for index in range(3):
+            for invalid in (Decimal('NaN'), Decimal('Infinity'), Decimal('-Infinity'), None, True):
+                values = [24, 4, 2]
+                values[index] = invalid
+                with self.subTest(index=index, value=invalid):
+                    with self.assertRaisesRegex(ValueError, 'invalid'):
+                        estimate(fixture(), *values)
+
+    def run_cli(self, *args, credit_env=None):
+        env = dict(os.environ)
+        env.pop('AVAILABLE_CREDIT_USD', None)
+        if credit_env is not None:
+            env['AVAILABLE_CREDIT_USD'] = credit_env
+        return subprocess.run([sys.executable, 'scripts/aws_staging_budget.py', *args],
+                              cwd=CONFIG.parents[1], env=env, capture_output=True, text=True)
+
+    def test_gate_cli_missing_credit_blocks(self):
+        p = self.run_cli('--require-gate')
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn('Gate result:               UNVERIFIED', p.stdout)
+
+    def test_gate_cli_empty_inherited_balance_blocks(self):
+        self.assertEqual(self.run_cli('--require-gate', credit_env='').returncode, 2)
+
+    def test_gate_cli_insufficient_credit_fails(self):
+        p = self.run_cli('--require-gate', credit_env='0')
+        self.assertEqual(p.returncode, 1, p.stderr)
+        self.assertIn('Gate result:               FAIL', p.stdout)
+
+    def test_gate_cli_exact_credit_passes(self):
+        final = estimate(fixture(), 24, 4, 2)[3]
+        p = self.run_cli('--require-gate', credit_env=str(final))
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn('Gate result:               PASS', p.stdout)
+
+    def test_gate_cli_invalid_balance_blocks(self):
+        for value in ('NaN', 'Infinity', '-Infinity', '-1'):
+            with self.subTest(value=value):
+                self.assertEqual(self.run_cli('--require-gate', credit_env=value).returncode, 2)
+
+    def test_gate_cli_invalid_hours_block(self):
+        for flag in ('--hours', '--experiment-hours', '--k6-hours'):
+            for value in ('NaN', 'Infinity'):
+                with self.subTest(flag=flag, value=value):
+                    self.assertEqual(self.run_cli('--require-gate', flag, value, credit_env='200').returncode, 2)
 
     def test_stale_public_price_snapshot_fails_closed(self):
         data = json.loads(CONFIG.read_text())
