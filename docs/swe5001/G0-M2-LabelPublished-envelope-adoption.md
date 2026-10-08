@@ -51,3 +51,12 @@ export, deployed authentication, measured capacity/failover or cloud action is
 included. M3 remains the designated reviewer of M4's G0 deliverables; M4 remains
 the designated reviewer of M2's stewardship work. Technical validation and a
 draft repair PR do not establish either acceptance or Jira Done.
+
+
+## October 8 G0 HTTP compatibility follow-through
+
+This isolated author repair also aligns the supplied Label Workflow HTTP contract with existing AWS architecture BR-05/BR-11 and the M2 contract. Every operation receives and returns the gateway correlation ID. Cross-organisation private resources return 403, with 404 reserved for absence. PASSED cannot contain blocking findings; FAILED preserves at least one blocker; a blocking finding is ERROR and not passed. No role, organisation visibility rule or service boundary is introduced. Public DTO field sets are preserved.
+
+The internal snapshot adapter is server-owned: JWT org_id -> organisationId; private aggregate draftRevision is distinct from immutable versionNumber; public jurisdictionCode maps unchanged to internal jurisdiction; declarations project to allergenId/declarationType. The architecture's created_by_subject stays private for maker-checker, so its absence from a public DTO is not a missing M2 snapshot field. The actor JWT is forwarded; absent revision/exact inputs fails closed. M4 confirms that implementation binding; this schema/document change does not claim deployed authorization or runtime equivalence.
+
+The realm design uses baseline role codes, while M1 descriptions name four service capabilities as roles. Owners must choose explicit aliases to existing permissions or introduce separately reviewed realm roles before the security/starter integration. This repair selects neither policy. Undeclared UI read/edit/current-publication APIs remain a later interface scope; no public operation is invented merely to close G0-M2. Native OpenAPI/event checks and focused HTTP positive/negative checks execute together in the existing contract workflow.
