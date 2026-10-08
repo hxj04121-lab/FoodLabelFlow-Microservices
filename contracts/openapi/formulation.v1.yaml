@@ -24,8 +24,9 @@ paths:
       - products
       operationId: listProducts
       summary: List the caller's products.
-      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
-        get 404.
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11). A resource owned
+        by another organisation returns 403 AUTHORIZATION_DENIED without any of its content (architecture
+        v3 section 15).
       parameters:
       - $ref: '#/components/parameters/CorrelationId'
       - $ref: '#/components/parameters/Limit'
@@ -61,8 +62,9 @@ paths:
       - products
       operationId: getProduct
       summary: Read one product and its current formula pointer.
-      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
-        get 404.
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11). A resource owned
+        by another organisation returns 403 AUTHORIZATION_DENIED without any of its content (architecture
+        v3 section 15).
       parameters:
       - $ref: '#/components/parameters/CorrelationId'
       - name: productId
@@ -104,8 +106,9 @@ paths:
       - formula-versions
       operationId: listProductFormulaVersions
       summary: List a product's formula versions, newest first.
-      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
-        get 404.
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11). A resource owned
+        by another organisation returns 403 AUTHORIZATION_DENIED without any of its content (architecture
+        v3 section 15).
       parameters:
       - $ref: '#/components/parameters/CorrelationId'
       - name: productId
@@ -191,8 +194,9 @@ paths:
       - formula-versions
       operationId: createFormulaDraft
       summary: Create a draft formula version.
-      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
-        get 404. Requires FORMULA_AUTHOR. Every item must reference a released, effective specification
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11). A resource owned
+        by another organisation returns 403 AUTHORIZATION_DENIED without any of its content (architecture
+        v3 section 15). Requires FORMULA_AUTHOR. Every item must reference a released, effective specification
         of the same material in the projection (422 SPECIFICATION_NOT_RELEASED, SPECIFICATION_MATERIAL_MISMATCH,
         SPECIFICATION_NOT_EFFECTIVE or SPECIFICATION_PROJECTION_UNAVAILABLE). Quantity and unit are both
         set or both null.
@@ -239,8 +243,9 @@ paths:
       - formula-versions
       operationId: getFormulaVersion
       summary: Read one formula version with its items.
-      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
-        get 404.
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11). A resource owned
+        by another organisation returns 403 AUTHORIZATION_DENIED without any of its content (architecture
+        v3 section 15).
       parameters:
       - $ref: '#/components/parameters/CorrelationId'
       - name: formulaVersionId
@@ -282,9 +287,10 @@ paths:
       - formula-versions
       operationId: releaseFormulaVersion
       summary: Release a draft formula and make it the product's current formula.
-      description: 'Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
-        get 404. Requires FORMULA_RELEASER. In one local transaction: the expected current pointer is
-        checked under lock (409 CURRENT_FORMULA_CHANGED), the draft becomes RELEASED and current, the
+      description: 'Requires org_type MANUFACTURER and ownership of the product (BR-11). A resource owned
+        by another organisation returns 403 AUTHORIZATION_DENIED without any of its content (architecture
+        v3 section 15). Requires FORMULA_RELEASER. In one local transaction: the expected current pointer
+        is checked under lock (409 CURRENT_FORMULA_CHANGED), the draft becomes RELEASED and current, the
         previous current formula stays immutable, local audit is written and FormulaPublished.v1 is added
         to the outbox (BR-01, BR-02, BR-10). A second release returns 409 VERSION_IMMUTABLE with no writes.'
       parameters:
@@ -338,8 +344,9 @@ paths:
       - formula-versions
       operationId: traceFormulaVersion
       summary: Trace a formula version to the exact specification versions and suppliers it uses.
-      description: Requires org_type MANUFACTURER and ownership of the product (BR-11); other organisations
-        get 404.
+      description: Requires org_type MANUFACTURER and ownership of the product (BR-11). A resource owned
+        by another organisation returns 403 AUTHORIZATION_DENIED without any of its content (architecture
+        v3 section 15).
       parameters:
       - $ref: '#/components/parameters/CorrelationId'
       - name: formulaVersionId
@@ -537,12 +544,17 @@ components:
       type: object
       additionalProperties: false
       required:
+      - formulaItemId
       - sequenceNo
       - materialId
       - specificationVersion
       - quantity
       - unit
       properties:
+        formulaItemId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          description: Stable server-assigned ID, unique and immutable within the formula version; the
+            same ID appears in FormulaPublished.v1 and in M2 UNRESOLVED evidence.
         sequenceNo:
           type: integer
           minimum: 1
@@ -682,6 +694,7 @@ components:
             type: object
             additionalProperties: false
             required:
+            - formulaItemId
             - sequenceNo
             - materialId
             - specificationVersion
@@ -689,6 +702,8 @@ components:
             - supplierOrganisationId
             - effectiveDate
             properties:
+              formulaItemId:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
               sequenceNo:
                 type: integer
                 minimum: 1
@@ -729,7 +744,8 @@ components:
           schema:
             $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
     AuthorizationDenied:
-      description: Missing role or organisation ownership (AUTHORIZATION_DENIED, BR-07/BR-11).
+      description: Missing role, or the resource belongs to another organisation (AUTHORIZATION_DENIED,
+        BR-07/BR-11); no content of that resource is returned.
       headers:
         X-Correlation-ID:
           description: Actual propagated request correlation identifier.
@@ -741,7 +757,7 @@ components:
           schema:
             $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
     ResourceNotFound:
-      description: The resource does not exist or is not visible to the caller's organisation (RESOURCE_NOT_FOUND).
+      description: The resource does not exist (RESOURCE_NOT_FOUND).
       headers:
         X-Correlation-ID:
           description: Actual propagated request correlation identifier.

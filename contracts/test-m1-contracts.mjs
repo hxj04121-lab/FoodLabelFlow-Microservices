@@ -95,6 +95,64 @@ check('two-phase story is consistent across M1 and M2 examples', () => {
   assert.equal(formula.correlationId === specV2.correlationId, false, 'adoption is a separate request');
 });
 
+// ---- stable component / item IDs and UNRESOLVED traceability (M2 steward finding 1 on PR #8)
+const specUnmapped = json('examples/specification/specification-published-unmapped-component.json');
+const formulaSameSpec = json('examples/formulation/formula-published-two-items-same-spec.json');
+check('event spec with UNMAPPED component', () => { valid(specEvent, specUnmapped); specSemantics(specUnmapped); });
+check('event formula with two items on one specification', () => { valid(formulaEvent, formulaSameSpec); formulaSemantics(formulaSameSpec); });
+check('component and item IDs are unique and present', () => {
+  for (const e of [specV1, specV2, specUnmapped]) {
+    const ids = e.payload.components.map((c) => c.specComponentId);
+    assert.equal(new Set(ids).size, ids.length);
+  }
+  for (const e of [formula, formulaSameSpec]) {
+    const ids = e.payload.items.map((i) => i.formulaItemId);
+    assert.equal(new Set(ids).size, ids.length);
+  }
+  const allComponentIds = [specV1, specV2, specUnmapped].flatMap((e) => e.payload.components.map((c) => c.specComponentId));
+  assert.equal(new Set(allComponentIds).size, allComponentIds.length, 'a new version gets new component IDs');
+});
+bad('spec: component without specComponentId', specV2, specEvent, (e) => { delete e.payload.components[0].specComponentId; });
+bad('formula: item without formulaItemId', formula, formulaEvent, (e) => { delete e.payload.items[0].formulaItemId; });
+
+// What Compliance derives for a formula: one UNRESOLVED entry per (formula item, unresolved component).
+function deriveUnresolved(formulaEvt, specEvts) {
+  const specs = new Map(specEvts.map((s) => [s.payload.specificationVersion.id, s.payload]));
+  return formulaEvt.payload.items.flatMap((item) => {
+    const spec = specs.get(item.specificationVersion.id);
+    if (!spec) return [];
+    return spec.components.filter((c) => c.matchStatus !== 'MATCHED').map((c) => ({
+      formulaItemId: item.formulaItemId, specificationVersionId: spec.specificationVersion.id,
+      specComponentId: c.specComponentId, ingredientId: c.ingredientId, rawPhrase: c.rawPhrase, reason: c.matchStatus,
+    }));
+  });
+}
+const m2Unresolved = ajv.compile({ $ref: `${base}events/impact-finding-payload.v1.schema.json#/properties/unresolvedAllergens/items` });
+check('UNRESOLVED evidence traces to the exact formula item and specification component', () => {
+  const evidence = deriveUnresolved(formulaSameSpec, [specUnmapped]);
+  assert.equal(evidence.length, 2, 'two items on the same specification give two entries');
+  assert.equal(new Set(evidence.map((x) => x.formulaItemId)).size, 2, 'entries are told apart by formulaItemId');
+  for (const x of evidence) {
+    valid(m2Unresolved, x);
+    const items = formulaSameSpec.payload.items.filter((i) => i.formulaItemId === x.formulaItemId);
+    assert.equal(items.length, 1, 'formulaItemId resolves to exactly one formula line');
+    assert.equal(items[0].specificationVersion.id, x.specificationVersionId);
+    const components = specUnmapped.payload.components.filter((c) => c.specComponentId === x.specComponentId);
+    assert.equal(components.length, 1, 'specComponentId resolves to exactly one component of that version');
+    assert.equal(components[0].rawPhrase, x.rawPhrase);
+    assert.equal(components[0].matchStatus, x.reason);
+  }
+});
+check('event redelivery yields identical evidence', () => {
+  const first = deriveUnresolved(formulaSameSpec, [specUnmapped]);
+  const again = deriveUnresolved(clone(formulaSameSpec), [clone(specUnmapped)]);
+  assert.deepEqual(again, first);
+});
+check('soy-lecithin story stays free of UNRESOLVED evidence', () => {
+  assert.deepEqual(deriveUnresolved(formula, [specV2]), []);
+  assert.deepEqual(json('examples/compliance/impact-potential-missing.json').payload.unresolvedAllergens, []);
+});
+
 // ---- HTTP contracts
 function rewrite(value) {
   if (Array.isArray(value)) return value.map(rewrite);
@@ -141,6 +199,21 @@ for (const [name, api] of Object.entries(apis)) {
     }
   });
 }
+check('other organisations get 403, never a hidden 404 (architecture v3 section 15; finding 2)', () => {
+  for (const api of Object.values(apis)) {
+    assert.equal(/not visible|other organisations get 404/i.test(JSON.stringify(api)), false);
+    for (const ops of Object.values(api.paths)) for (const operation of Object.values(ops)) {
+      assert(operation.responses['403'], `${operation.operationId} documents 403`);
+    }
+  }
+  const productRead = apis.formulation.paths['/api/formulations/products/{productId}'].get.description;
+  assert.match(productRead, /another organisation returns 403 AUTHORIZATION_DENIED/);
+});
+check('public representations expose the stable IDs', () => {
+  assert(apis.specification.components.schemas.Component.required.includes('specComponentId'));
+  assert(apis.formulation.components.schemas.FormulaItem.required.includes('formulaItemId'));
+  assert(apis.formulation.components.schemas.FormulaTrace.properties.items.items.required.includes('formulaItemId'));
+});
 check('release operations exist and document the outbox event', () => {
   const s = apis.specification.paths['/api/specifications/versions/{specificationVersionId}/release'].post;
   const f = apis.formulation.paths['/api/formulations/formula-versions/{formulaVersionId}/release'].post;

@@ -10,17 +10,55 @@
   "aggregateVersion": 2,
   "payload": {
     "organisationId": "supplier_01",
-    "supplier": { "supplierId": "sup_001", "supplierCode": "COURSE-SUP-01", "supplierName": "Course cocoa supplier" },
-    "material": { "materialId": "mat_001", "materialCode": "CHOC-BASE-01", "materialName": "Chocolate base" },
-    "specificationVersion": { "id": "spec_001_v2", "versionNumber": 2 },
-    "previousVersion": { "id": "spec_001_v1", "versionNumber": 1 },
+    "supplier": {
+      "supplierId": "sup_001",
+      "supplierCode": "COURSE-SUP-01",
+      "supplierName": "Course cocoa supplier"
+    },
+    "material": {
+      "materialId": "mat_001",
+      "materialCode": "CHOC-BASE-01",
+      "materialName": "Chocolate base"
+    },
+    "specificationVersion": {
+      "id": "spec_001_v2",
+      "versionNumber": 2
+    },
+    "previousVersion": {
+      "id": "spec_001_v1",
+      "versionNumber": 1
+    },
     "effectiveDate": "2026-10-01",
     "releasedAt": "2026-10-01T07:55:00Z",
     "components": [
-      { "sequenceNo": 1, "ingredientId": "ing_cocoa", "ingredientName": "cocoa", "rawPhrase": "cocoa mass", "matchStatus": "MATCHED" },
-      { "sequenceNo": 2, "ingredientId": "ing_wheat_flour", "ingredientName": "wheat flour", "rawPhrase": "wheat flour", "matchStatus": "MATCHED" },
-      { "sequenceNo": 3, "ingredientId": "ing_soy_lecithin", "ingredientName": "soy lecithin", "rawPhrase": "emulsifier (soy lecithin)", "matchStatus": "MATCHED" }
+      {
+        "specComponentId": "spec_001_v2_c01",
+        "sequenceNo": 1,
+        "ingredientId": "ing_cocoa",
+        "ingredientName": "cocoa",
+        "rawPhrase": "cocoa mass",
+        "matchStatus": "MATCHED"
+      },
+      {
+        "specComponentId": "spec_001_v2_c02",
+        "sequenceNo": 2,
+        "ingredientId": "ing_wheat_flour",
+        "ingredientName": "wheat flour",
+        "rawPhrase": "wheat flour",
+        "matchStatus": "MATCHED"
+      },
+      {
+        "specComponentId": "spec_001_v2_c03",
+        "sequenceNo": 3,
+        "ingredientId": "ing_soy_lecithin",
+        "ingredientName": "soy lecithin",
+        "rawPhrase": "emulsifier (soy lecithin)",
+        "matchStatus": "MATCHED"
+      }
     ],
-    "provenance": { "provenanceId": "prov_project_seed", "sourceType": "PROJECT_SEEDED" }
+    "provenance": {
+      "provenanceId": "prov_project_seed",
+      "sourceType": "PROJECT_SEEDED"
+    }
   }
 }

@@ -275,8 +275,8 @@ paths:
       - specification-versions
       operationId: listSpecificationVersions
       summary: List specification versions.
-      description: RELEASED and RETIRED versions are visible to every organisation; DRAFT versions only
-        to the owning supplier organisation.
+      description: RELEASED and RETIRED versions are visible to every organisation; DRAFT versions are
+        listed only for the owning supplier organisation.
       parameters:
       - $ref: '#/components/parameters/CorrelationId'
       - name: materialId
@@ -371,7 +371,8 @@ paths:
       - specification-versions
       operationId: getSpecificationVersion
       summary: Read one specification version with its components.
-      description: Drafts are visible only to the owning supplier organisation; released versions to all.
+      description: Released versions are visible to all organisations. A draft owned by another organisation
+        returns 403 AUTHORIZATION_DENIED without any of its content.
       parameters:
       - $ref: '#/components/parameters/CorrelationId'
       - name: specificationVersionId
@@ -656,6 +657,7 @@ components:
       type: object
       additionalProperties: false
       required:
+      - specComponentId
       - sequenceNo
       - ingredientId
       - ingredientName
@@ -663,11 +665,16 @@ components:
       - matchRule
       - matchStatus
       properties:
+        specComponentId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          description: Stable server-assigned ID, unique and immutable within the released version; the
+            same ID appears in SpecificationPublished.v1 and in M2 UNRESOLVED evidence.
         sequenceNo:
           type: integer
           minimum: 1
         ingredientId:
           $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          description: Vocabulary ingredient; UNMAPPED/AMBIGUOUS components reference a PLACEHOLDER ingredient.
         ingredientName:
           type: string
           minLength: 1
@@ -802,7 +809,8 @@ components:
           schema:
             $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
     AuthorizationDenied:
-      description: Missing role or organisation ownership (AUTHORIZATION_DENIED, BR-07/BR-11).
+      description: Missing role, or the resource belongs to another organisation (AUTHORIZATION_DENIED,
+        BR-07/BR-11); no content of that resource is returned.
       headers:
         X-Correlation-ID:
           description: Actual propagated request correlation identifier.
@@ -814,7 +822,7 @@ components:
           schema:
             $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
     ResourceNotFound:
-      description: The resource does not exist or is not visible to the caller's organisation (RESOURCE_NOT_FOUND).
+      description: The resource does not exist (RESOURCE_NOT_FOUND).
       headers:
         X-Correlation-ID:
           description: Actual propagated request correlation identifier.
