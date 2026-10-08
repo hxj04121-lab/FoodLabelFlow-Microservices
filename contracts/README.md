@@ -1,4 +1,4 @@
-# SpecTrace-CN G0 M2 contracts — STCN-27 review scope
+# SpecTrace-CN G0 M2 contracts — STCN-26 review scope
 
 Owner: RunChen Cai (M2); reviewer: Zhu Wenyu (M4). Parent task: STCN-2.
 
@@ -6,11 +6,13 @@ The [source manifest](source-manifest.json) preserves the original October 1 FIN
 
 This stage contains [ImpactFinding.v1](events/impact-finding.v1.schema.json), its [payload](events/impact-finding-payload.v1.schema.json), [shared wire types/ApiError](openapi/compliance-types.v1.schema.json) and actual M2 examples. [ADR-G0-M2-001](../docs/swe5001/adr/ADR-G0-M2-001-compliance-contracts.md) remains PROPOSED.
 
+STCN-26 adds the [Compliance OpenAPI](openapi/compliance.v1.yaml) and HTTP examples.
+
 Run `npm ci --ignore-scripts --no-audit --no-fund` and `npm run check` from `contracts/`. Each stage validates every file in its explicitly selected scope; missing required inputs fail. The full suite is enabled in STCN-29 when all deliverables are present.
 
-The event's local EnvelopeInterface is the M2 consumer expectation from FINAL. M1 has supplied the canonical candidate in [PR #8](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/8), exact head **0fb42667d6d94fbab66ec29347d83e7b1a00d0e5**, at `events/event-envelope.v1.schema.json`; it is not yet merged into this stack. Run `npm run check:envelope` against that actual candidate in an isolated review checkout. Absence here exits BLOCKED (code 2). Adopt the shared `$ref` once the owner artifact is available in the integration branch, then rerun both owners' checks. Candidate conformance and human acceptance are separate.
+ImpactFinding now composes the actual M1 canonical `events/event-envelope.v1.schema.json`, exact Git blob **909f043f68257c8c767a94bb396491ad9d2aa2b3** from PR8 **0fb42667d6d94fbab66ec29347d83e7b1a00d0e5**, rather than maintaining a parallel local EnvelopeInterface. This normal M2 author update incorporates the tested source-example correction from PR20 and its two exact provider fixtures. Run `npm run check` and `npm run check:envelope`; canonical conformance is now executable on this branch. The schema remains an identified owner-supplied candidate; it does not claim the provider PR was merged or M4 accepted it. Unresolved evidence rejects exact duplicate entries while retaining distinct formula-item paths for the same component.
 
-Review order: STCN-27 → STCN-26 → STCN-28 → STCN-29. Each dependent PR is stacked on the preceding branch for a focused subtask diff and must be retargeted to main after prerequisites merge. M1 envelope/peer contracts, M4 wire/plan/ADR review, green CI and merged PR evidence remain necessary; no Done or v1 freeze is claimed.
+Review order: combined STCN-26/27 PR2 → STCN-28 PR4 → STCN-29 PR5. Each dependent PR is stacked on the preceding branch for a focused subtask diff and must be retargeted to main after prerequisites merge. M1 envelope/peer contracts, M4 wire/plan/ADR review, green CI and merged PR evidence remain necessary; no Done or v1 freeze is claimed.
 
 ## M1 contracts (G0-M1.4/1.5, STCN-24/25)
 
@@ -24,6 +26,7 @@ Stable IDs: every specification component carries `specComponentId` and every fo
 
 Run `npm run check:m1`. It lints both OpenAPI files and checks the envelope, both events (including aggregate/tenant semantics) and the two-phase story against the M2 ImpactFinding examples.
 
-## M2 canonical reference adoption — 5 October 2026
 
-This companion branch is based on exact M1 PR8 head 0fb42667d6d94fbab66ec29347d83e7b1a00d0e5. ImpactFinding composes the actual M1 `event-envelope.v1.schema.json` via `$ref`; the duplicate local EnvelopeInterface is removed. `check:events` verifies the reference and all required fields, and `check:envelope` validates actual M1 conformance. Both owners' checks must remain green. This branch changes M2 files only and preserves the M1 branch. Original text above describes historical preparation; supplied candidate status here supersedes absence claims. Review/merge and M4 G0 acceptance remain pending.
+## Current-main integration — 8 October 14:49 UTC
+
+PR2 is actually merged at d438f637e7b5990cc977653dabc9c2c11774a465. This isolated companion normally merges that current main while retaining all 16 current M1 provider schema/API/example/test files byte-for-byte at 0fb42667d6d94fbab66ec29347d83e7b1a00d0e5. M2 full HTTP/event/source checks and M1 checks remain available; both run in the existing contract workflow. The canonical Git blob is unchanged. Provider branch adoption and designated acceptance remain real owner decisions.

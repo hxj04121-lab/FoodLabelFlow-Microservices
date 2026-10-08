@@ -82,6 +82,7 @@ badEvent('aggregate mismatch', (e) => { e.aggregateId = 'finding_other'; }, true
 badEvent('set difference mismatch', (e) => { e.payload.missingAllergens = ['all_wheat']; }, true);
 const unresolved = json('examples/compliance/impact-unresolved.json');
 check('unresolved cannot silently pass', () => { unresolved.payload.outcome = 'NO_ACTION'; invalid(eventValidator, unresolved); });
+check('duplicate unresolved evidence rejected', () => { const event = json('examples/compliance/impact-unresolved.json'); event.payload.unresolvedAllergens.push(clone(event.payload.unresolvedAllergens[0])); invalid(eventValidator, event); });
 }
 if (mode !== 'events') {
 check('full draft snapshot', () => valid(httpValidator('DraftSnapshot'), json('examples/compliance/validation-request.json')));

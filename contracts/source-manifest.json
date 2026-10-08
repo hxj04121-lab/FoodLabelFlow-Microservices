@@ -37,7 +37,7 @@
     }
   ],
   "canonicalEnvelopeOwner": "M1 Huang Xiangjia (G0-M1.5)",
-  "canonicalEnvelopeState": "M1 exact current open candidate supplied and referenced by M2; merged evidence and M4 acceptance remain pending",
+  "canonicalEnvelopeState": "Actual canonical Envelope supplied by M1 is included in merged PR2/main; current M1 API/event candidate and human acceptance remain separate",
   "canonicalEnvelopeFields": [
     "eventId",
     "eventType",
@@ -92,5 +92,10 @@
     "referenceAdoption": "adopted by this M2 review candidate against the exact M1 Git blob; G0 stack/provider merge and human acceptance remain pending",
     "previousCapturedCommit": "a788fa5fc815c34cb23cf219d5194d92a51937bb"
   },
-  "historicalSourceNote": "Original sourceState/commit are retained as the October 2 assessment on which the M1 candidate was built. Current cloud/deployment/cost authority is merged AWS v3 main 56931b460029abe04ec3d61a35de106e36b6008e."
+  "historicalSourceNote": "Original sourceState/commit are retained as the October 2 assessment on which the M1 candidate was built. Current cloud/deployment/cost authority is merged AWS v3 main 56931b460029abe04ec3d61a35de106e36b6008e.",
+  "integrationMain": {
+    "commit": "d438f637e7b5990cc977653dabc9c2c11774a465",
+    "mergedPR": 2,
+    "alignment": "normal merge into this isolated M1/M2 adoption candidate; provider branch untouched"
+  }
 }

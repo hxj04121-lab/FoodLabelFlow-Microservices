@@ -30,7 +30,7 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: contracts/package-lock.json
-      - name: Validate STCN-27 publication scope
+      - name: Validate STCN-26 publication scope
         working-directory: contracts
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
