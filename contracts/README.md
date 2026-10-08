@@ -30,3 +30,7 @@ Run `npm run check:m1`. It lints both OpenAPI files and checks the envelope, bot
 ## Current-main integration — 8 October 14:49 UTC
 
 PR2 is actually merged at d438f637e7b5990cc977653dabc9c2c11774a465. This isolated companion normally merges that current main while retaining all 16 current M1 provider schema/API/example/test files byte-for-byte at 0fb42667d6d94fbab66ec29347d83e7b1a00d0e5. M2 full HTTP/event/source checks and M1 checks remain available; both run in the existing contract workflow. The canonical Git blob is unchanged. Provider branch adoption and designated acceptance remain real owner decisions.
+
+## Joint M1/M2/M4 integration validation
+
+The isolated combined candidate normally merges both tested current-main companions and resolves their two remaining CI-route/package-script conflicts. `npm run check:integration` executes M2 HTTP/event/exact-source checks, M1 specification/formulation checks, actual canonical conformance and M4 LabelPublished/HTTP compatibility in one fixed-lock checkout. It preserves every owner wire artifact; adoption, role binding and designated human acceptance remain actual owner decisions.
