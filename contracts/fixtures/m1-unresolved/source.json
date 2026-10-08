@@ -1,0 +1,17 @@
+{
+  "repository": "hxj04121-lab/FoodLabelFlow-Microservices",
+  "pullRequest": 8,
+  "commit": "0fb42667d6d94fbab66ec29347d83e7b1a00d0e5",
+  "files": [
+    {
+      "localFile": "specification-published-unmapped-component.json",
+      "sourcePath": "contracts/examples/specification/specification-published-unmapped-component.json",
+      "gitBlob": "96c95e3660f0b335a169c2a9ec610fe504fa3e8d"
+    },
+    {
+      "localFile": "formula-published-two-items-same-spec.json",
+      "sourcePath": "contracts/examples/formulation/formula-published-two-items-same-spec.json",
+      "gitBlob": "ef926c8b8652f951f697b91b402f0eaae9bf9e46"
+    }
+  ]
+}
