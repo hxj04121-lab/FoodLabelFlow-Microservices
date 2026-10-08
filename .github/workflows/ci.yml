@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "chore/**", "feature/**"]
   pull_request:
-    branches: [main]
+    branches: [main, 'g0-m4-label-workflow-contracts']
 
 permissions:
   contents: read

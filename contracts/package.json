@@ -3,12 +3,13 @@
   "private": true,
   "scripts": {
     "lint:openapi": "redocly lint --extends minimal openapi/label-workflow-v1.yaml",
-    "validate:events": "ajv validate --spec=draft2020 -c ajv-formats -s events/label-published-v1.schema.json -d events/examples/label-published-v1.json",
+    "validate:events": "node test-label-published.mjs",
     "validate": "npm run lint:openapi && npm run validate:events"
   },
   "devDependencies": {
     "@redocly/cli": "2.59.0",
     "ajv-cli": "5.0.0",
-    "ajv-formats": "3.0.1"
+    "ajv-formats": "3.0.1",
+    "ajv": "8.20.0"
   }
 }
