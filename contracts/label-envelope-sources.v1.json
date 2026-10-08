@@ -1,0 +1,20 @@
+{
+  "basePR": 16,
+  "baseHead": "f02a6f5238c1211c0a1cce8272a955717215b942",
+  "sources": [
+    {
+      "owner": "M1",
+      "pr": 8,
+      "head": "a788fa5fc815c34cb23cf219d5194d92a51937bb",
+      "path": "contracts/events/event-envelope.v1.schema.json",
+      "blob": "909f043f68257c8c767a94bb396491ad9d2aa2b3"
+    },
+    {
+      "owner": "M2",
+      "pr": 2,
+      "head": "64e0ee8223134669d0687d58306614838d7c324c",
+      "path": "contracts/openapi/compliance-types.v1.schema.json",
+      "blob": "03ed2ac738456a969f8d057ca7af6080a9deb0b3"
+    }
+  ]
+}

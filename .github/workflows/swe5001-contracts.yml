@@ -1,0 +1,44 @@
+name: SWE5001 G0 contracts
+on:
+  pull_request:
+    branches: [main, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*']
+    paths:
+      - 'contracts/**'
+      - 'docs/swe5001/test-plan-G0-M2*'
+      - 'docs/swe5001/adr/ADR-G0-M2-001*'
+      - 'docs/swe5001/G0-M2-*.md'
+      - 'docs/contracts/allergen-validation-api-v1.yaml'
+      - '.github/workflows/swe5001-contracts.yml'
+  push:
+    branches: [main, 'codex/stcn-2-*', 'codex/stcn-26-*', 'codex/stcn-27-*', 'codex/stcn-28-*', 'codex/stcn-29-*']
+    paths:
+      - 'contracts/**'
+      - 'docs/swe5001/test-plan-G0-M2*'
+      - 'docs/swe5001/adr/ADR-G0-M2-001*'
+      - 'docs/swe5001/G0-M2-*.md'
+      - 'docs/contracts/allergen-validation-api-v1.yaml'
+      - '.github/workflows/swe5001-contracts.yml'
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+      - name: Validate STCN-26 publication scope
+        working-directory: contracts
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check
+      - name: Record blocked M1 canonical-envelope conformance
+        if: ${{ hashFiles('contracts/events/event-envelope.v1.schema.json') == '' }}
+        run: echo "::notice::BLOCKED acceptance dependency - M1 canonical envelope is absent; local M2 validation does not establish conformance."
+      - name: Check M1 canonical envelope when provided at the agreed path
+        if: ${{ hashFiles('contracts/events/event-envelope.v1.schema.json') != '' }}
+        working-directory: contracts
+        run: npm run check:envelope -- --schema events/event-envelope.v1.schema.json

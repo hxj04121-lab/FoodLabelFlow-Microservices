@@ -23,6 +23,8 @@ security:
   - bearerAuth: []
 paths:
   /api/labels/drafts:
+    parameters:
+      - $ref: '#/components/parameters/CorrelationId'
     post:
       tags: [labels]
       operationId: createLabelDraft
@@ -41,6 +43,13 @@ paths:
       responses:
         '201':
           description: Draft created.
+          headers:
+            X-Correlation-ID:
+              required: true
+              schema:
+                type: string
+                minLength: 1
+                maxLength: 128
           content:
             application/json:
               schema:
@@ -60,6 +69,7 @@ paths:
   /api/labels/{labelVersionId}:
     parameters:
       - $ref: '#/components/parameters/LabelVersionId'
+      - $ref: '#/components/parameters/CorrelationId'
     get:
       tags: [labels]
       operationId: getLabelVersion
@@ -67,6 +77,13 @@ paths:
       responses:
         '200':
           description: The requested label version.
+          headers:
+            X-Correlation-ID:
+              required: true
+              schema:
+                type: string
+                minLength: 1
+                maxLength: 128
           content:
             application/json:
               schema:
@@ -82,6 +99,7 @@ paths:
   /api/labels/{labelVersionId}/declarations:
     parameters:
       - $ref: '#/components/parameters/LabelVersionId'
+      - $ref: '#/components/parameters/CorrelationId'
     get:
       tags: [labels]
       operationId: getLabelDeclarations
@@ -89,6 +107,13 @@ paths:
       responses:
         '200':
           description: Declarations bound to the requested label and formula versions.
+          headers:
+            X-Correlation-ID:
+              required: true
+              schema:
+                type: string
+                minLength: 1
+                maxLength: 128
           content:
             application/json:
               schema:
@@ -104,6 +129,7 @@ paths:
   /api/labels/{labelVersionId}/validations:
     parameters:
       - $ref: '#/components/parameters/LabelVersionId'
+      - $ref: '#/components/parameters/CorrelationId'
     post:
       tags: [label-validation]
       operationId: validateLabelDraft
@@ -113,11 +139,23 @@ paths:
         Idempotency-Key derived from labelVersionId and draft revision. It
         stores the returned validation binding locally. A completed run with
         blocking ERROR findings is returned as FAILED; it cannot satisfy the
-        BR-05 submit guard.
+        BR-05 submit guard. The server builds the snapshot from its owned label
+        aggregate: organisationId from JWT org_id, private draftRevision distinct
+        from versionNumber, unchanged jurisdictionCode mapped to jurisdiction,
+        and declarations projected to allergenId/declarationType. It forwards
+        the actor JWT and X-Correlation-ID. Missing private revision or exact
+        inputs fails closed; no browser creator/revision field is inferred.
       x-required-permission: LABEL.VALIDATE
       responses:
         '201':
           description: Persisted validation run and findings.
+          headers:
+            X-Correlation-ID:
+              required: true
+              schema:
+                type: string
+                minLength: 1
+                maxLength: 128
           content:
             application/json:
               schema:
@@ -139,13 +177,14 @@ paths:
   /api/labels/{labelVersionId}/submit:
     parameters:
       - $ref: '#/components/parameters/LabelVersionId'
+      - $ref: '#/components/parameters/CorrelationId'
     post:
       tags: [label-review]
       operationId: submitLabelForReview
       summary: Submit a validated draft for review.
       description: >-
         BR-05 permits DRAFT -> PENDING_REVIEW only when a PASSED validation
-        exists for the exact labelVersionId, formulaVersionId,
+        exists for the exact labelVersionId, draftRevision, formulaVersionId,
         ruleSetVersionId and jurisdictionCode tuple and it has zero blocking
         ERROR findings. Validation state, label state, audit and outbox changes
         commit atomically within Label Workflow.
@@ -153,6 +192,13 @@ paths:
       responses:
         '200':
           description: The label is now pending review.
+          headers:
+            X-Correlation-ID:
+              required: true
+              schema:
+                type: string
+                minLength: 1
+                maxLength: 128
           content:
             application/json:
               schema:
@@ -170,6 +216,7 @@ paths:
   /api/labels/{labelVersionId}/decisions:
     parameters:
       - $ref: '#/components/parameters/LabelVersionId'
+      - $ref: '#/components/parameters/CorrelationId'
     get:
       tags: [label-review]
       operationId: listLabelDecisions
@@ -177,6 +224,13 @@ paths:
       responses:
         '200':
           description: Decision history in chronological order.
+          headers:
+            X-Correlation-ID:
+              required: true
+              schema:
+                type: string
+                minLength: 1
+                maxLength: 128
           content:
             application/json:
               schema:
@@ -211,6 +265,13 @@ paths:
       responses:
         '201':
           description: Decision recorded and appended to decision history.
+          headers:
+            X-Correlation-ID:
+              required: true
+              schema:
+                type: string
+                minLength: 1
+                maxLength: 128
           content:
             application/json:
               schema:
@@ -230,6 +291,7 @@ paths:
   /api/labels/{labelVersionId}/publish:
     parameters:
       - $ref: '#/components/parameters/LabelVersionId'
+      - $ref: '#/components/parameters/CorrelationId'
     post:
       tags: [label-publication]
       operationId: publishLabel
@@ -245,6 +307,13 @@ paths:
       responses:
         '201':
           description: Publication committed and LabelPublished.v1 queued in the outbox.
+          headers:
+            X-Correlation-ID:
+              required: true
+              schema:
+                type: string
+                minLength: 1
+                maxLength: 128
           content:
             application/json:
               schema:
@@ -266,6 +335,16 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: true
+      description: Gateway-provided correlation ID; services preserve it in responses and downstream calls.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^\S+$'
     LabelVersionId:
       name: labelVersionId
       in: path
@@ -276,6 +355,13 @@ components:
   responses:
     InvalidRequest:
       description: Request syntax or required field is invalid.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
       content:
         application/json:
           schema:
@@ -287,6 +373,13 @@ components:
             evidenceId: null
     AuthenticationRequired:
       description: Credentials are absent, invalid, or do not map to an active identity.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
       content:
         application/json:
           schema:
@@ -297,7 +390,14 @@ components:
             traceId: null
             evidenceId: null
     AuthorizationDenied:
-      description: The actor lacks the required permission or fails BR-06 maker-checker.
+      description: The actor lacks the required permission, fails BR-06 maker-checker, or requests another organisation's private resource.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
       content:
         application/json:
           schema:
@@ -308,7 +408,14 @@ components:
             traceId: null
             evidenceId: null
     LabelNotFound:
-      description: The exact label version does not exist or is not visible to this organisation.
+      description: The exact label version does not exist. A resource owned by another organisation returns 403 without resource content.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
       content:
         application/json:
           schema:
@@ -320,6 +427,13 @@ components:
             evidenceId: null
     LabelVersionConflict:
       description: The requested state transition is invalid or the label is no longer current.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
       content:
         application/json:
           schema:
@@ -331,6 +445,13 @@ components:
             evidenceId: null
     SubmitGuardFailed:
       description: BR-05 exact-tuple validation is not PASSED or has a blocking ERROR finding.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
       content:
         application/json:
           schema:
@@ -342,6 +463,13 @@ components:
             evidenceId: null
     ReviewTaskRequired:
       description: A pending review task is required before a decision can be recorded.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
       content:
         application/json:
           schema:
@@ -353,6 +481,13 @@ components:
             evidenceId: null
     PublishGuardFailed:
       description: The label must be APPROVED and have an APPROVE decision; REJECTED is not publishable.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
       content:
         application/json:
           schema:
@@ -364,6 +499,13 @@ components:
             evidenceId: null
     ValidationPreconditionFailed:
       description: Required canonical validation inputs are unavailable.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
       content:
         application/json:
           schema:
@@ -375,6 +517,13 @@ components:
             evidenceId: null
     InternalError:
       description: Unexpected failure; implementation details are not exposed.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
       content:
         application/json:
           schema:
@@ -488,6 +637,30 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ValidationFinding'
+      allOf:
+        - if:
+            properties:
+              status: {const: PASSED}
+            required: [status]
+          then:
+            properties:
+              findings:
+                items:
+                  not:
+                    properties:
+                      blocking: {const: true}
+                    required: [blocking]
+        - if:
+            properties:
+              status: {const: FAILED}
+            required: [status]
+          then:
+            properties:
+              findings:
+                contains:
+                  properties:
+                    blocking: {const: true}
+                  required: [blocking]
     ValidationFinding:
       type: object
       required: [resultCode, severity, passed, blocking, message]
@@ -506,6 +679,15 @@ components:
         message:
           type: string
           minLength: 1
+      allOf:
+        - if:
+            properties:
+              blocking: {const: true}
+            required: [blocking]
+          then:
+            properties:
+              severity: {const: ERROR}
+              passed: {const: false}
     RecordLabelDecision:
       type: object
       additionalProperties: false
