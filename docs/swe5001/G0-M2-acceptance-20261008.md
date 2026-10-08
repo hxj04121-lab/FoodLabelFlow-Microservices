@@ -37,10 +37,17 @@ PR2 has now been merged by M1 to main at `d438f637e7b5990cc977653dabc9c2c11774a4
 Review order: combined PR2 (STCN-26/27), PR4 (STCN-28), PR5 (STCN-29). Each current candidate must pass applicable CI and be normally merged through actual protection; the M4 reviewer must record the G0 snapshot/plan/steward/ADR acceptance. Realm binding and runtime/UI implementation choices are tracked at their actual owner gates and do not substitute for these bounded G0 decisions. Runtime capacity/failover measurements, G1 starter and cloud/account/provisioning work do not belong to this G0 closing checklist. Until actual approvals/merges are recorded, statuses remain In Progress and this ADR remains PROPOSED. No owner acceptance or Done is fabricated.
 
 
-## Completed local follow-through pending publication
+## Verified local validation at 08:52 UTC
 
 The updated PR4 candidate passes 18 HTTP / 25 event / 14 source checks, fixed-target provenance/numeric validation and actual canonical Envelope conformance. The updated PR5 candidate passes the complete 39-case suite, 14 source checks, numeric validation and actual Envelope conformance. Original target JSON bytes are unchanged.
 
 The additional isolated PR17 HTTP repair now passes 44 canonical event/profile cases and 32 HTTP compatibility cases. It fixes required correlation headers, architectural 403, PASSED/FAILED/blocking invariants and the documented server-owned snapshot adapter while preserving public DTO fields, producer/payload bytes, existing permission boundaries and every already locked package entry. These additional HTTP changes are local and are not claimed as a remote CI result or owner adoption.
 
-Desktop GitHub HTTPS/SSH publication is currently unavailable (TLS/connection closure); the connected GitHub integration rejects writes with 403 Resource not accessible by integration. Full tested local commits, focused patches and a verified Git bundle are retained so the current candidates can be published through an existing authorized connection. No force push, new token, permission or security setting change is performed.
+At the 08:52 UTC checkpoint, desktop GitHub HTTPS/SSH publication was unavailable (TLS/connection closure); the connected GitHub integration rejects writes with 403 Resource not accessible by integration. Full tested local commits, focused patches and a verified Git bundle are retained so the current candidates can be published through an existing authorized connection. No force push, new token, permission or security setting change is performed.
+
+
+## Publication resumed at 10:19 UTC
+
+The existing desktop connection is now reachable and the existing native rcncai account has repository push authorization. The tested PR4 author update was normally aligned to actual main without changing its tree, published at 3c55f80985d0d9e9950bcb99faf03d9749dc2a53, and retargeted to main. PR5 retains the tested steward tree plus this dated evidence update. PR17's tested event/HTTP repair was published at dd343dc3932128ff9077ec0f8afa7d88fa6e1e79; remote label contract CI 37763229057 actually executed all 44 event and 32 HTTP cases successfully. These observations supersede the earlier transport-blocked checkpoint; the denied cloud write integration was not retried.
+
+Actual exact-head project CI, normal integration and designated human acceptance remain separately checked. PR4 currently requires review; no M4 acceptance is recorded for STCN-26–29. The superseded own source-fix draft PR20 was closed after proving all five source/example/test blobs byte-identical in main, with its branch preserved.
