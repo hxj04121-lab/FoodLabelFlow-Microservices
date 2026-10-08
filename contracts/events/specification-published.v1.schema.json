@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpecificationPublished.v1 domain event",
+  "description": "Published by specification-service through the outbox in the same transaction as the release. Aggregate = the supplier material's specification series: aggregateId is the materialId and aggregateVersion the released versionNumber, so consumers discard stale versions. Consumers: Formulation (released-spec projection), Compliance (Phase 1 POTENTIAL findings), Notification (Should). Owner: M1 (G0-M1.5).",
+  "allOf": [
+    { "$ref": "event-envelope.v1.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": { "const": "SpecificationPublished.v1" },
+        "producer": { "const": "specification-service" },
+        "payload": { "$ref": "specification-published-payload.v1.schema.json" }
+      }
+    }
+  ]
+}

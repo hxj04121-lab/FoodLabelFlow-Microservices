@@ -11,3 +11,15 @@ Run `npm ci --ignore-scripts --no-audit --no-fund` and `npm run check` from `con
 The event's local EnvelopeInterface is the M2 consumer expectation from FINAL. M1 has supplied the canonical candidate in [PR #8](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/8), exact head **a788fa5fc815c34cb23cf219d5194d92a51937bb**, at `events/event-envelope.v1.schema.json`; it is not yet merged into this stack. Run `npm run check:envelope` against that actual candidate in an isolated review checkout. Absence here exits BLOCKED (code 2). Adopt the shared `$ref` once the owner artifact is available in the integration branch, then rerun both owners' checks. Candidate conformance and human acceptance are separate.
 
 Review order: STCN-27 → STCN-26 → STCN-28 → STCN-29. Each dependent PR is stacked on the preceding branch for a focused subtask diff and must be retargeted to main after prerequisites merge. M1 envelope/peer contracts, M4 wire/plan/ADR review, green CI and merged PR evidence remain necessary; no Done or v1 freeze is claimed.
+
+## M1 contracts (G0-M1.4/1.5, STCN-24/25)
+
+Owner: Huang Xiangjia (M1); steward/reviewer: RunChen Cai (M2). Stacked on STCN-27.
+
+- [Canonical event envelope](events/event-envelope.v1.schema.json) at the path proposed in ADR-G0-M2-001 item 5; `check:envelope` now runs against it and accepts every ImpactFinding example.
+- [SpecificationPublished.v1](events/specification-published.v1.schema.json) and [FormulaPublished.v1](events/formula-published.v1.schema.json) with payload schemas and examples in `examples/specification` and `examples/formulation`.
+- [Specification API](openapi/specification.v1.yaml) (`/api/specifications/**`) and [Formulation API](openapi/formulation.v1.yaml) (`/api/formulations/**`), reusing `compliance-types.v1` IDs, VersionReference and ApiError.
+
+Stable IDs: every specification component carries `specComponentId` and every formula line `formulaItemId`, in the public APIs and in both events. They are server-assigned, unique and immutable within a released version, so M2 UNRESOLVED evidence resolves to exactly one component and one formula line, also when several lines use the same specification and after redelivery. UNMAPPED/AMBIGUOUS components reference a PLACEHOLDER vocabulary ingredient, so `ingredientId` is never null on the M1 side. Cross-organisation access to a manufacturer resource or a supplier draft returns 403 `AUTHORIZATION_DENIED` with no resource content (architecture v3 §15); 404 means the resource does not exist.
+
+Run `npm run check:m1`. It lints both OpenAPI files and checks the envelope, both events (including aggregate/tenant semantics) and the two-phase story against the M2 ImpactFinding examples.
