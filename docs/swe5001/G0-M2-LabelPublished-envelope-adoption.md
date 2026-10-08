@@ -43,10 +43,11 @@ integrate the common files through the agreed upstream order. Shared package
 and lock integration with M1/M2 must retain all owners' checks; copying these
 exact source files into a review branch does not merge or freeze the providers.
 
-This correction covers only event-envelope compatibility. Public draft revision,
-creator/validation DTO mapping and consistency, correlation headers, M3 public
-read/edit interfaces, role vocabulary and the joint 403/404 policy remain owner
-decisions recorded in the original review. No target Java transactions, realm
+The initial event-only candidate left HTTP compatibility for follow-through.
+The October 8 repair below now fixes correlation headers, architectural 403 and
+validation invariants, and documents the private snapshot adapter. Public
+revision/creator exposure, M3 UI interfaces, role binding and runtime realization
+remain at their actual owner gates; existing public DTO field sets are preserved. No target Java transactions, realm
 export, deployed authentication, measured capacity/failover or cloud action is
 included. M3 remains the designated reviewer of M4's G0 deliverables; M4 remains
 the designated reviewer of M2's stewardship work. Technical validation and a
