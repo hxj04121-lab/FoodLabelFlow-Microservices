@@ -1,0 +1,28 @@
+name: AWS staging budget caller regression
+on:
+  push:
+    branches: ['feature/stcn-oct8-pr10-fix']
+  pull_request:
+    paths:
+      - '.github/workflows/aws-staging-budget*.yml'
+      - 'scripts/aws_staging_budget.py'
+      - 'tests/test_aws_staging_budget.py'
+permissions:
+  contents: read
+jobs:
+  called-gate:
+    uses: ./.github/workflows/aws-staging-budget-gate.yml
+    with:
+      window_hours: '24'
+      experiment_hours: '4'
+      k6_hours: '2'
+      available_credit_usd: '200'
+  rejection-cases:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Assert missing, insufficient and invalid inputs fail closed
+        run: python -m unittest discover -s tests -p 'test_aws_staging_budget.py' -v

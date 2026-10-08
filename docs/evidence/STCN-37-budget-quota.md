@@ -70,10 +70,26 @@ Gate result:               UNVERIFIED
 To enforce the gate with a balance supplied explicitly:
 
 ```bash
-python3 scripts/aws_staging_budget.py --hours 24 --experiment-hours 4 --k6-hours 2 --available-credit-usd 200
+python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 --available-credit-usd 200
 ```
 
-The USD 200 value above is an example input only; no remaining account credit is asserted. A reusable `workflow_call` fails closed if no credit is supplied; push, pull request, and manual estimate runs can show `UNVERIFIED` without AWS credentials.
+The USD 200 value above is an example input only; no remaining account credit is asserted.
+
+Pre-apply callers use `.github/workflows/aws-staging-budget-gate.yml`. This reusable workflow always passes `--require-gate`, regardless of the caller event. Missing/empty or invalid credit exits 2; insufficient credit exits 1; only a finite non-negative balance covering the full estimate exits 0. It has no estimate-only override. The former combined `aws-staging-budget.yml` is now estimate-only; no repository workflow called that old reusable entry point when this correction was prepared. External callers must migrate to the gate path; an unmigrated call to the old estimate-only workflow is rejected by GitHub because it has no `workflow_call` trigger.
+
+```yaml
+jobs:
+  budget:
+    uses: ./.github/workflows/aws-staging-budget-gate.yml
+    with:
+      window_hours: '24'
+      experiment_hours: '4'
+      k6_hours: '2'
+      available_credit_usd: ${{ vars.STAGING_AVAILABLE_CREDIT_USD }}
+  # A later apply job must depend on budget with needs: budget.
+```
+
+This is caller wiring guidance, not a deployment. The owner must supply a currently verified balance and planned hours. Push, PR and manual estimates remain read-only and may report UNVERIFIED. The regression workflow exercises the real reusable caller on a PR/push and asserts rejected inputs through the CLI. GitHub documents that the [reusable workflow context belongs to the caller](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#github-context), so event-name equality cannot identify a reusable invocation.
 
 ## Scope
 
