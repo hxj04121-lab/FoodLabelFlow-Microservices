@@ -1,0 +1,40 @@
+work_order_id: G1-M1
+story_id: ST-G1-M1
+gate: G1
+window: "2026-10-08..2026-10-11"
+title: "Service starter, outbox and service skeletons"
+owner: "M1 Huang Xiangjia"
+github: hxj04121-lab
+reviewer: "M2 Cai Runchen"
+estimate_md: 3.0
+jira: STCN-6
+jira_subtasks: "STCN-41..STCN-46"
+status: PLANNED
+scope:  # one Jira subtask per entry
+  - "G1-M1.1 Starter base: health/readiness, canonical error envelope, correlation ID, JSON logs, metrics"
+  - "G1-M1.2 Local docker-compose with MySQL, RabbitMQ and Keycloak"
+  - "G1-M1.3 Skeletons of the four services generated from the starter"
+  - "G1-M1.4 Negative-test kit for 401, 403 and cross-organisation cases"
+  - "G1-M1.5 Outbox relay with publisher confirms and idempotent consumer (processed_event)"
+  - "G1-M1.6 Testcontainers helpers for MySQL and RabbitMQ"
+acceptance_criteria:
+  - "the starter contains no domain entities, DTOs or business rules (architecture 12.2)"
+  - "state, local audit and outbox commit or roll back together (BR-10)"
+  - "a duplicate eventId or a stale aggregateVersion is never applied twice"
+  - "every skeleton builds, starts locally and reports readiness"
+required_tests:
+  - "outbox atomicity and relay-after-confirm tests"
+  - "duplicate and stale event tests"
+  - "starter unit tests"
+architecture_impact: "Golden Path developer control plane (architecture 12)"
+db_impact: "outbox, local_audit and processed_event tables in each service schema"
+shared_file_domain: "platform/starter/*, services/*/ skeletons, docker-compose.yml"
+base_contract:
+  baseline_tag: "spectrace-cn-baseline-20260926"
+  baseline_commit: "a3520e1f1d450796a694b6930d7792dda0f2b512"
+  architecture: "docs/swe5001/architecture/SpecTrace-CN_Architecture_Source_of_Truth_v3_AWS.md"
+  proposal: "docs/swe5001/proposal/01_SpecTrace-CN_SWE5001_Project_Proposal_team16_AWS.docx"
+  contracts: "contracts/ (v1 frozen at G0 exit; changes need M2 approval and an ADR)"
+dependencies: [G0-M1, G0-M2, G0-M4]
+evidence_required: "CI run, starter test report, local compose smoke"
+human_acceptance: required
