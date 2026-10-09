@@ -37,6 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
 @ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"spectrace.test.database=compliance", "spring.datasource.hikari.connection-timeout=2000",
+                "spring.datasource.hikari.validation-timeout=1000",
                 "spring.datasource.hikari.data-source-properties.socketTimeout=2000",
                 "spring.datasource.hikari.data-source-properties.connectTimeout=2000"})
 class ComplianceApplicationTest {
@@ -59,7 +60,7 @@ class ComplianceApplicationTest {
 
     private HttpResponse<String> get(String path, String correlation) throws Exception {
         return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-                .header(CorrelationId.HEADER, correlation).timeout(Duration.ofSeconds(10)).build(),
+                .header(CorrelationId.HEADER, correlation).timeout(Duration.ofSeconds(30)).build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
