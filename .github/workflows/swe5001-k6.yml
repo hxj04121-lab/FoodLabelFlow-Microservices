@@ -1,0 +1,40 @@
+name: SWE5001 k6 local stub
+on:
+  pull_request:
+    paths: ['perf/k6/**', 'contracts/**', 'docs/swe5001/test-plan-G0-M2-targets.v1.json', '.github/workflows/swe5001-k6.yml']
+  push:
+    branches: ['feature/stcn-50-*']
+    paths: ['perf/k6/**', '.github/workflows/swe5001-k6.yml']
+permissions:
+  contents: read
+jobs:
+  k6-local:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: perf/k6/package-lock.json
+      - name: Install pinned official k6
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v2.3.0 --repo grafana/k6 --pattern k6-v2.3.0-linux-amd64.tar.gz --dir "$RUNNER_TEMP/k6"
+          gh api repos/grafana/k6/releases/tags/v2.3.0 --jq '.assets[] | select(.name == "k6-v2.3.0-linux-amd64.tar.gz") | .digest' > "$RUNNER_TEMP/k6/digest.txt"
+          digest=$(cat "$RUNNER_TEMP/k6/digest.txt")
+          test "${digest#sha256:}" != "$digest"
+          echo "${digest#sha256:}  $RUNNER_TEMP/k6/k6-v2.3.0-linux-amd64.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/k6/k6-v2.3.0-linux-amd64.tar.gz" -C "$RUNNER_TEMP/k6"
+          echo "$RUNNER_TEMP/k6/k6-v2.3.0-linux-amd64" >> "$GITHUB_PATH"
+      - name: Run fixture checks and actual k6 against loopback stub
+        working-directory: perf/k6
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-local-evidence
+          path: perf/k6/.evidence/
+          include-hidden-files: true
+          if-no-files-found: error
