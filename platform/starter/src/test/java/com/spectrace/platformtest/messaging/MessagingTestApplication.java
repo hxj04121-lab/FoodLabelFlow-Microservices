@@ -65,6 +65,7 @@ public class MessagingTestApplication {
     static class DemoListener {
 
         final AtomicInteger failuresToThrow = new AtomicInteger();
+        final AtomicInteger duplicateFailuresToThrow = new AtomicInteger();
         final AtomicInteger attempts = new AtomicInteger();
         private final IdempotentConsumer consumer;
         private final JdbcTemplate jdbc;
@@ -78,6 +79,10 @@ public class MessagingTestApplication {
         void on(Message message) {
             consumer.consume("test-listener", message, event -> {
                 attempts.incrementAndGet();
+                if (duplicateFailuresToThrow.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
+                    // A real handler-side unique constraint violation, not a processed_event duplicate.
+                    jdbc.update("INSERT INTO demo_projection (aggregate_id, version, applied) VALUES ('constraint_fixture', 1, 1)");
+                }
                 if (failuresToThrow.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
                     throw new IllegalStateException("projection temporarily unavailable");
                 }

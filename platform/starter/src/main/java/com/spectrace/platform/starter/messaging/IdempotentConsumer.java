@@ -71,20 +71,23 @@ public class IdempotentConsumer {
             log.info("{} {} {} for aggregate {} v{}", consumer, outcome, event.eventType(), event.aggregateId(),
                     event.aggregateVersion());
             return outcome;
-        } catch (DuplicateKeyException duplicate) {
-            log.info("{} DUPLICATE {} {}", consumer, event.eventType(), event.eventId());
-            return Outcome.DUPLICATE;
         }
     }
 
     private Outcome apply(String consumer, EventEnvelope event, Handler handler) {
         Timestamp now = Timestamp.from(clock.instant());
         // The primary key makes a concurrent or later redelivery wait for this transaction, then fail as a duplicate.
-        jdbc.update("""
-                INSERT INTO processed_event (consumer, event_id, event_type, aggregate_id, aggregate_version, outcome,
-                                             processed_at)
-                VALUES (?, ?, ?, ?, ?, 'APPLIED', ?)""",
-                consumer, event.eventId(), event.eventType(), event.aggregateId(), event.aggregateVersion(), now);
+        try {
+            jdbc.update("""
+                    INSERT INTO processed_event (consumer, event_id, event_type, aggregate_id, aggregate_version, outcome,
+                                                 processed_at)
+                    VALUES (?, ?, ?, ?, ?, 'APPLIED', ?)""",
+                    consumer, event.eventId(), event.eventType(), event.aggregateId(), event.aggregateVersion(), now);
+        } catch (DuplicateKeyException duplicate) {
+            // Only this deduplication key is a successful redelivery. A handler or aggregate-version
+            // constraint failure must escape the transaction so AUTO acknowledgement can retry/DLQ.
+            return Outcome.DUPLICATE;
+        }
         List<Long> applied = jdbc.queryForList("""
                 SELECT aggregate_version FROM consumed_aggregate_version
                 WHERE consumer = ? AND aggregate_id = ? FOR UPDATE""", Long.class, consumer, event.aggregateId());
