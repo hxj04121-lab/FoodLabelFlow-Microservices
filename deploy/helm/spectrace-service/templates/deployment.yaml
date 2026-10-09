@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "spectrace.fullname" . }}
+  labels:
+    {{- include "spectrace.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels:
+      {{- include "spectrace.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "spectrace.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "spectrace.fullname" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.spread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          minDomains: {{ .Values.spread.minimumZones }}
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          nodeAffinityPolicy: Honor
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              {{- include "spectrace.selectorLabels" . | nindent 14 }}
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeAffinityPolicy: Honor
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              {{- include "spectrace.selectorLabels" . | nindent 14 }}
+      {{- end }}
+      containers:
+        - name: {{ .Values.serviceName }}
+          image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: {{ .Values.containerPort }}, protocol: TCP}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          startupProbe:
+            httpGet: {path: {{ .Values.probes.livenessPath | quote }}, port: http}
+            periodSeconds: 5
+            failureThreshold: {{ .Values.probes.startupFailureThreshold }}
+          readinessProbe:
+            httpGet: {path: {{ .Values.probes.readinessPath | quote }}, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: {{ .Values.probes.livenessPath | quote }}, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          {{- with .Values.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}
