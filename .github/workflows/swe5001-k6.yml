@@ -36,3 +36,5 @@ jobs:
         with:
           name: k6-local-evidence
           path: perf/k6/.evidence/
+          include-hidden-files: true
+          if-no-files-found: error
