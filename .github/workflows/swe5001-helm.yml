@@ -28,3 +28,5 @@ jobs:
         with:
           name: helm-template-evidence
           path: deploy/helm/.evidence/
+          include-hidden-files: true
+          if-no-files-found: error
