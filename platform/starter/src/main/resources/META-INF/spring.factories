@@ -1,0 +1,2 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+com.spectrace.platform.starter.env.StarterDefaults
