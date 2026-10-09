@@ -74,8 +74,86 @@ docker compose -f deploy/local/compose.yaml up -d mysql rabbitmq keycloak # infr
 
 Ports can be changed with the variables in [compose.yaml](../../deploy/local/compose.yaml). Remove everything, including data, with `docker compose -f deploy/local/compose.yaml down -v`.
 
-## Next in this work order
+## Outbox, local audit and idempotent consumer (STCN-45)
 
-- STCN-45: outbox relay with publisher confirms and idempotent consumer (`processed_event`, `aggregateVersion` guard).
-- STCN-46: Testcontainers helpers for MySQL and RabbitMQ.
-- STCN-44: negative-test kit for 401, 403 and cross-organisation cases (with M4's security module).
+The starter ships the technical tables as `classpath:db/spectrace-platform/V0_1__spectrace_platform_tables.sql` (`outbox`, `local_audit`, `processed_event`, `consumed_aggregate_version`). Generated services list that location before their own `db/migration`, so **service migrations start at V1**.
+
+Producer — state, audit and event in one local transaction (BR-10):
+
+```java
+@Transactional
+public SpecificationVersion release(...) {
+    // ... update the specification row ...
+    audit.record("SPECIFICATION_RELEASED", "SPECIFICATION_VERSION", id, actor.subject(), actor.organisationId(), null);
+    outbox.append("SpecificationPublished.v1", organisationId, supplierMaterialId, versionNumber, payload);
+}
+```
+
+`Outbox.append` and `LocalAudit.record` refuse to run outside a transaction. The envelope (`eventId`, UTC `occurredAt`, `producer` = `<spring.application.name>-service`, current `correlationId`) is built and validated by the starter; the payload must match the event's contract in `contracts/events/`.
+
+`OutboxRelay` runs in every replica and polls every 500 ms (`spectrace.messaging.relay.*`):
+- rows are claimed with `FOR UPDATE SKIP LOCKED`, so replicas never publish the same row concurrently;
+- each event goes to `spectrace.events` with routing key `specification.published.v1`, `messageId` = `eventId`, persistent;
+- the row is marked published only after a positive correlated confirm **and** no unroutable return;
+- otherwise it records `attempts` and `last_error` and is retried on the next poll.
+
+Delivery is at-least-once.
+
+Consumer — at most once per consumer, newest version only:
+
+```java
+@RabbitListener(queues = "formulation.specification-published")
+void on(Message message) {
+    consumer.consume("formulation.specification-published", message, event -> projection.apply(event));
+}
+```
+
+`IdempotentConsumer` records the `eventId` in `processed_event` and checks `consumed_aggregate_version` in the same transaction as the handler.
+
+| Event | Result |
+|---|---|
+| repeated `eventId` | `DUPLICATE` |
+| `aggregateVersion` not newer than the last one applied | `STALE`, recorded, handler not called |
+| handler throws | rollback and requeue; the quorum queue's `x-delivery-limit` then dead-letters it |
+| malformed envelope | rejected without requeue |
+
+The container's default AUTO acknowledge mode acks only after the transaction commits. Tenant checks on the payload remain the service's job (BR-11).
+
+## Test support — `spectrace-starter-test` (STCN-46, STCN-44)
+
+```xml
+<dependency>
+    <groupId>com.spectrace.platform</groupId>
+    <artifactId>spectrace-starter-test</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <scope>test</scope>
+</dependency>
+```
+
+| Helper | Use |
+|---|---|
+| `@Import(MySqlTestcontainers.class)` | MySQL 8.4.11 wired to the DataSource/Flyway; database name from `spectrace.test.database` |
+| `@Import(RabbitTestcontainers.class)` | RabbitMQ 4.1 wired to the connection factory |
+| `SpectraceTopology.consumerQueue(queue, routingKeys...)` | bean of `Declarables`: `spectrace.events` topic exchange, durable quorum queue with `x-delivery-limit` 5 and its own `<queue>.dlq` |
+| `TestTokens` | RS256 Keycloak-shaped tokens with `sub`, `org_id`, `org_type`, `roles`; `jwtDecoder()` for the test resource server; expired, untrusted-signature and wrong-issuer variants |
+| `NegativeAuthKit` | runs the 401/403/cross-organisation cases against one endpoint (below) |
+
+```java
+NegativeAuthKit.endpoint(tokens, "GET", URI.create(base + "/api/labels/" + labelId))
+    .allowedCaller(Caller.of("maker-1", "org_m1", "MANUFACTURER", "LABEL_MAKER"))
+    .callerWithoutRole(Caller.of("viewer-1", "org_m1", "MANUFACTURER", "VIEWER"))
+    .callerFromOtherOrganisation(Caller.of("maker-2", "org_m2", "MANUFACTURER", "LABEL_MAKER"))
+    .contentThatMustNotLeak(labelId, "Chocolate Bar")
+    .verify();
+```
+
+| Case | Expected result |
+|---|---|
+| no token, malformed token, expired token, untrusted signature, wrong issuer | 401 `AUTHENTICATION_REQUIRED` |
+| caller without the role | 403 `AUTHORIZATION_DENIED` |
+| caller from another organisation | 403 `AUTHORIZATION_DENIED`, never 404, with none of the listed content |
+
+- Every rejection must be the canonical `ApiError`, with `traceId` equal to `X-Correlation-ID`.
+- The allowed caller must get a 2xx, so an endpoint that rejects everyone fails too.
+- All violations are reported together.
+- The claim names follow architecture v3 §11.2. If the M4 realm uses different claim names, `TestTokens` changes in one place.
