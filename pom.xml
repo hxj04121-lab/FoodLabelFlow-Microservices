@@ -16,6 +16,7 @@
     <name>SpecTrace-CN platform and services</name>
 
     <modules>
+        <module>platform/starter-test</module>
         <module>platform/starter</module>
         <module>services/specification</module>
         <module>services/formulation</module>

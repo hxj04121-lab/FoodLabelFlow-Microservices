@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import com.spectrace.platform.starter.correlation.CorrelationId;
+import com.spectrace.platform.test.MySqlTestcontainers;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -24,26 +25,23 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Real HTTP and MySQL checks of the generated G1 skeleton; no business API or fake JWT adapter. */
-@Testcontainers
+@Import(MySqlTestcontainers.class)
 @AutoConfigureMetrics
 @ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spring.datasource.hikari.connection-timeout=2000")
+        properties = {"spectrace.test.database=compliance", "spring.datasource.hikari.connection-timeout=2000",
+                "spring.datasource.hikari.data-source-properties.socketTimeout=2000",
+                "spring.datasource.hikari.data-source-properties.connectTimeout=2000"})
 class ComplianceApplicationTest {
-    @Container
-    @ServiceConnection
-    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4.11")
-            .withDatabaseName("compliance").withUsername("compliance").withPassword("local-test-compliance")
-            .withUrlParam("socketTimeout", "2000").withUrlParam("connectTimeout", "2000");
+    @Autowired
+    MySQLContainer mysql;
 
     @LocalServerPort
     int port;
@@ -106,6 +104,12 @@ class ComplianceApplicationTest {
     void flywayOwnsTheComplianceRootAndReapplyingDoesNotDuplicateHistory() {
         assertThat(jdbc.queryForObject("SELECT DATABASE()", String.class)).isEqualTo("compliance");
         assertThat(flyway.info().current().getVersion().toString()).isEqualTo("1");
+        assertThat(jdbc.queryForList("SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank",
+                String.class)).containsExactly("0.1", "1");
+        assertThat(jdbc.queryForList("""
+                SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()
+                AND table_name IN ('outbox', 'local_audit', 'processed_event', 'consumed_aggregate_version')""", String.class))
+                .containsExactlyInAnyOrder("outbox", "local_audit", "processed_event", "consumed_aggregate_version");
         assertThat(flyway.getConfiguration().isBaselineOnMigrate()).isFalse();
         assertThat(flyway.getConfiguration().isValidateOnMigrate()).isTrue();
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
@@ -130,12 +134,12 @@ class ComplianceApplicationTest {
     @Test
     void flywayCleanCannotDeleteTheServiceDatabase() {
         assertThatThrownBy(flyway::clean).isInstanceOf(FlywayException.class).hasMessageContaining("cleanDisabled");
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE", Integer.class)).isEqualTo(2);
     }
 
     @Test
     void serviceDatabaseUserCannotReadAnotherSchema() throws Exception {
-        var setup = MYSQL.execInContainer("sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysql -uroot -e "
+        var setup = mysql.execInContainer("sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysql -uroot -e "
                 + "'CREATE DATABASE compliance_peer_fixture; CREATE TABLE compliance_peer_fixture.marker (id INT PRIMARY KEY); "
                 + "INSERT INTO compliance_peer_fixture.marker VALUES (1);'");
         assertThat(setup.getExitCode()).as(setup.getStderr()).isZero();
@@ -149,14 +153,14 @@ class ComplianceApplicationTest {
 
     @Test
     void actualDatabaseOutageDropsReadinessButNotLivenessAndRecovers() throws Exception {
-        MYSQL.getDockerClient().pauseContainerCmd(MYSQL.getContainerId()).exec();
+        mysql.getDockerClient().pauseContainerCmd(mysql.getContainerId()).exec();
         try {
             HttpResponse<String> readiness = get("/actuator/health/readiness", "stcn49-db-outage");
             assertThat(readiness.statusCode()).isEqualTo(503);
             assertThat(body(readiness)).containsOnlyKeys("status").containsEntry("status", "DOWN");
             assertThat(get("/actuator/health/liveness", "stcn49-db-outage").statusCode()).isEqualTo(200);
         } finally {
-            MYSQL.getDockerClient().unpauseContainerCmd(MYSQL.getContainerId()).exec();
+            mysql.getDockerClient().unpauseContainerCmd(mysql.getContainerId()).exec();
         }
         await().atMost(Duration.ofSeconds(25)).untilAsserted(() ->
                 assertThat(get("/actuator/health/readiness", "stcn49-db-recovered").statusCode()).isEqualTo(200));

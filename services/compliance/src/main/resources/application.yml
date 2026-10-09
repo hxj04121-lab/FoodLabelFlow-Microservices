@@ -6,11 +6,18 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:compliance}
     password: ${SPRING_DATASOURCE_PASSWORD:local-only-compliance}
   flyway:
-    locations: classpath:db/migration
+    # Starter tables (outbox, local_audit, processed_event, consumed_aggregate_version) are V0_x;
+    # this service's own migrations in db/migration start at V1.
+    locations: classpath:db/spectrace-platform,classpath:db/migration
     fail-on-missing-locations: true
     validate-on-migrate: true
     baseline-on-migrate: false
     clean-disabled: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:spectrace}
+    password: ${RABBITMQ_PASSWORD:local-only-rabbitmq}
   jdbc:
     template:
       query-timeout: 5s
@@ -21,4 +28,5 @@ management:
     health:
       group:
         readiness:
+          # The broker is not a readiness dependency: committed events wait in the outbox.
           include: readinessState,db

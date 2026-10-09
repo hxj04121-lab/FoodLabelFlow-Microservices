@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "chore/**", "feature/**"]
   pull_request:
-    branches: [main, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-41-starter-skeletons']
+    branches: [main, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-45-outbox-consumer']
 
 permissions:
   contents: read
@@ -54,7 +54,7 @@ jobs:
         with:
           name: platform-coverage
           path: |
-            platform/starter/target/site/jacoco/jacoco.xml
+            platform/*/target/site/jacoco/jacoco.xml
             services/*/target/site/jacoco/jacoco.xml
           if-no-files-found: error
       - name: Upload platform and service test reports
@@ -63,7 +63,7 @@ jobs:
         with:
           name: platform-test-reports
           path: |
-            platform/starter/target/surefire-reports/**
+            platform/*/target/surefire-reports/**
             services/*/target/surefire-reports/**
           if-no-files-found: ignore
           retention-days: 14
