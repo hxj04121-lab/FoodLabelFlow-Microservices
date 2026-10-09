@@ -6,6 +6,14 @@ import {validateRequest} from './fixture-validators.mjs';
 
 const here=dirname(fileURLToPath(import.meta.url));
 export const fixture=JSON.parse(readFileSync(resolve(here,'fixtures/local-preview.json'),'utf8'));
+export const unresolvedFixture={
+  formulaItemId:'stub-item_001',
+  specificationVersionId:fixture.cases[0].request.specificationChange.candidate.id,
+  specComponentId:'stub-component_001',
+  ingredientId:null,
+  rawPhrase:'Synthetic unmapped component',
+  reason:'UNMAPPED',
+};
 export function createPreviewStub(mode='ok') {
   return createServer(async (request,response)=>{
     const correlation=request.headers['x-correlation-id'] || 'stub-correlation';
@@ -22,6 +30,12 @@ export function createPreviewStub(mode='ok') {
     if(JSON.stringify(body)!==JSON.stringify(fixture.cases[0].request)) return error(422,'PROJECTION_UNAVAILABLE');
     if(mode==='http-503') return error(503,'SERVICE_UNAVAILABLE');
     const preview=structuredClone(fixture.previewResponse);preview.correlationId=correlation;
+    if(mode==='valid-unresolved'||mode==='duplicate-unresolved') {
+      preview.findings[0].unresolvedAllergens=[structuredClone(unresolvedFixture)];
+      if(mode==='duplicate-unresolved') {
+        preview.findings[0].unresolvedAllergens.push(Object.fromEntries(Object.entries(unresolvedFixture).reverse()));
+      }
+    }
     if(mode==='wrong-tenant') preview.organisationId='manufacturer_other';
     if(mode==='wrong-kind') preview.findings[0].kind='CONFIRMED';
     if(mode==='missing-version') delete preview.findings[0].formulaVersion;

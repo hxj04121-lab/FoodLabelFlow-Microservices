@@ -117,7 +117,8 @@
           }
         }
       },
-      "description": "Unresolved ingredient/component evidence; an unknown allergen is never fabricated."
+      "description": "Unresolved ingredient/component evidence; an unknown allergen is never fabricated.",
+      "uniqueItems": true
     },
     "specificationChange": {
       "type": "object",

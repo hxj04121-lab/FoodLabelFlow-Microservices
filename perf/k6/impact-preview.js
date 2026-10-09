@@ -65,6 +65,10 @@ function validFinding(finding, request) {
   if (!Array.isArray(finding.unresolvedAllergens) || finding.unresolvedAllergens.some(e => !e || Object.keys(e).length !== 6 ||
       !opaqueId(e.formulaItemId) || !opaqueId(e.specificationVersionId) || !opaqueId(e.specComponentId) ||
       !(e.ingredientId === null || typeof e.ingredientId === 'string') || typeof e.rawPhrase !== 'string' || !e.rawPhrase.length || !['UNMAPPED', 'AMBIGUOUS'].includes(e.reason))) return false;
+  const unresolvedKeys = finding.unresolvedAllergens.map(e => JSON.stringify([
+    e.formulaItemId, e.specificationVersionId, e.specComponentId, e.ingredientId, e.rawPhrase, e.reason,
+  ]));
+  if (new Set(unresolvedKeys).size !== unresolvedKeys.length) return false;
   if (typeof finding.jurisdiction !== 'string' || !finding.jurisdiction.length || finding.jurisdiction.length > 32) return false;
   const missing = finding.requiredAllergens.filter(a => !finding.declaredAllergens.includes(a));
   if (missing.length !== finding.missingAllergens.length || missing.some(a => !finding.missingAllergens.includes(a))) return false;

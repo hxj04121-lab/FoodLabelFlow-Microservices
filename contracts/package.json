@@ -6,10 +6,11 @@
   "scripts": {
     "lint": "spectral lint openapi/compliance.v1.yaml --fail-severity warn",
     "test": "node test-contracts.mjs",
-    "check": "npm run lint && npm test && npm run check:targets",
-    "check:events": "node test-contracts.mjs --scope events",
+    "check": "npm run lint && npm test && npm run check:unresolved-source && npm run check:targets",
+    "check:events": "node test-contracts.mjs --scope events && npm run check:unresolved-source",
     "check:http": "npm run lint && node test-contracts.mjs --scope http",
     "check:envelope": "node test-envelope-interface.mjs",
+    "check:unresolved-source": "node test-unresolved-source.mjs",
     "check:targets": "node test-capacity-targets.mjs"
   },
   "devDependencies": {

@@ -4,7 +4,7 @@ import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
-import {createPreviewStub,fixture} from './stub.mjs';
+import {createPreviewStub,fixture,unresolvedFixture} from './stub.mjs';
 import {validateRequest,validateResponse,validateError} from './fixture-validators.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
@@ -16,6 +16,12 @@ const partial=structuredClone(fixture.cases[0].request);delete partial.ruleSetVe
 assert.equal(validateRequest(partial),false);
 const confirmed=structuredClone(fixture.previewResponse);confirmed.findings[0].kind='CONFIRMED';
 assert.equal(validateResponse(confirmed),false);
+const unresolved=structuredClone(fixture.previewResponse);
+unresolved.findings[0].unresolvedAllergens=[structuredClone(unresolvedFixture)];
+assert(validateResponse(unresolved),JSON.stringify(validateResponse.errors));
+unresolved.findings[0].unresolvedAllergens.push(Object.fromEntries(Object.entries(unresolvedFixture).reverse()));
+assert.equal(validateResponse(unresolved),false);
+assert(validateResponse.errors.some(error=>error.keyword==='uniqueItems'));
 console.log('PASS actual OpenAPI request/response fixture schemas and negative cases');
 
 const server=createPreviewStub();server.listen(0,'127.0.0.1');await once(server,'listening');
@@ -56,5 +62,5 @@ async function runDriver(mode,shouldPass) {
     console.log(`PASS actual k6 ${mode}: ${shouldPass?'success':'invalid preview rejected'}`);
   } finally {await new Promise((resolve,reject)=>stub.close(e=>e?reject(e):resolve()));}
 }
-for(const [mode,shouldPass] of [['ok',true],['wrong-tenant',false],['wrong-kind',false],['missing-version',false],['bad-body',false],['http-503',false]]) await runDriver(mode,shouldPass);
-console.log('10 local fixture/protocol/k6 checks passed. Local stub is not a JWT, capacity or failover implementation.');
+for(const [mode,shouldPass] of [['ok',true],['valid-unresolved',true],['duplicate-unresolved',false],['wrong-tenant',false],['wrong-kind',false],['missing-version',false],['bad-body',false],['http-503',false]]) await runDriver(mode,shouldPass);
+console.log('12 local fixture/protocol/k6 checks passed. Local stub is not a JWT, capacity or failover implementation.');
