@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      Local/CI aggregator only. Each module is an independent Maven project with its own parent;
+      services depend on the starter by version, never on each other's code.
+      The SWE5006 baseline in backend/ is built separately (backend/pom.xml).
+    -->
+    <groupId>com.spectrace</groupId>
+    <artifactId>spectrace-cn-build</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>SpecTrace-CN platform and services</name>
+
+    <modules>
+        <module>platform/starter</module>
+        <module>services/specification</module>
+        <module>services/formulation</module>
+        <module>services/compliance</module>
+        <module>services/label-workflow</module>
+    </modules>
+</project>
