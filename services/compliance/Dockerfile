@@ -1,6 +1,8 @@
 # Build context: repository root (docker build -f services/compliance/Dockerfile .)
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /workspace
+COPY platform/starter-test platform/starter-test
+RUN mvn -B -ntp -q -f platform/starter-test/pom.xml -DskipTests install
 COPY platform/starter/pom.xml platform/starter/pom.xml
 COPY platform/starter/src platform/starter/src
 RUN mvn -B -ntp -q -f platform/starter/pom.xml -DskipTests install

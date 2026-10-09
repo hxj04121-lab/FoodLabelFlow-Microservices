@@ -1,3 +1,9 @@
 spring:
   application:
     name: starter-test
+  # The web tests run without a database or broker; MessagingIntegrationTest re-enables these.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
+      - org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration
