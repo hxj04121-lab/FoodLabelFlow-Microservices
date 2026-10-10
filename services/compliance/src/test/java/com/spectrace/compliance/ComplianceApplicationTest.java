@@ -323,6 +323,63 @@ class ComplianceApplicationTest {
                 Integer.class, oldSpecId)).isZero();
     }
 
+    @Test
+    void missingLabelBusinessVersionFailsClosedInMySqlWithoutChangingFormulaProjections() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String specificationId = "g2_spec_" + suffix;
+        String formulaId = "g2_formula_" + suffix;
+        String labelId = "g2_label_" + suffix;
+        String productId = "g2_product_" + suffix;
+        insertFormula(specificationId, formulaId, "ing_soy_lecithin", "MATCHED", suffix);
+
+        List<Map<String, Object>> formulaBefore = jdbc.queryForList("""
+                SELECT formula_version_id, organisation_id, product_id, version_number
+                FROM formula_version_projection WHERE formula_version_id = ?
+                """, formulaId);
+        List<Map<String, Object>> itemsBefore = jdbc.queryForList("""
+                SELECT formula_item_id, sequence_no, material_id, specification_version_id, quantity, unit
+                FROM formula_item_projection WHERE formula_version_id = ? ORDER BY sequence_no, formula_item_id
+                """, formulaId);
+        assertThat(formulaBefore).hasSize(1);
+        assertThat(itemsBefore).hasSize(1);
+
+        ObjectNode labelNode = (ObjectNode) json.readTree(java.nio.file.Files.readString(
+                java.nio.file.Path.of("..", "..", "contracts", "events", "examples", "label-published-v1.json"),
+                StandardCharsets.UTF_8));
+        labelNode.put("eventId", UUID.randomUUID().toString());
+        labelNode.put("aggregateId", labelId);
+        labelNode.put("aggregateVersion", 9);
+        labelNode.put("organisationId", "manufacturer_01");
+        ObjectNode payload = (ObjectNode) labelNode.get("payload");
+        payload.put("productId", productId);
+        payload.put("labelVersionId", labelId);
+        payload.put("formulaVersionId", formulaId);
+        EventEnvelope event = EventEnvelope.parse(json.writeValueAsBytes(labelNode), json);
+
+        assertThatThrownBy(() -> idempotentConsumer.consume("compliance.label-projection.v1", event,
+                eventProjector::projectLabel))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No verified CN label version lookup is configured")
+                .hasMessageContaining("aggregateVersion is event sequencing metadata");
+
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM processed_event WHERE consumer = ? AND event_id = ?",
+                Integer.class, "compliance.label-projection.v1", event.eventId())).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM consumed_aggregate_version WHERE consumer = ? AND aggregate_id = ?",
+                Integer.class, "compliance.label-projection.v1", labelId)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM label_version_projection WHERE label_version_id = ?",
+                Integer.class, labelId)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM label_declaration_projection WHERE label_version_id = ?",
+                Integer.class, labelId)).isZero();
+        assertThat(jdbc.queryForList("""
+                SELECT formula_version_id, organisation_id, product_id, version_number
+                FROM formula_version_projection WHERE formula_version_id = ?
+                """, formulaId)).containsExactlyElementsOf(formulaBefore);
+        assertThat(jdbc.queryForList("""
+                SELECT formula_item_id, sequence_no, material_id, specification_version_id, quantity, unit
+                FROM formula_item_projection WHERE formula_version_id = ? ORDER BY sequence_no, formula_item_id
+                """, formulaId)).containsExactlyElementsOf(itemsBefore);
+    }
+
     private void insertFormula(String specificationId, String formulaId, String ingredientId,
                                String matchStatus, String suffix) {
         jdbc.update("""
