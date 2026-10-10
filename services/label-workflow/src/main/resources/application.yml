@@ -6,7 +6,14 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:label_workflow}
     password: ${SPRING_DATASOURCE_PASSWORD:local-only-label_workflow}
   flyway:
-    locations: classpath:db/migration
+    # Starter tables (outbox, local_audit, processed_event, consumed_aggregate_version) are V0_x;
+    # this service's own migrations in db/migration start at V1.
+    locations: classpath:db/spectrace-platform,classpath:db/migration
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:spectrace}
+    password: ${RABBITMQ_PASSWORD:local-only-rabbitmq}
   jdbc:
     template:
       query-timeout: 5s
@@ -17,4 +24,5 @@ management:
     health:
       group:
         readiness:
+          # The broker is not a readiness dependency: committed events wait in the outbox.
           include: readinessState,db
