@@ -172,7 +172,10 @@ public class ComplianceEventProjector {
         String formulaId = text(payload, "formulaVersionId");
         String ruleSetId = text(payload, "ruleSetVersionId");
         int labelVersionNumber = labelVersionNumbers.resolve(event.organisationId(), labelId);
-        if (labelVersionNumber < 1) throw invalid("resolved label business versionNumber must be positive");
+        if (labelVersionNumber < 1) {
+            throw new IllegalStateException("CN label provider returned a non-positive business versionNumber for "
+                    + labelId + " in organisation " + event.organisationId());
+        }
         String jurisdiction = text(payload, "jurisdictionCode");
         jdbc.update("""
                 INSERT INTO label_version_projection (label_version_id, organisation_id, product_id, formula_version_id,

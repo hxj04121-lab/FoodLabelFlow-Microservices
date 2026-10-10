@@ -102,6 +102,12 @@ class PhaseOneImpactMatcherTest {
             assertThat(value.reason()).isEqualTo(ImpactFinding.UnresolvedReason.UNMAPPED);
             assertThat(value.rawPhrase()).isEqualTo("natural flavouring");
         });
+
+        JsonNode payload = JsonMapper.builder().build().valueToTree(finding);
+        assertThat(payload.get("kind").asString()).isEqualTo("POTENTIAL");
+        assertThat(payload.get("outcome").asString()).isEqualTo("REVIEW_REQUIRED");
+        assertThat(payload.get("unresolvedAllergens").size()).isEqualTo(1);
+        assertThat(payload.get("missingAllergens").isEmpty()).isTrue();
     }
 
     @Test

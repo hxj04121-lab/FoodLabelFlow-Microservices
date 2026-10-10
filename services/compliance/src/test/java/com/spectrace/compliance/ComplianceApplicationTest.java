@@ -258,20 +258,29 @@ class ComplianceApplicationTest {
     }
 
     @Test
-    void unresolvedFormulaComponentsAlwaysBlockValidation() {
+    void unresolvedFormulaComponentsPersistFailedRunAndReplayByTheSameIdempotencyKey() {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         String specificationId = "g2_spec_" + suffix;
         String formulaId = "g2_formula_" + suffix;
         String labelId = "g2_label_" + suffix;
         insertFormula(specificationId, formulaId, "ing_placeholder_unmapped", "UNMAPPED", suffix);
-        var submission = validations.evaluate(labelId + ":1",
-                new DraftSnapshot("manufacturer_01", labelId, 1, 1, formulaId, "US", "rules_us_v1", List.of()),
-                new ValidationAuthorizationPort.Actor("test-actor", "manufacturer_01"));
+        DraftSnapshot snapshot = new DraftSnapshot("manufacturer_01", labelId, 1, 1, formulaId, "US",
+                "rules_us_v1", List.of());
+        ValidationAuthorizationPort.Actor actor = new ValidationAuthorizationPort.Actor("test-actor", "manufacturer_01");
+
+        var submission = validations.evaluate(labelId + ":1", snapshot, actor);
+        var replay = validations.evaluate(labelId + ":1", snapshot, actor);
+
+        assertThat(submission.created()).isTrue();
         assertThat(submission.run().status()).isEqualTo("FAILED");
         assertThat(submission.run().findings()).anySatisfy(finding -> {
             assertThat(finding.resultCode()).isEqualTo("FORMULA_COMPONENT_UNRESOLVED");
             assertThat(finding.blocking()).isTrue();
         });
+        assertThat(replay.created()).isFalse();
+        assertThat(replay.run().validationRunId()).isEqualTo(submission.run().validationRunId());
+        assertThat(replay.run().status()).isEqualTo("FAILED");
+        assertThat(replay.run().findings()).containsExactlyElementsOf(submission.run().findings());
     }
 
     @Test

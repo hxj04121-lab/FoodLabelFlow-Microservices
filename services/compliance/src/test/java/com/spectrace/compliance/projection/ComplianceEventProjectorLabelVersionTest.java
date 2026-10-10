@@ -62,10 +62,24 @@ class ComplianceEventProjectorLabelVersionTest {
         assertThat(jdbc.updates).isEmpty();
     }
 
+    @Test
+    void nonPositiveProviderVersionIsAnIntegrationFailureAndWritesNothing() throws Exception {
+        RecordingJdbcTemplate jdbc = new RecordingJdbcTemplate();
+        ImpactFindingProjectionService impacts = new ImpactFindingProjectionService(jdbc, json);
+        ComplianceEventProjector projector = new ComplianceEventProjector(jdbc, json, impacts,
+                (organisationId, labelVersionId) -> 0);
+
+        assertThatThrownBy(() -> projector.projectLabel(labelEvent(9)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("non-positive business versionNumber");
+        assertThat(jdbc.updates).isEmpty();
+    }
+
     private EventEnvelope labelEvent(long aggregateVersion) throws Exception {
         Path sample = Path.of("..", "..", "contracts", "events", "examples", "label-published-v1.json");
         ObjectNode event = (ObjectNode) json.readTree(Files.readString(sample));
         event.put("aggregateVersion", aggregateVersion);
+        assertThat(event.get("payload").has("versionNumber")).isFalse();
         return EventEnvelope.parse(json.writeValueAsBytes(event), json);
     }
 
