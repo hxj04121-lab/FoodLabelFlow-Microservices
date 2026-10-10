@@ -141,6 +141,23 @@ class MessagingIntegrationTest {
     }
 
     @Test
+    void deterministicReplayAppendsEachSeedEventOnlyOnce() {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        String eventId = Outbox.eventIdFor("seed:formula_1106285_v1");
+        assertThat(eventId).isEqualTo(Outbox.eventIdFor("seed:formula_1106285_v1"));
+        java.time.Instant releasedAt = java.time.Instant.parse("2026-01-01T09:00:00Z");
+        Boolean first = tx.execute(status -> outbox.appendOnce(eventId, releasedAt, "FormulaPublished.v1",
+                "manufacturer_4c_foods_corp", "prod_usda_1106285", 1, Map.of("n", 1)));
+        Boolean second = tx.execute(status -> outbox.appendOnce(eventId, releasedAt, "FormulaPublished.v1",
+                "manufacturer_4c_foods_corp", "prod_usda_1106285", 1, Map.of("n", 1)));
+        assertThat(first).isTrue();
+        assertThat(second).isFalse();
+        assertThat(count("SELECT COUNT(*) FROM outbox WHERE event_id = ?", eventId)).isEqualTo(1);
+        assertThat(json.readTree(jdbc.queryForObject("SELECT envelope FROM outbox WHERE event_id = ?", String.class, eventId))
+                .get("occurredAt").asString()).isEqualTo("2026-01-01T09:00:00Z");
+    }
+
+    @Test
     void invalidEventIsRejectedBeforeAnyRowIsWritten() {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         assertThatThrownBy(() -> tx.executeWithoutResult(status ->
@@ -250,6 +267,20 @@ class MessagingIntegrationTest {
                 .isEqualTo("STALE");
         assertThat(jdbc.queryForObject("SELECT aggregate_version FROM consumed_aggregate_version WHERE consumer = ? AND aggregate_id = ?",
                 Long.class, "formulation.spec", "mat_cocoa")).isEqualTo(3L);
+    }
+
+    @Test
+    void allVersionsConsumerAppliesAnOlderVersionThatArrivesLateButStillDeduplicates() {
+        AtomicInteger applied = new AtomicInteger();
+        EventEnvelope v1 = event("mat_hazelnut", 1);
+        assertThat(consumer.consume("formulation.released-specs", event("mat_hazelnut", 2), IdempotentConsumer.Versions.ALL,
+                e -> applied.incrementAndGet())).isEqualTo(Outcome.APPLIED);
+        assertThat(consumer.consume("formulation.released-specs", v1, IdempotentConsumer.Versions.ALL,
+                e -> applied.incrementAndGet())).isEqualTo(Outcome.APPLIED);
+        assertThat(consumer.consume("formulation.released-specs", v1, IdempotentConsumer.Versions.ALL,
+                e -> applied.incrementAndGet())).isEqualTo(Outcome.DUPLICATE);
+        assertThat(applied).hasValue(2);
+        assertThat(count("SELECT COUNT(*) FROM consumed_aggregate_version WHERE consumer = 'formulation.released-specs'")).isZero();
     }
 
     @Test
