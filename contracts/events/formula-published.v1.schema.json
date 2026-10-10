@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FormulaPublished.v1 domain event",
+  "description": "Published by formulation-service through the outbox in the same transaction as the formula release. Aggregate = the product's formula series: aggregateId is the productId and aggregateVersion the released versionNumber. Phase 2 trigger for Compliance; feeds the Label Workflow formula projection. Owner: M1 (G0-M1.5).",
+  "allOf": [
+    { "$ref": "event-envelope.v1.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": { "const": "FormulaPublished.v1" },
+        "producer": { "const": "formulation-service" },
+        "payload": { "$ref": "formula-published-payload.v1.schema.json" }
+      }
+    }
+  ]
+}

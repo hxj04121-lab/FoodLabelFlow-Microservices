@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpecificationPublished.v1 payload",
+  "description": "A supplier released a new immutable specification version of one of its materials (BR-01). Carries the components with ingredient IDs from the Specification-owned ingredient vocabulary; Compliance maps them to allergens and treats unmapped ingredients as UNRESOLVED (BR-03). previousVersion is the material's previously released version (null for the first release), which Phase 1 uses to find formulas that still reference an earlier version. Owner: M1 (G0-M1.5). Components carry stable specComponentId values so Compliance evidence can point at the exact component.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "organisationId",
+    "supplier",
+    "material",
+    "specificationVersion",
+    "previousVersion",
+    "effectiveDate",
+    "releasedAt",
+    "components",
+    "provenance"
+  ],
+  "properties": {
+    "organisationId": {
+      "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id",
+      "description": "SUPPLIER organisation that owns the material; equals the envelope organisationId."
+    },
+    "supplier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "supplierId",
+        "supplierCode",
+        "supplierName"
+      ],
+      "properties": {
+        "supplierId": {
+          "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id"
+        },
+        "supplierCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "supplierName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "materialId",
+        "materialCode",
+        "materialName"
+      ],
+      "properties": {
+        "materialId": {
+          "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id"
+        },
+        "materialCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "materialName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "specificationVersion": {
+      "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/VersionReference"
+    },
+    "previousVersion": {
+      "oneOf": [
+        {
+          "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/VersionReference"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "effectiveDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "releasedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "specComponentId",
+          "sequenceNo",
+          "ingredientId",
+          "ingredientName",
+          "rawPhrase",
+          "matchStatus"
+        ],
+        "properties": {
+          "specComponentId": {
+            "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id",
+            "description": "Stable server-assigned ID, unique and immutable within this released version (a new version gets new IDs). Redelivery carries the same ID. M2 UNRESOLVED evidence references it."
+          },
+          "sequenceNo": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "ingredientId": {
+            "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id",
+            "description": "Vocabulary ingredient. UNMAPPED and AMBIGUOUS components reference a PLACEHOLDER vocabulary ingredient, so this is never null."
+          },
+          "ingredientName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "rawPhrase": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "matchStatus": {
+            "type": "string",
+            "enum": [
+              "MATCHED",
+              "UNMAPPED",
+              "AMBIGUOUS"
+            ]
+          }
+        }
+      }
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    }
+  },
+  "$defs": {
+    "Provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provenanceId",
+        "sourceType"
+      ],
+      "properties": {
+        "provenanceId": {
+          "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id"
+        },
+        "sourceType": {
+          "type": "string",
+          "enum": [
+            "PUBLIC_SOURCE",
+            "PROJECT_SEEDED",
+            "DERIVED",
+            "SYSTEM_GENERATED"
+          ]
+        }
+      }
+    }
+  }
+}

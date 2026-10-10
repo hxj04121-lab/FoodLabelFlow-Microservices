@@ -1,0 +1,23 @@
+name: SWE5001 LabelPublished contracts
+on:
+  pull_request:
+    branches: [main, g0-m4-label-workflow-contracts]
+    paths: ['contracts/**', 'docs/swe5001/G0-M2-LabelPublished-envelope-adoption.md', '.github/workflows/swe5001-label-contracts.yml']
+  push:
+    branches: ['feature/stcn-29-label-envelope']
+    paths: ['contracts/**', 'docs/swe5001/G0-M2-LabelPublished-envelope-adoption.md', '.github/workflows/swe5001-label-contracts.yml']
+permissions:
+  contents: read
+jobs:
+  label-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+      - name: Validate Label Workflow and canonical LabelPublished
+        working-directory: contracts
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm run check:integration
