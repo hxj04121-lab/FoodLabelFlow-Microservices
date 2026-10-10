@@ -68,8 +68,10 @@ services:
       context: ../..
       dockerfile: services/specification/Dockerfile
     environment:
+      SPECTRACE_SEED_REPLAY_ENABLED: ${SEED_REPLAY:-false}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/specification?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       RABBITMQ_HOST: rabbitmq
+      SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:
       - "${SPECIFICATION_HOST_PORT:-8081}:8080"
 
@@ -81,6 +83,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/formulation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       RABBITMQ_HOST: rabbitmq
+      SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:
       - "${FORMULATION_HOST_PORT:-8082}:8080"
 
@@ -92,6 +95,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/compliance?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       RABBITMQ_HOST: rabbitmq
+      SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:
       - "${COMPLIANCE_HOST_PORT:-8083}:8080"
 
@@ -103,6 +107,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/label_workflow?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       RABBITMQ_HOST: rabbitmq
+      SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:
       - "${LABEL_WORKFLOW_HOST_PORT:-8084}:8080"
 
