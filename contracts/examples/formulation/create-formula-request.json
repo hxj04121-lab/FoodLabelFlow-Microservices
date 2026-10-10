@@ -1,0 +1,8 @@
+{
+  "productId": "prod_001",
+  "provenanceId": "prov_project_seed",
+  "items": [
+    { "materialId": "mat_001", "specificationVersionId": "spec_001_v2", "quantity": 12.5, "unit": "kg" },
+    { "materialId": "mat_002", "specificationVersionId": "spec_002_v1", "quantity": null, "unit": null }
+  ]
+}

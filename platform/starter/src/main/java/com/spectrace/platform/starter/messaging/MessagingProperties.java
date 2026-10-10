@@ -13,7 +13,22 @@ public class MessagingProperties {
     /** Topic exchange that every event is published to (architecture v3 §6.4). */
     private String exchange = "spectrace.events";
 
+    /**
+     * Declare the {@code spectrace.events} exchange (and the service's own queues, see {@link QueueTopology})
+     * at startup. For local and test environments only; in staging the topology is owned by M5's
+     * RabbitMQ topology operator and this stays false.
+     */
+    private boolean declareTopology;
+
     private final Relay relay = new Relay();
+
+    public boolean isDeclareTopology() {
+        return declareTopology;
+    }
+
+    public void setDeclareTopology(boolean declareTopology) {
+        this.declareTopology = declareTopology;
+    }
 
     public String getProducer() {
         return producer;

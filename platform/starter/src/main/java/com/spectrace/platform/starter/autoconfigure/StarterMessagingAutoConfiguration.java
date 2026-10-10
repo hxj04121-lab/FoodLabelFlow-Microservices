@@ -75,6 +75,13 @@ public class StarterMessagingAutoConfiguration {
             return new OutboxRelay(jdbc, new TransactionTemplate(transactionManager), connectionFactory, properties, clock);
         }
 
+        /** Local/test only: the event exchange the relay publishes to (see MessagingProperties#declareTopology). */
+        @Bean
+        @ConditionalOnProperty(prefix = "spectrace.messaging", name = "declare-topology", havingValue = "true")
+        org.springframework.amqp.core.TopicExchange spectraceEventsExchange(MessagingProperties properties) {
+            return new org.springframework.amqp.core.TopicExchange(properties.getExchange(), true, false);
+        }
+
         @Bean
         @ConditionalOnMissingBean
         IdempotentConsumer idempotentConsumer(JdbcTemplate jdbc, PlatformTransactionManager transactionManager,
