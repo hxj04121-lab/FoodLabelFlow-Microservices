@@ -1,0 +1,10 @@
+{
+  "materialId": "mat_001",
+  "effectiveDate": "2026-10-01",
+  "provenanceId": "prov_project_seed",
+  "components": [
+    { "ingredientId": "ing_cocoa", "rawPhrase": "cocoa mass", "matchRule": "Human verified course fixture" },
+    { "ingredientId": "ing_wheat_flour", "rawPhrase": "wheat flour", "matchRule": "Human verified course fixture" },
+    { "ingredientId": "ing_soy_lecithin", "rawPhrase": "emulsifier (soy lecithin)", "matchRule": "Human verified course fixture" }
+  ]
+}
