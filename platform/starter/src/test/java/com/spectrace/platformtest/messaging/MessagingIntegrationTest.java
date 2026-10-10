@@ -34,6 +34,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -75,6 +76,7 @@ class MessagingIntegrationTest {
             admin.purgeQueue(queue, false);
         }
         listener.failuresToThrow.set(0);
+        listener.duplicateFailuresToThrow.set(0);
         listener.attempts.set(0);
     }
 
@@ -265,6 +267,21 @@ class MessagingIntegrationTest {
     }
 
     @Test
+    void handlerUniqueKeyFailureRollsBackAndAllowsRedelivery() {
+        EventEnvelope event = event("mat_unique_conflict", 1);
+        jdbc.update("INSERT INTO demo_projection (aggregate_id, version, applied) VALUES ('constraint_fixture', 1, 1)");
+        assertThatThrownBy(() -> consumer.consume("formulation.spec", event, e -> {
+            jdbc.update("INSERT INTO demo_projection (aggregate_id, version, applied) VALUES (?, 1, 1)", e.aggregateId());
+            jdbc.update("INSERT INTO demo_projection (aggregate_id, version, applied) VALUES ('constraint_fixture', 1, 1)");
+        })).isInstanceOf(DuplicateKeyException.class);
+        assertThat(count("SELECT COUNT(*) FROM processed_event WHERE event_id = ?", event.eventId())).isZero();
+        assertThat(count("SELECT COUNT(*) FROM consumed_aggregate_version WHERE aggregate_id = ?", event.aggregateId())).isZero();
+        assertThat(projectionApplied(event.aggregateId())).isZero();
+        assertThat(consumer.consume("formulation.spec", event, e -> { })).isEqualTo(Outcome.APPLIED);
+        assertThat(consumer.consume("formulation.spec", event, e -> { })).isEqualTo(Outcome.DUPLICATE);
+    }
+
+    @Test
     void malformedEnvelopeIsRejectedWithoutRequeue() {
         String valid = json.writeValueAsString(event("mat_milk", 1).toJson(json));
         for (String body : List.of("not json", "[]", valid.replace("\"eventId\"", "\"eventID\""),
@@ -301,6 +318,33 @@ class MessagingIntegrationTest {
                         && admin.getQueueInfo(MessagingTestApplication.LISTENER_QUEUE).getMessageCount() == 0);
         await().during(Duration.ofSeconds(1)).atMost(Duration.ofSeconds(5)).until(() -> projectionApplied("spec_001_v2") == 1);
         assertThat(listener.attempts).hasValue(2);
+    }
+
+    @Test
+    void listenerRetriesHandlerUniqueKeyFailure() {
+        jdbc.update("INSERT INTO demo_projection (aggregate_id, version, applied) VALUES ('constraint_fixture', 1, 1)");
+        listener.duplicateFailuresToThrow.set(1);
+        EventEnvelope event = commands.release("spec_unique_retry", "SpecificationPublished.v1", 1, false);
+        assertThat(relay.publishPending()).isEqualTo(1);
+        await().atMost(Duration.ofSeconds(20)).until(() -> projectionApplied(event.aggregateId()) == 1);
+        assertThat(listener.attempts).hasValue(2);
+        assertThat(count("SELECT COUNT(*) FROM processed_event WHERE event_id = ?", event.eventId())).isEqualTo(1);
+        assertThat(rabbit.receive(MessagingTestApplication.LISTENER_QUEUE + ".dlq", 300)).isNull();
+    }
+
+    @Test
+    void handlerUniqueKeyFailureReachesDeadLetterQueue() {
+        jdbc.update("INSERT INTO demo_projection (aggregate_id, version, applied) VALUES ('constraint_fixture', 1, 1)");
+        listener.duplicateFailuresToThrow.set(100);
+        EventEnvelope event = commands.release("spec_unique_poison", "SpecificationPublished.v1", 1, false);
+        assertThat(relay.publishPending()).isEqualTo(1);
+        Message dead = await().atMost(Duration.ofSeconds(30))
+                .until(() -> rabbit.receive(MessagingTestApplication.LISTENER_QUEUE + ".dlq"), message -> message != null);
+        assertThat(dead.getMessageProperties().getMessageId()).isEqualTo(event.eventId());
+        assertThat(listener.attempts.get()).isGreaterThanOrEqualTo(3);
+        assertThat(projectionApplied(event.aggregateId())).isZero();
+        assertThat(count("SELECT COUNT(*) FROM processed_event WHERE event_id = ?", event.eventId())).isZero();
+        assertThat(count("SELECT COUNT(*) FROM consumed_aggregate_version WHERE aggregate_id = ?", event.aggregateId())).isZero();
     }
 
     @Test
