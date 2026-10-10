@@ -324,6 +324,52 @@ class ComplianceApplicationTest {
     }
 
     @Test
+    void formulaProjectionDeduplicatesAndDiscardsStaleEventsInMySql() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String productId = "g2_product_" + suffix;
+        String formulaId = "g2_formula_v2_" + suffix;
+        String staleFormulaId = "g2_formula_v1_" + suffix;
+        ObjectNode candidateNode = (ObjectNode) json.readTree(contractExample(
+                "formulation/formula-published-adopts-v2.json"));
+        candidateNode.put("eventId", UUID.randomUUID().toString());
+        candidateNode.put("aggregateId", productId);
+        ObjectNode candidatePayload = (ObjectNode) candidateNode.get("payload");
+        ((ObjectNode) candidatePayload.get("product")).put("productId", productId);
+        ((ObjectNode) candidatePayload.get("formulaVersion")).put("id", formulaId);
+        EventEnvelope candidate = EventEnvelope.parse(json.writeValueAsBytes(candidateNode), json);
+
+        assertThat(idempotentConsumer.consume("compliance.formula-projection.v1", candidate,
+                eventProjector::projectFormula)).isEqualTo(IdempotentConsumer.Outcome.APPLIED);
+        assertThat(idempotentConsumer.consume("compliance.formula-projection.v1", candidate,
+                eventProjector::projectFormula)).isEqualTo(IdempotentConsumer.Outcome.DUPLICATE);
+
+        ObjectNode staleNode = candidateNode.deepCopy();
+        staleNode.put("eventId", UUID.randomUUID().toString());
+        staleNode.put("aggregateVersion", 1);
+        staleNode.put("occurredAt", "2026-10-01T03:00:00Z");
+        ObjectNode stalePayload = (ObjectNode) staleNode.get("payload");
+        stalePayload.put("releasedAt", "2026-10-01T03:00:00Z");
+        stalePayload.putNull("previousFormulaVersion");
+        ObjectNode staleVersion = (ObjectNode) stalePayload.get("formulaVersion");
+        staleVersion.put("id", staleFormulaId);
+        staleVersion.put("versionNumber", 1);
+        EventEnvelope stale = EventEnvelope.parse(json.writeValueAsBytes(staleNode), json);
+
+        assertThat(idempotentConsumer.consume("compliance.formula-projection.v1", stale,
+                eventProjector::projectFormula)).isEqualTo(IdempotentConsumer.Outcome.STALE);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM formula_version_projection WHERE formula_version_id = ?",
+                Integer.class, formulaId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM formula_item_projection WHERE formula_version_id = ?",
+                Integer.class, formulaId)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM formula_version_projection WHERE formula_version_id = ?",
+                Integer.class, staleFormulaId)).isZero();
+        assertThat(jdbc.queryForObject("SELECT aggregate_version FROM consumed_aggregate_version WHERE consumer = ? AND aggregate_id = ?",
+                Long.class, "compliance.formula-projection.v1", productId)).isEqualTo(2L);
+        assertThat(jdbc.queryForObject("SELECT outcome FROM processed_event WHERE consumer = ? AND event_id = ?",
+                String.class, "compliance.formula-projection.v1", stale.eventId())).isEqualTo("STALE");
+    }
+
+    @Test
     void missingLabelBusinessVersionFailsClosedInMySqlWithoutChangingFormulaProjections() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         String specificationId = "g2_spec_" + suffix;
