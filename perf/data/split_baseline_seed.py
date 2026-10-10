@@ -94,6 +94,11 @@ def main():
     products = rows(sql, "product")
     formulas = rows(sql, "formula_version")
     items = rows(sql, "formula_item")
+    # The baseline sets current pointers with UPDATE statements after the formula and label inserts.
+    pointers = {pid: fid for fid, pid in re.findall(
+        r"UPDATE product SET current_formula_version_id='([^']+)'[^;]*WHERE product_id='([^']+)';", sql)}
+    for p in products:
+        p["current_formula_version_id"] = pointers.get(p["product_id"], p.get("current_formula_version_id"))
 
     organisations = {}
     for s in suppliers:
