@@ -1,0 +1,104 @@
+# Local SpecTrace-CN platform (G1-M1.2). Run from the repository root:
+#   docker compose -f deploy/local/compose.yaml up -d --build
+# Infrastructure only:  docker compose -f deploy/local/compose.yaml up -d mysql rabbitmq keycloak
+# Credentials below are local-only defaults; staging gets real secrets from the pipeline.
+name: spectrace-local
+
+x-service: &service
+  depends_on:
+    mysql:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
+    interval: 10s
+    timeout: 5s
+    retries: 30
+    start_period: 20s
+
+services:
+  mysql:
+    image: mysql:8.4.11
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local-only-root}
+    ports:
+      - "${MYSQL_HOST_PORT:-3316}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysql --protocol=TCP -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} -e 'SELECT 1 FROM mysql.user WHERE user=\"label_workflow\"' | grep -q 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-spectrace}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-local-only-rabbitmq}
+    ports:
+      - "${RABBITMQ_HOST_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_HOST_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3
+    command: ["start-dev", "--http-port=8080"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-local-only-keycloak}
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_HOST_PORT:-8180}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  specification:
+    <<: *service
+    build:
+      context: ../..
+      dockerfile: services/specification/Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/specification?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    ports:
+      - "${SPECIFICATION_HOST_PORT:-8081}:8080"
+
+  formulation:
+    <<: *service
+    build:
+      context: ../..
+      dockerfile: services/formulation/Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/formulation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    ports:
+      - "${FORMULATION_HOST_PORT:-8082}:8080"
+
+  compliance:
+    <<: *service
+    build:
+      context: ../..
+      dockerfile: services/compliance/Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/compliance?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    ports:
+      - "${COMPLIANCE_HOST_PORT:-8083}:8080"
+
+  label-workflow:
+    <<: *service
+    build:
+      context: ../..
+      dockerfile: services/label-workflow/Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/label_workflow?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    ports:
+      - "${LABEL_WORKFLOW_HOST_PORT:-8084}:8080"
+
+volumes:
+  mysql-data:
