@@ -50,6 +50,10 @@ class SpecificationApiTest {
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbc;
     @Autowired JsonMapper json;
+    @Autowired com.spectrace.specification.persistence.SpecificationStore store;
+    @Autowired com.spectrace.specification.application.SpecificationService service;
+    @Autowired com.spectrace.platform.starter.messaging.Outbox outbox;
+    @Autowired org.springframework.transaction.support.TransactionTemplate transactions;
 
     private final HttpClient client = HttpClient.newHttpClient();
 
@@ -187,6 +191,36 @@ class SpecificationApiTest {
         assertThat(again.status()).isEqualTo(409);
         assertThat(again.body().get("code").asString()).isEqualTo("VERSION_IMMUTABLE");
         assertThat(outboxRows()).isEqualTo(outboxBefore + 1);
+    }
+
+    @Test
+    void anOlderDraftCannotBeReleasedAfterANewerVersion() throws Exception {
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        String older = call("POST", "/api/specifications/versions", BASE_AUTHOR, draftBody("mat_wheat_flour", today, "ing_wheat_flour"))
+                .body().get("specificationVersionId").asString();
+        String newer = call("POST", "/api/specifications/versions", BASE_AUTHOR, draftBody("mat_wheat_flour", today, "ing_wheat_flour"))
+                .body().get("specificationVersionId").asString();
+        assertThat(call("POST", "/api/specifications/versions/" + newer + "/release", BASE_AUTHOR, null).status()).isEqualTo(200);
+        Response stale = call("POST", "/api/specifications/versions/" + older + "/release", BASE_AUTHOR, null);
+        assertThat(stale.status()).isEqualTo(409);
+        assertThat(stale.body().get("code").asString()).isEqualTo("DATA_CONFLICT");
+        assertThat(call("GET", "/api/specifications/versions/" + older, BASE_AUTHOR, null).body().get("lifecycleStatus").asString())
+                .isEqualTo("DRAFT");
+    }
+
+    @Test
+    void seedReplayAppendsOneDeterministicEventPerSeededReleaseAndIsIdempotent() throws Exception {
+        var replay = new com.spectrace.specification.bootstrap.SeedReplay(store, service, outbox, transactions);
+        int first = transactions.execute(status -> replay.replay());
+        int second = transactions.execute(status -> replay.replay());
+        assertThat(first).isGreaterThanOrEqualTo(5);
+        assertThat(second).isZero();
+        String eventId = com.spectrace.platform.starter.messaging.Outbox.eventIdFor("seed:spec_chocolate_v1");
+        JsonNode event = json.readTree(jdbc.queryForObject("SELECT envelope FROM outbox WHERE event_id = ?", String.class, eventId));
+        assertThat(validate("events/specification-published.v1.schema.json", event)).isEmpty();
+        assertThat(event.get("occurredAt").asString()).isEqualTo("2026-01-01T09:00:00Z");
+        assertThat(event.get("payload").get("previousVersion").isNull()).isTrue();
+        assertThat(event.get("correlationId").asString()).isEqualTo("seed-replay-specification");
     }
 
     @Test

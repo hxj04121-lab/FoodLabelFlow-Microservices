@@ -168,6 +168,14 @@ public class SpecificationStore {
                 .stream().findFirst();
     }
 
+    /** Highest released or retired version number of the material, 0 if none. */
+    public int latestReleasedVersionNumber(String materialId) {
+        Integer latest = jdbc.queryForObject("""
+                SELECT COALESCE(MAX(version_number), 0) FROM specification_version
+                WHERE material_id = ? AND lifecycle_status IN ('RELEASED', 'RETIRED')""", Integer.class, materialId);
+        return latest == null ? 0 : latest;
+    }
+
     /** Latest effective date among the material's released versions other than {@code excluding}. */
     public Optional<LocalDate> latestReleasedEffectiveDate(String materialId, String excluding) {
         return jdbc.queryForList("""

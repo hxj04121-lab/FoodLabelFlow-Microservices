@@ -158,6 +158,10 @@ public class SpecificationService {
             throw new ApiException(HttpStatus.CONFLICT, "VERSION_IMMUTABLE",
                     "Only a draft can be released; create a new version for changes.");
         }
+        if (store.latestReleasedVersionNumber(material.materialId()) > draft.versionNumber()) {
+            // Consumers keep the newest version per material; an older draft released later would be discarded as stale.
+            throw ApiException.conflict("A newer version of this material is already released; create a new draft from it.");
+        }
         requireEffectiveDateNotBeforeReleased(material.materialId(), draft.specificationVersionId(), draft.effectiveDate());
 
         Instant releasedAt = clock.instant().truncatedTo(ChronoUnit.MILLIS);
