@@ -4,15 +4,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
+import com.spectrace.compliance.authorization.ValidationAuthorizationPort;
+import com.spectrace.compliance.projection.ComplianceEventProjector;
+import com.spectrace.compliance.projection.ComplianceMessagingTestTopology;
+import com.spectrace.compliance.validation.DraftSnapshot;
+import com.spectrace.compliance.validation.ValidationService;
 import com.spectrace.platform.starter.correlation.CorrelationId;
+import com.spectrace.platform.starter.error.ApiException;
+import com.spectrace.platform.starter.messaging.EventEnvelope;
+import com.spectrace.platform.starter.messaging.IdempotentConsumer;
 import com.spectrace.platform.test.MySqlTestcontainers;
+import com.spectrace.platform.test.RabbitTestcontainers;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.exception.FlywayValidateException;
@@ -27,12 +40,15 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.mysql.MySQLContainer;
+import tools.jackson.databind.node.ObjectNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Real HTTP and MySQL checks of the generated G1 skeleton; no business API or fake JWT adapter. */
-@Import(MySqlTestcontainers.class)
+/** Real HTTP, MySQL, and Rabbit checks of the Compliance service. */
+@Import({MySqlTestcontainers.class, RabbitTestcontainers.class, ComplianceMessagingTestTopology.class})
 @AutoConfigureMetrics
 @ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -56,11 +72,28 @@ class ComplianceApplicationTest {
     @Autowired
     JsonMapper json;
 
+    @Autowired
+    ValidationService validations;
+
+    @Autowired
+    IdempotentConsumer idempotentConsumer;
+
+    @Autowired
+    ComplianceEventProjector eventProjector;
+
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
     private HttpResponse<String> get(String path, String correlation) throws Exception {
         return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                 .header(CorrelationId.HEADER, correlation).timeout(Duration.ofSeconds(30)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> post(String path, String correlation, String key, String requestBody) throws Exception {
+        return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header(CorrelationId.HEADER, correlation).header("Idempotency-Key", key)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody)).timeout(Duration.ofSeconds(30)).build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
@@ -104,13 +137,15 @@ class ComplianceApplicationTest {
     @Test
     void flywayOwnsTheComplianceRootAndReapplyingDoesNotDuplicateHistory() {
         assertThat(jdbc.queryForObject("SELECT DATABASE()", String.class)).isEqualTo("compliance");
-        assertThat(flyway.info().current().getVersion().toString()).isEqualTo("1");
+        assertThat(flyway.info().current().getVersion().toString()).isEqualTo("2");
         assertThat(jdbc.queryForList("SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank",
-                String.class)).containsExactly("0.1", "1");
+                String.class)).containsExactly("0.1", "1", "2");
         assertThat(jdbc.queryForList("""
                 SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()
-                AND table_name IN ('outbox', 'local_audit', 'processed_event', 'consumed_aggregate_version')""", String.class))
-                .containsExactlyInAnyOrder("outbox", "local_audit", "processed_event", "consumed_aggregate_version");
+                AND table_name IN ('outbox', 'local_audit', 'processed_event', 'consumed_aggregate_version',
+                    'compliance_allergen', 'validation_run', 'specification_version_projection')""", String.class))
+                .containsExactlyInAnyOrder("outbox", "local_audit", "processed_event", "consumed_aggregate_version",
+                        "compliance_allergen", "validation_run", "specification_version_projection");
         assertThat(flyway.getConfiguration().isBaselineOnMigrate()).isFalse();
         assertThat(flyway.getConfiguration().isValidateOnMigrate()).isTrue();
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
@@ -135,7 +170,7 @@ class ComplianceApplicationTest {
     @Test
     void flywayCleanCannotDeleteTheServiceDatabase() {
         assertThatThrownBy(flyway::clean).isInstanceOf(FlywayException.class).hasMessageContaining("cleanDisabled");
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE", Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE", Integer.class)).isEqualTo(3);
     }
 
     @Test
@@ -179,5 +214,133 @@ class ComplianceApplicationTest {
         assertThat(record).containsEntry("correlationId", "stcn49-log");
         assertThat((Map<String, Object>) record.get("service")).containsEntry("name", "compliance");
         assertThat(record).containsKey("ecs");
+    }
+
+    @Test
+    void validationEndpointDeniesRequestsUntilTheRealIdentityAdapterIsInstalled() throws Exception {
+        HttpResponse<String> response = post("/internal/validations", "g2-auth-deny", "label_001_v2:3",
+                contractExample("compliance/validation-request.json"));
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(body(response)).containsEntry("code", "AUTHENTICATION_REQUIRED")
+                .containsEntry("traceId", "g2-auth-deny");
+    }
+
+    @Test
+    void soyValidationPersistsOnceReplaysTheStoredResultAndRejectsKeyReuse() {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String specificationId = "g2_spec_" + suffix;
+        String formulaId = "g2_formula_" + suffix;
+        String labelId = "g2_label_" + suffix;
+        insertFormula(specificationId, formulaId, "ing_soy_lecithin", "MATCHED", suffix);
+        DraftSnapshot snapshot = new DraftSnapshot("manufacturer_01", labelId, 1, 1, formulaId, "US",
+                "rules_us_v1", List.of());
+        ValidationAuthorizationPort.Actor actor = new ValidationAuthorizationPort.Actor("test-actor", "manufacturer_01");
+
+        ValidationService.Submission first = validations.evaluate(labelId + ":1", snapshot, actor);
+        ValidationService.Submission replay = validations.evaluate(labelId + ":1", snapshot, actor);
+
+        assertThat(first.created()).isTrue();
+        assertThat(first.run().status()).isEqualTo("FAILED");
+        assertThat(first.run().findings()).anySatisfy(finding -> assertThat(finding.resultCode()).isEqualTo("MISSING_ALLERGEN"));
+        assertThat(replay.created()).isFalse();
+        assertThat(replay.run().validationRunId()).isEqualTo(first.run().validationRunId());
+        DraftSnapshot changed = new DraftSnapshot("manufacturer_01", labelId, 1, 1, formulaId, "US",
+                "rules_us_v1", List.of(new DraftSnapshot.Declaration("all_soy", "CONTAINS")));
+        assertThatThrownBy(() -> validations.evaluate(labelId + ":1", changed, actor))
+                .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.status().value()).isEqualTo(409));
+
+        String passingLabelId = labelId + "_pass";
+        DraftSnapshot passing = new DraftSnapshot("manufacturer_01", passingLabelId, 1, 1, formulaId, "US",
+                "rules_us_v1", List.of(new DraftSnapshot.Declaration("all_soy", "CONTAINS")));
+        ValidationService.Submission passed = validations.evaluate(passingLabelId + ":1", passing, actor);
+        assertThat(passed.run().status()).isEqualTo("PASSED");
+        assertThat(passed.run().findings()).isEmpty();
+    }
+
+    @Test
+    void unresolvedFormulaComponentsAlwaysBlockValidation() {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String specificationId = "g2_spec_" + suffix;
+        String formulaId = "g2_formula_" + suffix;
+        String labelId = "g2_label_" + suffix;
+        insertFormula(specificationId, formulaId, "ing_placeholder_unmapped", "UNMAPPED", suffix);
+        var submission = validations.evaluate(labelId + ":1",
+                new DraftSnapshot("manufacturer_01", labelId, 1, 1, formulaId, "US", "rules_us_v1", List.of()),
+                new ValidationAuthorizationPort.Actor("test-actor", "manufacturer_01"));
+        assertThat(submission.run().status()).isEqualTo("FAILED");
+        assertThat(submission.run().findings()).anySatisfy(finding -> {
+            assertThat(finding.resultCode()).isEqualTo("FORMULA_COMPONENT_UNRESOLVED");
+            assertThat(finding.blocking()).isTrue();
+        });
+    }
+
+    @Test
+    void specificationProjectionRejectsDuplicateAndStaleEventsWithoutChangingTheProjection() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String materialId = "g2_mat_" + suffix;
+        String oldSpecId = "g2_spec_old_" + suffix;
+        String newSpecId = "g2_spec_new_" + suffix;
+        ObjectNode candidateNode = (ObjectNode) json.readTree(contractExample(
+                "specification/specification-published-soy-lecithin-v2.json"));
+        candidateNode.put("eventId", UUID.randomUUID().toString());
+        candidateNode.put("aggregateId", materialId);
+        ObjectNode candidatePayload = (ObjectNode) candidateNode.get("payload");
+        ((ObjectNode) candidatePayload.get("material")).put("materialId", materialId);
+        ((ObjectNode) candidatePayload.get("specificationVersion")).put("id", newSpecId);
+        ((ObjectNode) candidatePayload.get("previousVersion")).put("id", oldSpecId);
+        EventEnvelope candidate = EventEnvelope.parse(json.writeValueAsBytes(candidateNode), json);
+
+        assertThat(idempotentConsumer.consume("compliance.specification-projection.v1", candidate,
+                eventProjector::projectSpecification)).isEqualTo(IdempotentConsumer.Outcome.APPLIED);
+        assertThat(idempotentConsumer.consume("compliance.specification-projection.v1", candidate,
+                eventProjector::projectSpecification)).isEqualTo(IdempotentConsumer.Outcome.DUPLICATE);
+
+        ObjectNode staleNode = candidateNode.deepCopy();
+        staleNode.put("eventId", UUID.randomUUID().toString());
+        staleNode.put("aggregateVersion", 1);
+        staleNode.put("occurredAt", "2026-09-30T07:55:00Z");
+        ObjectNode stalePayload = (ObjectNode) staleNode.get("payload");
+        ((ObjectNode) stalePayload.get("specificationVersion")).put("id", oldSpecId);
+        ((ObjectNode) stalePayload.get("specificationVersion")).put("versionNumber", 1);
+        stalePayload.putNull("previousVersion");
+        stalePayload.put("releasedAt", "2026-09-30T07:55:00Z");
+        EventEnvelope stale = EventEnvelope.parse(json.writeValueAsBytes(staleNode), json);
+        assertThat(idempotentConsumer.consume("compliance.specification-projection.v1", stale,
+                eventProjector::projectSpecification)).isEqualTo(IdempotentConsumer.Outcome.STALE);
+
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM specification_version_projection WHERE specification_version_id = ?",
+                Integer.class, newSpecId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM specification_version_projection WHERE specification_version_id = ?",
+                Integer.class, oldSpecId)).isZero();
+    }
+
+    private void insertFormula(String specificationId, String formulaId, String ingredientId,
+                               String matchStatus, String suffix) {
+        jdbc.update("""
+                INSERT INTO specification_version_projection (specification_version_id, organisation_id, material_id,
+                    version_number, previous_version_id, effective_date, released_at, payload_json)
+                VALUES (?, 'supplier_01', ?, 1, NULL, '2026-10-01', ?, CAST('{}' AS JSON))
+                """, specificationId, "material_" + suffix, java.sql.Timestamp.from(Instant.now()));
+        jdbc.update("""
+                INSERT INTO specification_component_projection (specification_version_id, spec_component_id,
+                    sequence_no, ingredient_id, raw_phrase, match_status) VALUES (?, ?, 1, ?, ?, ?)
+                """, specificationId, "component_" + suffix, ingredientId, "soy lecithin", matchStatus);
+        jdbc.update("""
+                INSERT INTO formula_version_projection (formula_version_id, organisation_id, product_id, version_number,
+                    released_at, payload_json) VALUES (?, 'manufacturer_01', ?, 1, ?, CAST('{}' AS JSON))
+                """, formulaId, "product_" + suffix, java.sql.Timestamp.from(Instant.now()));
+        jdbc.update("""
+                INSERT INTO formula_item_projection (formula_version_id, formula_item_id, sequence_no, material_id,
+                    specification_version_id, quantity, unit) VALUES (?, ?, 1, ?, ?, 1.0, 'kg')
+                """, formulaId, "item_" + suffix, "material_" + suffix, specificationId);
+    }
+
+    private static String contractExample(String relativePath) {
+        try {
+            return java.nio.file.Files.readString(java.nio.file.Path.of("..", "..", "contracts", "examples", relativePath),
+                    StandardCharsets.UTF_8);
+        } catch (java.io.IOException error) {
+            throw new IllegalStateException(error);
+        }
     }
 }
