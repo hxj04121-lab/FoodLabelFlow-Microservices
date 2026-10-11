@@ -1,0 +1,22 @@
+{
+  "organisationId": "manufacturer_01",
+  "labelVersionId": "label_001_v2",
+  "versionNumber": 2,
+  "draftRevision": 3,
+  "formulaVersionId": "formula_001_v2",
+  "jurisdiction": "US",
+  "ruleSetVersionId": "rules_us_v1",
+  "validationRunId": "validation_001",
+  "correlationId": "corr_validation_001",
+  "status": "FAILED",
+  "ranAt": "2026-10-01T08:00:00Z",
+  "findings": [
+    {
+      "resultCode": "MISSING_ALLERGEN",
+      "severity": "ERROR",
+      "passed": false,
+      "blocking": true,
+      "message": "Required allergen declaration is missing."
+    }
+  ]
+}
