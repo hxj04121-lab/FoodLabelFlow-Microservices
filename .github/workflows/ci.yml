@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "chore/**", "feature/**", "feat/stcn-*"]
+    branches: [main, "chore/**", "feature/**"]
   pull_request:
     branches: [main, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feat/stcn-*']
 

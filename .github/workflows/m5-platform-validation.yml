@@ -11,7 +11,7 @@ on:
       - 'scripts/check_m5_platform.py'
       - 'tests/test_staging_guards.sh'
   push:
-    branches: [main, 'feat/stcn-*']
+    branches: [main]
     paths:
       - 'deploy/**'
       - 'infra/terraform/**'
