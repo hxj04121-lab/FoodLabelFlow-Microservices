@@ -3,6 +3,8 @@ package com.spectrace.platform.starter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.spectrace.platform.starter.correlation.CorrelationId;
+import com.spectrace.platform.test.security.TestTokens;
+import com.spectrace.platform.test.security.TestTokens.Caller;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -17,15 +19,34 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Real HTTP against an embedded Tomcat: health, metrics, correlation ID, error envelope and JSON logs. */
 @ExtendWith(OutputCaptureExtension.class)
 @AutoConfigureMetrics
-@SpringBootTest(classes = StarterTestApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = {StarterTestApplication.class, StarterHttpTest.SignedTokens.class},
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class StarterHttpTest {
 
     private static final String UUID_PATTERN = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+
+    /** The starter is a JWT resource server, so every request in these tests carries a real token. */
+    @TestConfiguration
+    static class SignedTokens {
+
+        @Bean
+        TestTokens testTokens() {
+            return new TestTokens();
+        }
+
+        @Bean
+        JwtDecoder jwtDecoder(TestTokens tokens) {
+            return tokens.jwtDecoder();
+        }
+    }
 
     @LocalServerPort
     int port;
@@ -33,12 +54,17 @@ class StarterHttpTest {
     @Autowired
     JsonMapper json;
 
+    @Autowired
+    TestTokens tokens;
+
     private final HttpClient client = HttpClient.newHttpClient();
 
     private HttpResponse<String> send(String method, String path, String correlationId, String body)
             throws IOException, InterruptedException {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                 .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+        request.header("Authorization", "Bearer " + tokens.token(
+                Caller.of("starter-test", "org-starter-test", "MANUFACTURER", "LABEL_OFFICER")));
         if (body != null) {
             request.header("Content-Type", "application/json");
         }
@@ -152,6 +178,8 @@ class StarterHttpTest {
         assertApiError(send("DELETE", "/test/ok", null, null), 405, "METHOD_NOT_ALLOWED");
         assertApiError(get("/no/such/path", null), 404, "RESOURCE_NOT_FOUND");
         HttpResponse<String> plainText = client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/test/echo"))
+                .header("Authorization", "Bearer " + tokens.token(
+                        Caller.of("starter-test", "org-starter-test", "MANUFACTURER", "LABEL_OFFICER")))
                 .header("Content-Type", "text/plain").POST(HttpRequest.BodyPublishers.ofString("x")).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertApiError(plainText, 415, "UNSUPPORTED_MEDIA_TYPE");

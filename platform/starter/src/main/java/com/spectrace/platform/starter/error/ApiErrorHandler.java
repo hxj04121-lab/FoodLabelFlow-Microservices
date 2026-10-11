@@ -8,6 +8,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.NativeWebRequest;
@@ -35,6 +37,22 @@ public class ApiErrorHandler extends ResponseEntityExceptionHandler {
         }
         return ApiErrors.response(exception.status(), exception.code(), exception.getMessage(),
                 exception.evidenceId(), request);
+    }
+
+    /**
+     * A rejected guard must stay a 403 with the canonical envelope. Without this handler the generic
+     * one below would report an authorisation decision as an unexpected internal error.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Object> handleAccessDenied(AccessDeniedException exception, HttpServletRequest request) {
+        return ApiErrors.platform(HttpStatusCode.valueOf(403), request);
+    }
+
+    /** The same for a rejected identity, which must stay a 401. */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<Object> handleAuthenticationFailure(AuthenticationException exception,
+                                                              HttpServletRequest request) {
+        return ApiErrors.platform(HttpStatusCode.valueOf(401), request);
     }
 
     @ExceptionHandler(Exception.class)
