@@ -43,6 +43,11 @@ module "eks" {
   tags                         = var.tags
 }
 
+moved {
+  from = module.eks[0].aws_iam_role_policy_attachment.nodes["arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"]
+  to   = aws_iam_role_policy_attachment.node_vpc_cni_fallback[0]
+}
+
 module "rds" {
   count  = var.enable_rds && var.enable_eks ? 1 : 0
   source = "./modules/rds"
