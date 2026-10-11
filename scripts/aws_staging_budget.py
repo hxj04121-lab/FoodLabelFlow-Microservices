@@ -236,7 +236,7 @@ def main():
         if args.command == "quota":
             print("Running On-Demand Standard instances: required 16 vCPU; recommended quota request 20 vCPU.")
             print("Applied account quota: UNVERIFIED (live query and screenshot are tracked in STCN-38).")
-            return 0
+            return 2
         defaults = data["window_defaults"]
         hours = args.hours if args.hours is not None else Decimal(str(defaults["hours"]))
         experiment_hours = args.experiment_hours if args.experiment_hours is not None else Decimal(str(defaults["experiment_hours"]))

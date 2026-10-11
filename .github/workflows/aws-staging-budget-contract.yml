@@ -1,7 +1,5 @@
 name: AWS staging budget caller regression
 on:
-  push:
-    branches: ['feature/stcn-oct8-pr10-fix']
   pull_request:
     paths:
       - '.github/workflows/aws-staging-budget*.yml'

@@ -3,6 +3,7 @@ import copy
 import io
 import json
 import unittest
+from unittest.mock import patch
 import os
 import subprocess
 import sys
@@ -11,7 +12,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from tempfile import TemporaryDirectory
 
-from scripts.aws_staging_budget import estimate, load_config, report, under_budget
+from scripts.aws_staging_budget import estimate, load_config, main, report, under_budget
 
 CONFIG = Path(__file__).resolve().parents[1] / "infra/aws-staging-budget.json"
 
@@ -21,6 +22,11 @@ def fixture():
 
 
 class AwsStagingBudgetTests(unittest.TestCase):
+    def test_unverified_quota_exits_nonzero(self):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            with patch("sys.argv", ["aws_staging_budget.py", "quota"]):
+                self.assertEqual(main(), 2)
+
     def test_window_cost_scales_for_24_48_and_168_hours(self):
         data = fixture()
         totals = [sum(amount for _, amount in estimate(data, h, h / 6, h / 12)[0]) for h in (24, 48, 168)]
