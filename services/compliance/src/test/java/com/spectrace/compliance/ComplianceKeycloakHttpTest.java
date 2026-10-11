@@ -84,6 +84,10 @@ class ComplianceKeycloakHttpTest {
     void realRealmAudienceAndTopLevelRolesReachTheSharedManufacturerGuard() throws Exception {
         String token = login("manufacturer.north.maker");
         var verified = decoder.decode(token);
+        var raw = json.readTree(Base64.getUrlDecoder().decode(token.split("\\.")[1]));
+        assertThat(raw.has("sub")).as("M4 access token carries an immutable subject").isTrue();
+        assertThat(raw.get("sub").isString()).as("M4 subject is a JSON string").isTrue();
+        assertThat(verified.getSubject()).as("M4 subject is nonblank").isNotBlank();
         assertThat(verified.getIssuer().toString()).isEqualTo(ISSUER);
         assertThat(verified.getAudience()).contains("spectrace-api");
         assertThat(verified.getClaimAsString("org_id")).isEqualTo("org-manufacturer-north");
@@ -91,7 +95,6 @@ class ComplianceKeycloakHttpTest {
         assertThat(get(token, Map.of()).statusCode()).isEqualTo(200);
 
         // M4 confirms that a single aud is emitted as a JSON string; Spring must normalize it.
-        var raw = json.readTree(Base64.getUrlDecoder().decode(token.split("\\.")[1]));
         assertThat(raw.get("aud").isString()).isTrue();
         assertThat(raw.get("aud").asString()).isEqualTo("spectrace-api");
     }
