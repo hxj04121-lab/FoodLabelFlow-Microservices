@@ -1,0 +1,374 @@
+{{- $gatewayNS := index .Values.namespaces "gateway" -}}
+{{- $keycloakNS := index .Values.namespaces "keycloak" -}}
+{{- $rabbitmqNS := index .Values.namespaces "rabbitmq" -}}
+{{- $monitoringNS := index .Values.namespaces "observability" -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stcn-gateway-flows
+  namespace: {{ $gatewayNS | quote }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+  policyTypes: [Ingress, Egress]
+  ingress:
+    {{- range .Values.cidrs.alb }}
+    - from:
+        - ipBlock: {cidr: {{ . | quote }}}
+      ports:
+        - {protocol: TCP, port: 8080}
+    {{- end }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        {{- range $service := list "specification" "formulation" "compliance" "label-workflow" }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ index $.Values.namespaces $service | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ $service | quote }}
+        {{- end }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $keycloakNS | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports:
+        - {protocol: TCP, port: 8080}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $monitoringNS | quote }}
+      ports:
+        - {protocol: TCP, port: 4317}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stcn-keycloak-flows
+  namespace: {{ $keycloakNS | quote }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $gatewayNS | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+      ports:
+        - {protocol: TCP, port: 8080}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $monitoringNS | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: grafana-alloy
+      ports:
+        - {protocol: TCP, port: 8080}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ index .Values.operatorNamespaces "keycloak" | quote }}
+      ports:
+        - {protocol: TCP, port: 8080}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        {{- range .Values.cidrs.database }}
+        - ipBlock: {cidr: {{ . | quote }}}
+        {{- end }}
+      ports:
+        - {protocol: TCP, port: 3306}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $monitoringNS | quote }}
+      ports:
+        - {protocol: TCP, port: 4317}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stcn-rabbitmq-flows
+  namespace: {{ $rabbitmqNS | quote }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
+  policyTypes: [Ingress, Egress]
+  ingress:
+    {{- range $service := list "specification" "formulation" "compliance" "label-workflow" }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ index $.Values.namespaces $service | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ $service | quote }}
+      ports:
+        - {protocol: TCP, port: 5672}
+    {{- end }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rabbitmq
+      ports:
+        - {protocol: TCP, port: 4369}
+        - {protocol: TCP, port: 25672}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $monitoringNS | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: grafana-alloy
+      ports:
+        - {protocol: TCP, port: 15692}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ index .Values.operatorNamespaces "rabbitmq" | quote }}
+      ports:
+        - {protocol: TCP, port: 15672}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rabbitmq
+      ports:
+        - {protocol: TCP, port: 4369}
+        - {protocol: TCP, port: 25672}
+    - to:
+        - ipBlock: {cidr: {{ .Values.cidrs.vpc | quote }}}
+      ports:
+        - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stcn-observability-flows
+  namespace: {{ $monitoringNS | quote }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    {{- range $service := list "specification" "formulation" "compliance" "label-workflow" "gateway" "keycloak" }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ index $.Values.namespaces $service | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ $service | quote }}
+      ports:
+        - {protocol: TCP, port: 4317}
+    {{- end }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $rabbitmqNS | quote }}
+      ports:
+        - {protocol: TCP, port: 15692}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - ipBlock: {cidr: {{ $.Values.cidrs.vpc | quote }}}
+      ports:
+        - {protocol: TCP, port: 443}
+    {{- range $service := list "gateway" "keycloak" "specification" "formulation" "compliance" "label-workflow" }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ index $.Values.namespaces $service | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ $service | quote }}
+      ports:
+        - {protocol: TCP, port: 8080}
+    {{- end }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $rabbitmqNS | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rabbitmq
+      ports:
+        - {protocol: TCP, port: 15692}
+    - to:
+        - ipBlock: {cidr: "0.0.0.0/0"}
+      ports:
+        - {protocol: TCP, port: 443}
+    - to:
+        {{- range $.Values.cidrs.nodes }}
+        - ipBlock: {cidr: {{ . | quote }}}
+        {{- end }}
+      ports:
+        - {protocol: TCP, port: 10250}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stcn-kube-system-required-traffic
+  namespace: kube-system
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - ipBlock: {cidr: {{ .Values.cidrs.vpc | quote }}}
+      ports:
+        - {protocol: TCP, port: 4443}
+        - {protocol: TCP, port: 9443}
+        - {protocol: TCP, port: 10250}
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+  egress:
+    - to:
+        - ipBlock: {cidr: "0.0.0.0/0"}
+      ports:
+        - {protocol: TCP, port: 443}
+    - to:
+        {{- range .Values.cidrs.nodes }}
+        - ipBlock: {cidr: {{ . | quote }}}
+        {{- end }}
+      ports:
+        - {protocol: TCP, port: 10250}
+    - to:
+        - ipBlock: {cidr: "169.254.169.253/32"}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - ipBlock: {cidr: {{ .Values.cidrs.vpc | quote }}}
+      ports:
+        - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stcn-coredns-required-traffic
+  namespace: kube-system
+spec:
+  podSelector:
+    matchLabels:
+      k8s-app: kube-dns
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+  egress:
+    - to:
+        - ipBlock: {cidr: "169.254.169.253/32"}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - ipBlock: {cidr: {{ .Values.cidrs.vpc | quote }}}
+      ports:
+        - {protocol: TCP, port: 443}
+---
+{{- range $operator, $namespace := .Values.operatorNamespaces }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stcn-{{ $operator }}-operator-required-traffic
+  namespace: {{ $namespace | quote }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - ipBlock: {cidr: {{ $.Values.cidrs.vpc | quote }}}
+      ports:
+        - {protocol: TCP, port: 9443}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $monitoringNS | quote }}
+      ports:
+        - {protocol: TCP, port: 8080}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - ipBlock: {cidr: {{ $.Values.cidrs.vpc | quote }}}
+      ports:
+        - {protocol: TCP, port: 443}
+    {{- if eq $operator "rabbitmq" }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $rabbitmqNS | quote }}
+      ports:
+        - {protocol: TCP, port: 15672}
+    {{- else }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $keycloakNS | quote }}
+      ports:
+        - {protocol: TCP, port: 8080}
+    {{- end }}
+---
+{{- end }}

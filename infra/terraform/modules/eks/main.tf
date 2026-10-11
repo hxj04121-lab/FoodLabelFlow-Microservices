@@ -114,7 +114,6 @@ resource "aws_iam_role" "nodes" {
 resource "aws_iam_role_policy_attachment" "nodes" {
   for_each = toset([
     "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-    "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
     "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
   ])
   role       = aws_iam_role.nodes.name
@@ -130,8 +129,8 @@ resource "aws_eks_node_group" "general" {
 
   scaling_config {
     desired_size = var.general_desired_size
-    min_size     = var.general_desired_size
-    max_size     = var.general_desired_size
+    min_size     = 1
+    max_size     = 3
   }
 
   update_config { max_unavailable = 1 }
@@ -249,6 +248,10 @@ resource "aws_iam_openid_connect_provider" "cluster" {
   tags            = var.tags
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+data "aws_region" "current" {}
+
 resource "aws_iam_role_policy" "cluster_autoscaler" {
   name = "cluster-autoscaler"
   role = aws_iam_role.cluster_autoscaler.id
@@ -257,13 +260,21 @@ resource "aws_iam_role_policy" "cluster_autoscaler" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["autoscaling:DescribeAutoScalingGroups", "autoscaling:DescribeAutoScalingInstances", "autoscaling:DescribeLaunchConfigurations", "autoscaling:DescribeScalingActivities", "autoscaling:DescribeTags", "ec2:DescribeImages", "ec2:DescribeInstanceTypes", "ec2:DescribeLaunchTemplateVersions", "ec2:GetInstanceTypesFromInstanceRequirements", "eks:DescribeNodegroup"]
+        Action   = ["autoscaling:DescribeAutoScalingGroups", "autoscaling:DescribeAutoScalingInstances", "autoscaling:DescribeLaunchConfigurations", "autoscaling:DescribeScalingActivities", "autoscaling:DescribeTags", "ec2:DescribeImages", "ec2:DescribeInstanceTypes", "ec2:DescribeLaunchTemplateVersions", "ec2:GetInstanceTypesFromInstanceRequirements"]
         Resource = "*"
       },
       {
         Effect   = "Allow"
-        Action   = ["autoscaling:SetDesiredCapacity", "autoscaling:TerminateInstanceInAutoScalingGroup"]
-        Resource = "*"
+        Action   = ["eks:DescribeNodegroup"]
+        Resource = compact([aws_eks_node_group.general.arn, var.enable_compliance_node_group ? aws_eks_node_group.compliance[0].arn : ""])
+      },
+      {
+        Effect = "Allow"
+        Action = ["autoscaling:SetDesiredCapacity", "autoscaling:TerminateInstanceInAutoScalingGroup"]
+        Resource = compact([
+          "arn:${data.aws_partition.current.partition}:autoscaling:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/${aws_eks_node_group.general.resources[0].autoscaling_groups[0].name}",
+          var.enable_compliance_node_group ? "arn:${data.aws_partition.current.partition}:autoscaling:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/${aws_eks_node_group.compliance[0].resources[0].autoscaling_groups[0].name}" : ""
+        ])
         Condition = {
           StringEquals = { "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/${var.name}" = "owned" }
           StringLike   = { "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/enabled" = "true" }

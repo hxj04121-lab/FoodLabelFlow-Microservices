@@ -22,6 +22,12 @@ The repository does not provide an apply workflow or an apply-capable GitHub rol
 
 The current Trivy scan reports one remaining `AWS-0104` finding for EKS node HTTPS egress to `0.0.0.0/0`; private nodes need HTTPS through NAT for AWS APIs and image pulls. Before a stricter production policy, replace this with service-specific VPC endpoints and scoped egress rules, accounting for their recurring cost. Trivy also reports `AWS-0039` because the config omits a customer-managed KMS key; the selected EKS 1.36 control plane uses AWS-owned KMS v2 envelope encryption by default, which EKS documents for Kubernetes 1.28 and later.
 
+## EKS add-ons (STCN-59)
+
+Set `enable_eks_addons=true` only after the cluster is ready, the ACM certificate is issued, the domain is confirmed, and reviewed source CIDRs are provided in `alb_ingress_cidrs`. This includes the child module at `modules/eks-addons`, which reuses the existing EKS OIDC provider, autoscaler role and node groups. It replaces the static G0 ALB with the AWS Load Balancer Controller-managed HTTPS ALB. Terraform dependency ordering removes the Gateway Ingress and add-ons before EKS during destroy. RabbitMQ PVCs must be removed first so their `Delete`-policy EBS volumes are released.
+
+Run `scripts/check_eks_addons.sh` for offline validation and `scripts/verify_eks_addons.sh deploy|cleanup` for read-only checks inside the authorized staging window. The G0 branch does not yet provide an apply/destroy runner; do not bypass the STCN-37 budget gate or the account-readiness checks.
+
 ## Domain and HTTPS
 
 Leave `domain_name` and `certificate_arn` empty until the team selects an FQDN and DNS provider. Setting `domain_name` requests an ACM DNS-validation certificate and exposes the validation CNAMEs as `acm_dns_validation_options`; create those records with the chosen DNS provider and pass the issued ARN as `certificate_arn` to enable an HTTPS-only listener. No HTTP listener is created, and no domain is purchased or assumed.
