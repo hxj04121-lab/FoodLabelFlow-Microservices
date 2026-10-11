@@ -44,6 +44,12 @@ output "acm_dns_validation_options" {
   value       = var.domain_name == "" ? [] : aws_acm_certificate.staging[0].domain_validation_options
 }
 
+output "github_plan_role_arn" {
+  description = "Read-only Terraform plan role ARN; it cannot apply infrastructure or edit Kubernetes workloads."
+  value       = var.github_repository == "" ? null : module.github_oidc[0].role_arn
+}
+
 output "github_deploy_role_arn" {
-  value = var.github_repository == "" ? null : module.github_oidc[0].role_arn
+  description = "Deprecated compatibility alias; this ARN is plan-only and has no Kubernetes edit or Terraform apply permissions."
+  value       = var.github_repository == "" ? null : module.github_oidc[0].role_arn
 }

@@ -1,4 +1,6 @@
 variable "repository" { type = string }
+variable "repository_owner_id" { type = string }
+variable "repository_id" { type = string }
 variable "environment" { type = string }
 variable "branch" { type = string }
 variable "state_bucket_name" { type = string }

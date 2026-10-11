@@ -73,11 +73,13 @@ module "github_oidc" {
   source = "./modules/github-oidc"
 
   repository           = var.github_repository
+  repository_owner_id  = var.github_repository_owner_id
+  repository_id        = var.github_repository_id
   environment          = var.github_environment
   branch               = var.github_branch
   state_bucket_name    = var.state_bucket_name
   cluster_name         = var.enable_eks ? module.eks[0].cluster_name : ""
-  create_provider      = length(var.github_oidc_thumbprints) > 0
+  create_provider      = var.github_create_oidc_provider
   provider_thumbprints = var.github_oidc_thumbprints
   tags                 = var.tags
 }

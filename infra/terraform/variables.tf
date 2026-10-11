@@ -101,7 +101,7 @@ variable "domain_name" {
 }
 
 variable "github_branch" {
-  description = "Branch allowed by the GitHub staging Environment's deployment protection rules. AWS trust is pinned to the environment subject; configure this branch restriction in GitHub."
+  description = "Exact Git ref allowed by the GitHub Actions plan role and staging Environment protection."
   type        = string
   default     = "main"
 }
@@ -113,12 +113,32 @@ variable "certificate_arn" {
 }
 
 variable "github_repository" {
-  description = "Exact owner/repository allowed to assume the staging deploy role; empty disables OIDC role creation."
+  description = "Exact owner/repository allowed to assume the staging plan role; empty disables OIDC role creation."
   type        = string
   default     = ""
   validation {
     condition     = var.github_repository == "" || can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
     error_message = "github_repository must be an exact owner/repository pair."
+  }
+}
+
+variable "github_repository_owner_id" {
+  description = "Immutable GitHub owner ID used in the Actions OIDC subject."
+  type        = string
+  default     = "245486830"
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repository_owner_id))
+    error_message = "github_repository_owner_id must be a numeric GitHub ID."
+  }
+}
+
+variable "github_repository_id" {
+  description = "Immutable GitHub repository ID used in the Actions OIDC subject."
+  type        = string
+  default     = "1388701923"
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repository_id))
+    error_message = "github_repository_id must be a numeric GitHub ID."
   }
 }
 
@@ -129,9 +149,15 @@ variable "github_environment" {
 }
 
 variable "github_oidc_thumbprints" {
-  description = "Thumbprints for token.actions.githubusercontent.com when creating the account OIDC provider. Leave empty to reuse an existing provider."
+  description = "Optional thumbprints for token.actions.githubusercontent.com when creating the account OIDC provider."
   type        = list(string)
   default     = []
+}
+
+variable "github_create_oidc_provider" {
+  description = "Create the GitHub OIDC provider when the plan-role module is enabled; set false to reuse an existing provider."
+  type        = bool
+  default     = true
 }
 
 variable "state_bucket_name" {
