@@ -21,7 +21,7 @@ This report records read-only account checks, Terraform/PR evidence, and the cos
 
 ## Resource inventory
 
-Read-only inventory for Singapore found no EC2 instances, EKS clusters, RDS instances/clusters, ALBs, S3 buckets, GitHub OIDC providers, ACM certificates, or Route 53 hosted zones. No project Terraform state bucket or plan role was found. No project infrastructure was created by this work.
+Read-only inventory for Singapore found no EC2 instances, EKS clusters, RDS instances/clusters, ALBs, S3 buckets, GitHub OIDC providers, ACM certificates, or Route 53 hosted zones. One default RDS DB subnet group exists and spans the three default VPC subnets; it does not provide private project database subnets. No project Terraform state bucket or plan role was found. No project infrastructure was created by this work.
 
 The account has one default VPC (`172.31.0.0/16`), three default public subnets across `ap-southeast-1a`, `1b`, and `1c`, one main route table with an Internet Gateway route, and one attached Internet Gateway. There are no NAT Gateways or Elastic IPs. The four security groups are the default group plus three Jenkins AWS Marketplace groups. These are existing account resources, not project infrastructure; they were not modified or assumed reusable. The default VPC has no private subnet/NAT layout for the target staging architecture.
 
