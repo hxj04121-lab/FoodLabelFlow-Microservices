@@ -231,7 +231,7 @@ class ComplianceImpactHttpTest {
         ((ObjectNode) payload.get("previousFormulaVersion")).put("id", "unavailable-predecessor");
         rabbit.send("spectrace.events", "formula.published.v1", new org.springframework.amqp.core.Message(json.writeValueAsBytes(poison.toJson(json))));
         org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
-            var dead = rabbit.receive("compliance.formula-published.v1.dlq", 1000);
+            var dead = rabbit.receive("compliance.formula-published.dlq", 1000);
             assertThat(dead).isNotNull();
             assertThat(json.readTree(dead.getBody()).get("eventId").asString()).isEqualTo(poison.eventId());
             assertThat(dead.getMessageProperties().getHeaders()).containsKey("x-death");

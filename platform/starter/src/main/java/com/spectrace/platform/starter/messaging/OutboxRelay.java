@@ -35,6 +35,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * row unpublished with an attempt count and error, and it is retried on the next poll. Delivery is
  * at-least-once: a crash between the confirm and the commit republishes, and consumers deduplicate by
  * {@code eventId}.</p>
+ *
+ * <p>{@code attempts} counts every delivery attempt, the successful one included. Retries are uncapped,
+ * and a poll holds its transaction while it waits up to {@code confirmTimeout} for confirms.</p>
  */
 public class OutboxRelay implements SmartLifecycle {
 
