@@ -62,7 +62,7 @@ check('fixed three-replica placement requires c6i.large and compliance group',()
   const pod=dep.spec.template.spec;
   assert.deepEqual(pod.nodeSelector,{'eks.amazonaws.com/nodegroup':'compliance','node.kubernetes.io/instance-type':'c6i.large'});
   assert.deepEqual(pod.containers[0].resources,{requests:{cpu:'1',memory:'2Gi'},limits:{cpu:'1',memory:'2Gi'}});
-  assert(pod.tolerations.some(t=>t.key==='workload'&&t.value==='compliance'&&t.effect==='NoSchedule'));
+  assert.deepEqual(pod.tolerations,[{key:'workload',operator:'Equal',value:'compliance',effect:'NoSchedule'}]);
   const zone=pod.topologySpreadConstraints.find(t=>t.topologyKey==='topology.kubernetes.io/zone');
   assert.equal(zone.minDomains,2);assert.equal(zone.maxSkew,1);assert.equal(zone.whenUnsatisfiable,'DoNotSchedule');
   const host=pod.topologySpreadConstraints.find(t=>t.topologyKey==='kubernetes.io/hostname');
