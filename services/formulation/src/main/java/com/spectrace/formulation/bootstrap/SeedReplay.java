@@ -3,12 +3,8 @@ package com.spectrace.formulation.bootstrap;
 import com.spectrace.formulation.application.FormulaPublished;
 import com.spectrace.formulation.application.FormulationService;
 import com.spectrace.formulation.persistence.FormulationStore;
-import com.spectrace.platform.starter.correlation.CorrelationId;
 import com.spectrace.platform.starter.messaging.Outbox;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
+import com.spectrace.platform.starter.messaging.SeedReplayRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -23,39 +19,29 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Component
 @ConditionalOnProperty(prefix = "spectrace.seed-replay", name = "enabled", havingValue = "true")
-public class SeedReplay implements ApplicationRunner {
-
-    private static final Logger log = LoggerFactory.getLogger(SeedReplay.class);
+public class SeedReplay extends SeedReplayRunner {
 
     private final FormulationStore store;
     private final FormulationService service;
     private final Outbox outbox;
-    private final TransactionTemplate transactions;
 
     public SeedReplay(FormulationStore store, FormulationService service, Outbox outbox, TransactionTemplate transactions) {
+        super(transactions, "formulation", FormulaPublished.EVENT_TYPE);
         this.store = store;
         this.service = service;
         this.outbox = outbox;
-        this.transactions = transactions;
     }
 
     @Override
-    public void run(ApplicationArguments args) {
-        Integer appended = transactions.execute(status -> replay());
-        log.info("Seed replay appended {} FormulaPublished.v1 events", appended);
-    }
-
-    public int replay() {
+    protected int appendSeeded() {
         int appended = 0;
-        try (CorrelationId.Scope ignored = CorrelationId.bind("seed-replay-formulation")) {
-            for (FormulationStore.FormulaRow formula : store.currentReleased()) {
-                FormulationStore.ProductRow product = store.product(formula.productId(), false).orElseThrow();
-                FormulaPublished payload = service.published(formula, product, null);
-                if (outbox.appendOnce(Outbox.eventIdFor("seed:" + formula.formulaVersionId()), formula.releasedAt(),
-                        FormulaPublished.EVENT_TYPE, product.organisationId(), product.productId(), formula.versionNumber(),
-                        payload)) {
-                    appended++;
-                }
+        for (FormulationStore.FormulaRow formula : store.currentReleased()) {
+            FormulationStore.ProductRow product = store.product(formula.productId(), false).orElseThrow();
+            FormulaPublished payload = service.published(formula, product, null);
+            if (outbox.appendOnce(Outbox.eventIdFor("seed:" + formula.formulaVersionId()), formula.releasedAt(),
+                    FormulaPublished.EVENT_TYPE, product.organisationId(), product.productId(), formula.versionNumber(),
+                    payload)) {
+                appended++;
             }
         }
         return appended;

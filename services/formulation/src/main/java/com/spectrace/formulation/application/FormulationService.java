@@ -9,6 +9,7 @@ import com.spectrace.formulation.security.Permission;
 import com.spectrace.platform.starter.error.ApiException;
 import com.spectrace.platform.starter.messaging.LocalAudit;
 import com.spectrace.platform.starter.messaging.Outbox;
+import com.spectrace.platform.starter.web.Cursors;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -55,7 +56,7 @@ public class FormulationService {
         requireManufacturer(caller);
         int size = Cursors.limit(limit);
         return Cursors.page(store.products(caller.organisationId(), Cursors.after(cursor), size + 1), size,
-                ProductRow::productId, this::productView);
+                ProductRow::productId, this::productView, Views.Page::new);
     }
 
     public Views.Product product(Caller caller, String productId) {
@@ -67,7 +68,7 @@ public class FormulationService {
         int size = Cursors.limit(limit);
         int below = cursor == null ? Integer.MAX_VALUE : parseVersionCursor(Cursors.after(cursor));
         return Cursors.page(store.formulas(product.productId(), below, size + 1), size,
-                row -> Integer.toString(row.versionNumber()), this::formulaView);
+                row -> Integer.toString(row.versionNumber()), this::formulaView, Views.Page::new);
     }
 
     public Views.FormulaVersion formula(Caller caller, String formulaVersionId) {
@@ -92,7 +93,8 @@ public class FormulationService {
         return Cursors.page(store.releasedSpecifications(materialId, Cursors.after(cursor), size + 1), size,
                 ProjectionRow::specificationVersionId,
                 row -> new Views.ReleasedSpecification(new Views.VersionReference(row.specificationVersionId(), row.versionNumber()),
-                        row.materialId(), row.supplierId(), row.supplierOrganisationId(), row.effectiveDate(), row.receivedAt()));
+                        row.materialId(), row.supplierId(), row.supplierOrganisationId(), row.effectiveDate(), row.receivedAt()),
+                Views.Page::new);
     }
 
     // ---------------------------------------------------------------- writes

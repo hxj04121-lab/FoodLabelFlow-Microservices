@@ -1,9 +1,10 @@
-package com.spectrace.formulation.application;
+package com.spectrace.platform.starter.web;
 
 import com.spectrace.platform.starter.error.ApiException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /** Opaque keyset cursors: the base64url of the last returned key; pages are ordered by that key. */
@@ -35,12 +36,16 @@ public final class Cursors {
         }
     }
 
-    /** Rows were fetched with {@code limit + 1} to know whether another page exists. */
-    public static <R, T> Views.Page<T> page(List<R> rows, int limit, Function<R, String> key, Function<R, T> view) {
+    /**
+     * Rows were fetched with {@code limit + 1} to know whether another page exists; {@code page} builds the
+     * service's own page type from the visible items and the next cursor ({@code null} on the last page).
+     */
+    public static <R, T, P> P page(List<R> rows, int limit, Function<R, String> key, Function<R, T> view,
+                                   BiFunction<List<T>, String, P> page) {
         boolean more = rows.size() > limit;
         List<R> visible = more ? rows.subList(0, limit) : rows;
         String next = more ? Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(key.apply(visible.getLast()).getBytes(StandardCharsets.UTF_8)) : null;
-        return new Views.Page<>(visible.stream().map(view).toList(), next);
+        return page.apply(visible.stream().map(view).toList(), next);
     }
 }

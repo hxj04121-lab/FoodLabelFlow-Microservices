@@ -3,6 +3,7 @@ package com.spectrace.specification.application;
 import com.spectrace.platform.starter.error.ApiException;
 import com.spectrace.platform.starter.messaging.LocalAudit;
 import com.spectrace.platform.starter.messaging.Outbox;
+import com.spectrace.platform.starter.web.Cursors;
 import com.spectrace.specification.persistence.SpecificationStore;
 import com.spectrace.specification.persistence.SpecificationStore.MaterialRow;
 import com.spectrace.specification.persistence.SpecificationStore.SpecificationRow;
@@ -50,7 +51,7 @@ public class SpecificationService {
     public Views.Page<Views.Supplier> suppliers(Integer limit, String cursor) {
         int size = Cursors.limit(limit);
         return Cursors.page(store.suppliers(Cursors.after(cursor), size + 1), size, SpecificationStore.SupplierRow::supplierId,
-                SpecificationService::supplierView);
+                SpecificationService::supplierView, Views.Page::new);
     }
 
     public Views.Supplier supplier(String supplierId) {
@@ -61,7 +62,7 @@ public class SpecificationService {
     public Views.Page<Views.Material> materials(String supplierId, Integer limit, String cursor) {
         int size = Cursors.limit(limit);
         return Cursors.page(store.materials(supplierId, Cursors.after(cursor), size + 1), size, MaterialRow::materialId,
-                SpecificationService::materialView);
+                SpecificationService::materialView, Views.Page::new);
     }
 
     public Views.Material material(String materialId) {
@@ -76,7 +77,7 @@ public class SpecificationService {
         int size = Cursors.limit(limit);
         return Cursors.page(store.ingredients(prefix, Cursors.after(cursor), size + 1), size,
                 SpecificationStore.IngredientRow::ingredientId,
-                row -> new Views.Ingredient(row.ingredientId(), row.canonicalName(), row.ingredientKind()));
+                row -> new Views.Ingredient(row.ingredientId(), row.canonicalName(), row.ingredientKind()), Views.Page::new);
     }
 
     public Views.Page<Views.SpecificationVersion> versions(Caller caller, String materialId, String status, Integer limit,
@@ -86,7 +87,7 @@ public class SpecificationService {
         }
         int size = Cursors.limit(limit);
         return Cursors.page(store.versions(materialId, status, caller.organisationId(), Cursors.after(cursor), size + 1),
-                size, SpecificationRow::specificationVersionId, this::versionView);
+                size, SpecificationRow::specificationVersionId, this::versionView, Views.Page::new);
     }
 
     public Views.SpecificationVersion version(Caller caller, String specificationVersionId) {
