@@ -4,6 +4,13 @@ resource "aws_db_subnet_group" "this" {
   tags       = merge(var.tags, { Name = "${var.name}-mysql" })
 }
 
+resource "aws_cloudwatch_log_group" "rds" {
+  for_each          = toset(["error", "general", "slowquery"])
+  name              = "/aws/rds/instance/${var.name}-mysql/${each.value}"
+  retention_in_days = 14
+  tags              = var.tags
+}
+
 resource "aws_security_group" "this" {
   name        = "${var.name}-mysql"
   description = "Only EKS nodes may connect to MySQL"
@@ -15,12 +22,6 @@ resource "aws_security_group" "this" {
     to_port         = 3306
     protocol        = "tcp"
     security_groups = [var.allowed_source_sg]
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
   }
   tags = merge(var.tags, { Name = "${var.name}-mysql" })
 }
@@ -54,6 +55,8 @@ resource "aws_db_instance" "this" {
   delete_automated_backups        = true
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
   tags                            = merge(var.tags, { Name = "${var.name}-mysql" })
+
+  depends_on = [aws_cloudwatch_log_group.rds]
 }
 
 resource "aws_secretsmanager_secret" "master" {

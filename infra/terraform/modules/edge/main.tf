@@ -4,16 +4,6 @@ resource "aws_security_group" "this" {
   vpc_id      = var.vpc_id
 
   dynamic "ingress" {
-    for_each = var.ingress_cidrs
-    content {
-      description = "Staging HTTP ingress"
-      from_port   = 80
-      to_port     = 80
-      protocol    = "tcp"
-      cidr_blocks = [ingress.value]
-    }
-  }
-  dynamic "ingress" {
     for_each = var.certificate_arn == "" ? [] : var.ingress_cidrs
     content {
       description = "Staging HTTPS ingress"
@@ -24,18 +14,20 @@ resource "aws_security_group" "this" {
     }
   }
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description = "Forward traffic to in-VPC service targets"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
   }
   tags = merge(var.tags, { Name = "${var.name}-alb" })
 }
 
 resource "aws_lb" "this" {
   name                       = substr(replace("${var.name}-alb", "_", "-"), 0, 32)
-  internal                   = false
+  internal                   = length(var.ingress_cidrs) == 0 || var.certificate_arn == ""
   load_balancer_type         = "application"
+  drop_invalid_header_fields = true
   security_groups            = [aws_security_group.this.id]
   subnets                    = var.subnet_ids
   enable_deletion_protection = false
@@ -57,25 +49,6 @@ resource "aws_lb_target_group" "gateway" {
     interval            = 30
   }
   tags = var.tags
-}
-
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.this.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = var.certificate_arn == "" ? "forward" : "redirect"
-    target_group_arn = var.certificate_arn == "" ? aws_lb_target_group.gateway.arn : null
-    dynamic "redirect" {
-      for_each = var.certificate_arn == "" ? [] : [1]
-      content {
-        port        = "443"
-        protocol    = "HTTPS"
-        status_code = "HTTP_301"
-      }
-    }
-  }
 }
 
 resource "aws_lb_listener" "https" {

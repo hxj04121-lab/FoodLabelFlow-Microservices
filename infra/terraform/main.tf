@@ -33,6 +33,7 @@ module "eks" {
   name                         = "spectrace-${var.environment}"
   cluster_version              = var.eks_version
   vpc_id                       = module.network.vpc_id
+  vpc_cidr                     = var.vpc_cidr
   private_subnet_ids           = module.network.private_subnet_ids
   public_subnet_ids            = module.network.public_subnet_ids
   cluster_public_access_cidrs  = var.cluster_public_access_cidrs
@@ -60,6 +61,7 @@ module "edge" {
 
   name            = "spectrace-${var.environment}"
   vpc_id          = module.network.vpc_id
+  vpc_cidr        = var.vpc_cidr
   subnet_ids      = module.network.public_subnet_ids
   ingress_cidrs   = var.alb_ingress_cidrs
   certificate_arn = var.certificate_arn

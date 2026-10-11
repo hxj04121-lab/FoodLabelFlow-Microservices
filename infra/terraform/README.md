@@ -1,22 +1,30 @@
 # AWS staging Terraform
 
-This root creates the two-AZ network, one NAT Gateway, EKS, the private MySQL Multi-AZ instance and the public ALB. `general_desired_size=1` is the spike setting; the normal staging default is three. Compliance scales from one to four `c6i.large` nodes and carries the `workload=compliance:NoSchedule` taint. Autoscaler IAM role and ASG discovery tags are included; install Cluster Autoscaler as a staging add-on and bind its ServiceAccount to the output role ARN.
+This root creates the two-AZ network, one NAT Gateway, EKS, the private MySQL Multi-AZ instance and an ALB that stays internal until HTTPS and an approved ingress CIDR are configured. `general_desired_size=1` is the bounded spike setting; the normal staging default is three. Terraform includes the optional Compliance group, but it defaults off and uses the chart contract `dedicated=compliance:NoSchedule`; enable it only for an approved experiment. Autoscaler IAM role and ASG discovery tags are included; install Cluster Autoscaler as a staging add-on and bind its ServiceAccount to the output role ARN.
+
+RDS error/general/slow-query exports use Terraform-managed CloudWatch Log Groups with 14-day retention. The staging destroy removes them with RDS so log groups do not remain billable after a window. EKS 1.36 uses default AWS-owned KMS v2 envelope encryption for Kubernetes API data; no customer-managed KMS key is added to this short-lived cluster.
+
+The static G0 ALB target group has no Kubernetes target registration. The separate EKS add-ons integration must install the AWS Load Balancer Controller and Gateway Ingress before the HTTPS listener can route to pods. The ALB stays internal and has no listener unless both an ACM certificate and reviewed client CIDRs are supplied. This Terraform branch alone does not provide a working application URL.
+
+AWS is on-demand staging only. Use local Docker Compose between evidence windows, and destroy the staging root after each approved AWS window; only the separately bootstrapped state bucket remains. The independent k6 EC2 runner is a G3-only experiment input and is not part of the always-on EKS node groups or this Terraform root. Include its planned hours in the fail-closed budget check before provisioning it.
 
 ## Persistent state
 
-Create the S3 state bucket once from `state-bootstrap/` after the required budget gate and account checks. That bucket is encrypted, versioned, private, TLS-only, and protected against Terraform destruction. It is the only AWS resource intended to survive a staging window. Keep its bootstrap state securely outside this repository. Then copy `backend.hcl.example` to the ignored `backend.hcl`, enter the actual bucket name, and initialize with `terraform init -backend-config=backend.hcl`.
+Create the S3 state bucket once from `state-bootstrap/` after the required budget gate and account checks. That bucket uses the AWS-managed S3 KMS key, is versioned, private, TLS-only, and protected against Terraform destruction. It is the only AWS resource intended to survive a staging window. Keep its bootstrap state securely outside this repository. Then copy `backend.hcl.example` to the ignored `backend.hcl`, enter the actual bucket name, and initialize with `terraform init -backend-config=backend.hcl`.
 
 The staging root must be destroyed with the same backend after each window. The bootstrap bucket is deliberately separate and must not be included in a staging destroy.
 
 ## Bounded spike
 
-Use a dedicated Terraform workspace and temporary values file; do not commit account IDs, state, passwords, or credentials. Set the active account role, account plan/credits and budget alerts first; run the STCN-37 enforced cost gate; inspect the full plan and current AWS charges; and obtain the owner's explicit approval for the billable apply. Set `general_desired_size=1`, `enable_compliance_node_group=false`, and leave `cluster_public_access_cidrs` empty unless a reviewed private access path is supplied. `alb_ingress_cidrs` is empty by default. A public ALB can be created without opening inbound traffic.
+Use a dedicated Terraform workspace and temporary values file; do not commit account IDs, state, passwords, or credentials. Set the active account role, account plan/credits and budget alerts first; run the STCN-37 enforced cost gate; inspect the full plan and current AWS charges; and obtain the owner's explicit approval for the billable apply. Set `general_desired_size=1`, `enable_compliance_node_group=false`, and leave `cluster_public_access_cidrs` empty unless a reviewed private access path is supplied. `alb_ingress_cidrs` is empty by default. The ALB remains internal unless both the ACM certificate and an approved ingress CIDR are set; only HTTPS is configured.
 
 The repository does not provide an apply workflow. An apply is blocked until the approved STCN-37 fail-closed gate is available on the integration branch and a current live account-cost snapshot passes it. The plan-only manual workflow uses short-lived GitHub OIDC credentials and requires the `staging` GitHub Environment; configure that Environment to allow only the approved branch (`github_branch`, default `main`).
 
+The current Trivy scan reports one remaining `AWS-0104` finding for EKS node HTTPS egress to `0.0.0.0/0`; private nodes need HTTPS through NAT for AWS APIs and image pulls. Before a stricter production policy, replace this with service-specific VPC endpoints and scoped egress rules, accounting for their recurring cost. Trivy also reports `AWS-0039` because the config omits a customer-managed KMS key; the selected EKS 1.36 control plane uses AWS-owned KMS v2 envelope encryption by default, which EKS documents for Kubernetes 1.28 and later.
+
 ## Domain and HTTPS
 
-Leave `domain_name` and `certificate_arn` empty until the team selects an FQDN and DNS provider. Setting `domain_name` requests an ACM DNS-validation certificate and exposes the validation CNAMEs as `acm_dns_validation_options`; create those records with the chosen DNS provider and pass the issued ARN as `certificate_arn` to enable HTTPS and HTTP-to-HTTPS redirect. No domain is purchased or assumed.
+Leave `domain_name` and `certificate_arn` empty until the team selects an FQDN and DNS provider. Setting `domain_name` requests an ACM DNS-validation certificate and exposes the validation CNAMEs as `acm_dns_validation_options`; create those records with the chosen DNS provider and pass the issued ARN as `certificate_arn` to enable an HTTPS-only listener. No HTTP listener is created, and no domain is purchased or assumed.
 
 ## Validation
 
@@ -26,4 +34,6 @@ terraform init -backend=false
 terraform validate
 ```
 
-The manual workflow can run a read-only AWS plan after `AWS_PLAN_ROLE_ARN` is configured with a least-privilege OIDC plan role. It does not apply or destroy infrastructure.
+See [`docs/aws/staging-cost-model.md`](../../docs/aws/staging-cost-model.md) for the explicit 4-hour spike, 8-hour and 24-hour window, and 30-day reference estimates, including the optional G3 nodes and k6 runner.
+
+The manual workflow can run a read-only AWS plan after `AWS_PLAN_ROLE_ARN` is configured with a least-privilege OIDC plan role. It does not apply or destroy infrastructure. EKS node egress is limited to in-VPC services and HTTPS through NAT; RDS has no initiated outbound rule. The remote state bucket's AWS-managed KMS key has no monthly key charge, but usage-based KMS API charges should be rechecked with the cost gate.

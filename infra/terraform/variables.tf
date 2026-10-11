@@ -71,9 +71,9 @@ variable "compliance_desired_size" {
 }
 
 variable "enable_compliance_node_group" {
-  description = "Create the c6i.large Compliance group. Disable for the one-node EKS spike."
+  description = "Create the c6i.large Compliance group only for an approved experiment."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_rds" {

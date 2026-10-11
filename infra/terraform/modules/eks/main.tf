@@ -3,10 +3,10 @@ resource "aws_security_group" "cluster" {
   description = "EKS control plane security group"
   vpc_id      = var.vpc_id
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    security_groups = [aws_security_group.nodes.id]
   }
   tags = merge(var.tags, { Name = "${var.name}-eks-cluster" })
 }
@@ -23,9 +23,17 @@ resource "aws_security_group" "nodes" {
     self        = true
   }
   egress {
+    description = "Cluster, RDS, and other in-VPC services"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
+  egress {
+    description = "HTTPS to AWS APIs and image registries through NAT"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
   tags = merge(var.tags, { Name = "${var.name}-eks-nodes" })
@@ -74,6 +82,8 @@ resource "aws_eks_cluster" "this" {
   name     = var.name
   role_arn = aws_iam_role.cluster.arn
   version  = var.cluster_version
+
+  # EKS 1.28+ uses default KMS v2 envelope encryption for Kubernetes API data.
 
   vpc_config {
     subnet_ids              = var.private_subnet_ids
@@ -148,9 +158,12 @@ resource "aws_eks_node_group" "compliance" {
     max_size     = 4
   }
 
-  labels = { workload = "compliance" }
+  labels = {
+    dedicated = "compliance"
+    workload  = "compliance"
+  }
   taint {
-    key    = "workload"
+    key    = "dedicated"
     value  = "compliance"
     effect = "NO_SCHEDULE"
   }
@@ -197,6 +210,9 @@ resource "aws_launch_template" "nodes" {
     }
   }
   vpc_security_group_ids = [aws_security_group.nodes.id]
+  metadata_options {
+    http_tokens = "required"
+  }
   tag_specifications {
     resource_type = "instance"
     tags          = merge(var.tags, { Name = "${var.name}-node" })
