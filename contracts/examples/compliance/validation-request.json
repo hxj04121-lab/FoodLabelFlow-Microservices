@@ -1,0 +1,15 @@
+{
+  "organisationId": "manufacturer_01",
+  "labelVersionId": "label_001_v2",
+  "versionNumber": 2,
+  "draftRevision": 3,
+  "formulaVersionId": "formula_001_v2",
+  "jurisdiction": "US",
+  "ruleSetVersionId": "rules_us_v1",
+  "declarations": [
+    {
+      "allergenId": "all_soy",
+      "declarationType": "CONTAINS"
+    }
+  ]
+}
