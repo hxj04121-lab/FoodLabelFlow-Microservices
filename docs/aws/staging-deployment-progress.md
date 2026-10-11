@@ -36,9 +36,9 @@ Live GitHub CLI reads on 2026-10-11:
 | --- | --- | --- | --- |
 | [#10](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/10) | Merged | Required checks passed; review decision field still reports `CHANGES_REQUESTED` on the merged PR. | Merged. |
 | [#18](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/18) | Merged | Checks passed; review decision `APPROVED`. | Merged. |
-| [#27](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/27), head `6fb4060` | Open | Terraform validate, Helm, budget, backend/frontend/platform CI, security, container and Sonar checks passed; review required. | Behind base branch; not merged. |
+| [#27](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/27), head `d6b0f6a` | Open | Terraform Validate, Helm, budget, backend, frontend, platform-services, containers, security, and Sonar passed. PR Terraform Plan jobs were skipped by workflow conditions. Review required. | Behind base branch; not merged. |
 
-PR #27 needs the required reviewer and base-branch synchronization. Do not self-approve or merge it.
+PR #27 needs base-branch synchronization and the required reviewer. Do not self-approve or merge it.
 
 ## Remaining work and risks
 
