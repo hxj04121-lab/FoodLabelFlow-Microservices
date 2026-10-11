@@ -1,0 +1,895 @@
+openapi: 3.1.0
+info:
+  title: SpecTrace-CN Specification API
+  version: 1.0.0
+  description: 'G0-M1.4 (STCN-24) target contract for specification-service, extracted from the baseline
+    /api/catalog supplier, material and specification endpoints. Owner: M1 Huang Xiangjia; contract steward:
+    M2 Cai Runchen. Shares IDs, VersionReference and ApiError with compliance-types.v1. Releases publish
+    SpecificationPublished.v1 (../events/specification-published.v1.schema.json).'
+servers:
+- url: http://localhost:8080
+  description: Local contract placeholder; staging exists only during ADR-09 windows.
+tags:
+- name: suppliers
+  description: Supplier profiles (read-only here).
+- name: materials
+  description: Supplier-owned materials.
+- name: ingredients
+  description: Specification-owned ingredient vocabulary.
+- name: specification-versions
+  description: Versioned supplier material specifications (the platform Seed).
+security:
+- bearerAuth: []
+paths:
+  /api/specifications/suppliers:
+    get:
+      tags:
+      - suppliers
+      operationId: listSuppliers
+      summary: List supplier profiles.
+      description: Any authenticated organisation may read supplier profiles. Supplier profiles are created
+        by the organisation bootstrap (architecture v3 7.4), not by this API.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Supplier page.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierPage'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/specifications/suppliers/{supplierId}:
+    get:
+      tags:
+      - suppliers
+      operationId: getSupplier
+      summary: Read one supplier profile.
+      description: Any authenticated organisation may read a supplier profile.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: supplierId
+        in: path
+        required: true
+        description: Supplier ID.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      responses:
+        '200':
+          description: Supplier.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/specifications/materials:
+    get:
+      tags:
+      - materials
+      operationId: listMaterials
+      summary: List supplier materials.
+      description: Any authenticated organisation may read materials; filter by supplierId.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: supplierId
+        in: query
+        description: Only materials of this supplier.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Material page.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialPage'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      tags:
+      - materials
+      operationId: createMaterial
+      summary: Create a material for the caller's own supplier.
+      description: Requires org_type SUPPLIER, the SPEC_AUTHOR role and a supplierId owned by the caller's
+        org_id (BR-11). Material codes are unique per supplier.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '201':
+          description: Material created.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Material'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMaterialRequest'
+  /api/specifications/materials/{materialId}:
+    get:
+      tags:
+      - materials
+      operationId: getMaterial
+      summary: Read one material.
+      description: Any authenticated organisation may read a material.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: materialId
+        in: path
+        required: true
+        description: Material ID.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      responses:
+        '200':
+          description: Material.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Material'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/specifications/ingredients:
+    get:
+      tags:
+      - ingredients
+      operationId: listIngredients
+      summary: Search the ingredient vocabulary.
+      description: Specification owns the ingredient vocabulary (ADR-02); Compliance maps these IDs to
+        allergens.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: q
+        in: query
+        description: Case-insensitive name prefix.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Ingredient page.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngredientPage'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/specifications/versions:
+    get:
+      tags:
+      - specification-versions
+      operationId: listSpecificationVersions
+      summary: List specification versions.
+      description: RELEASED and RETIRED versions are visible to every organisation; DRAFT versions are
+        listed only for the owning supplier organisation.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: materialId
+        in: query
+        description: Only versions of this material.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      - name: status
+        in: query
+        description: Lifecycle filter.
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - RELEASED
+          - RETIRED
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Specification version page.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpecificationVersionPage'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      tags:
+      - specification-versions
+      operationId: createSpecificationDraft
+      summary: Create a draft specification version.
+      description: Requires org_type SUPPLIER, SPEC_AUTHOR and ownership of the material. The server assigns
+        the next versionNumber; components reference existing vocabulary ingredients (422 INGREDIENT_UNKNOWN
+        otherwise).
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '201':
+          description: Draft created.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpecificationVersion'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableReference'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSpecificationRequest'
+  /api/specifications/versions/{specificationVersionId}:
+    get:
+      tags:
+      - specification-versions
+      operationId: getSpecificationVersion
+      summary: Read one specification version with its components.
+      description: Released versions are visible to all organisations. A draft owned by another organisation
+        returns 403 AUTHORIZATION_DENIED without any of its content.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: specificationVersionId
+        in: path
+        required: true
+        description: Specification version ID.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      responses:
+        '200':
+          description: Specification version.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpecificationVersion'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/specifications/versions/{specificationVersionId}/release:
+    post:
+      tags:
+      - specification-versions
+      operationId: releaseSpecificationVersion
+      summary: Release a draft specification version.
+      description: 'Requires SPEC_RELEASER and ownership. In one local transaction: DRAFT becomes RELEASED
+        (immutable, BR-01), local audit is written and SpecificationPublished.v1 is added to the outbox
+        (BR-10). Earlier released versions stay unchanged. Releasing a non-draft returns 409 VERSION_IMMUTABLE
+        with no writes.'
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: specificationVersionId
+        in: path
+        required: true
+        description: Specification version ID.
+        schema:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      responses:
+        '200':
+          description: Released specification version.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpecificationVersion'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableReference'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Keycloak JWT; services re-check roles, org_id and org_type.
+  parameters:
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: true
+      description: Created at the gateway and propagated to the service, audit and outbox event.
+      schema:
+        $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    Limit:
+      name: limit
+      in: query
+      description: Page size.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from the previous page's nextCursor.
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    Supplier:
+      type: object
+      additionalProperties: false
+      required:
+      - supplierId
+      - organisationId
+      - supplierCode
+      - supplierName
+      properties:
+        supplierId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        organisationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        supplierCode:
+          type: string
+          minLength: 1
+          maxLength: 80
+        supplierName:
+          type: string
+          minLength: 1
+          maxLength: 200
+    SupplierPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - nextCursor
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Supplier'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    Material:
+      type: object
+      additionalProperties: false
+      required:
+      - materialId
+      - organisationId
+      - supplierId
+      - materialCode
+      - materialName
+      - description
+      - provenanceId
+      properties:
+        materialId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        organisationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        supplierId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        materialCode:
+          type: string
+          minLength: 1
+          maxLength: 100
+        materialName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 600
+        provenanceId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    MaterialPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - nextCursor
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Material'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    CreateMaterialRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - supplierId
+      - materialCode
+      - materialName
+      - provenanceId
+      properties:
+        supplierId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        materialCode:
+          type: string
+          minLength: 1
+          maxLength: 100
+        materialName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 600
+        provenanceId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    Ingredient:
+      type: object
+      additionalProperties: false
+      required:
+      - ingredientId
+      - canonicalName
+      - ingredientKind
+      properties:
+        ingredientId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        canonicalName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        ingredientKind:
+          type: string
+          enum:
+          - CANONICAL
+          - COMPOUND
+          - PLACEHOLDER
+    IngredientPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - nextCursor
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Ingredient'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    ComponentInput:
+      type: object
+      additionalProperties: false
+      required:
+      - ingredientId
+      - rawPhrase
+      - matchRule
+      properties:
+        ingredientId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        rawPhrase:
+          type: string
+          minLength: 1
+          maxLength: 300
+        matchRule:
+          type: string
+          minLength: 1
+          maxLength: 500
+    Component:
+      type: object
+      additionalProperties: false
+      required:
+      - specComponentId
+      - sequenceNo
+      - ingredientId
+      - ingredientName
+      - rawPhrase
+      - matchRule
+      - matchStatus
+      properties:
+        specComponentId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          description: Stable server-assigned ID, unique and immutable within the released version; the
+            same ID appears in SpecificationPublished.v1 and in M2 UNRESOLVED evidence.
+        sequenceNo:
+          type: integer
+          minimum: 1
+        ingredientId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          description: Vocabulary ingredient; UNMAPPED/AMBIGUOUS components reference a PLACEHOLDER ingredient.
+        ingredientName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        rawPhrase:
+          type: string
+          minLength: 1
+          maxLength: 300
+        matchRule:
+          type: string
+          minLength: 1
+          maxLength: 500
+        matchStatus:
+          type: string
+          enum:
+          - MATCHED
+          - UNMAPPED
+          - AMBIGUOUS
+    CreateSpecificationRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - materialId
+      - effectiveDate
+      - provenanceId
+      - components
+      properties:
+        materialId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        effectiveDate:
+          type: string
+          format: date
+        provenanceId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        components:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ComponentInput'
+    SpecificationVersion:
+      type: object
+      additionalProperties: false
+      required:
+      - specificationVersionId
+      - organisationId
+      - materialId
+      - versionNumber
+      - lifecycleStatus
+      - effectiveDate
+      - releasedAt
+      - createdBySubject
+      - provenanceId
+      - components
+      properties:
+        specificationVersionId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        organisationId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        materialId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        versionNumber:
+          type: integer
+          minimum: 1
+        lifecycleStatus:
+          type: string
+          enum:
+          - DRAFT
+          - RELEASED
+          - RETIRED
+        effectiveDate:
+          type: string
+          format: date
+        releasedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          pattern: Z$
+        createdBySubject:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: OIDC sub of the creator.
+        provenanceId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        components:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Component'
+    SpecificationVersionPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - nextCursor
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/SpecificationVersion'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+  responses:
+    InvalidRequest:
+      description: Invalid request shape or values (INVALID_REQUEST).
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    AuthenticationRequired:
+      description: Missing or invalid JWT.
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    AuthorizationDenied:
+      description: Missing role, or the resource belongs to another organisation (AUTHORIZATION_DENIED,
+        BR-07/BR-11); no content of that resource is returned.
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    ResourceNotFound:
+      description: The resource does not exist (RESOURCE_NOT_FOUND).
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    RateLimited:
+      description: Protective per-instance rate limit reached.
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    InternalError:
+      description: Unexpected failure without internal details.
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    ServiceUnavailable:
+      description: Service or its database is unavailable; callers must not assume success.
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    Conflict:
+      description: DATA_CONFLICT (duplicate material code) or VERSION_IMMUTABLE (release of a non-draft).
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+    UnprocessableReference:
+      description: INGREDIENT_UNKNOWN or EFFECTIVE_DATE_INVALID; nothing is written.
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
