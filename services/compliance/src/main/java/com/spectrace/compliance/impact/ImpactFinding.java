@@ -37,9 +37,6 @@ public record ImpactFinding(
         if (needsReview != (outcome == Outcome.REVIEW_REQUIRED)) {
             throw new IllegalArgumentException("REVIEW_REQUIRED must match missing or unresolved allergen evidence");
         }
-        if (kind != Kind.POTENTIAL) {
-            throw new IllegalArgumentException("Specification Phase 1 findings must be POTENTIAL");
-        }
     }
 
     private static String required(String value, String field) {
@@ -47,7 +44,7 @@ public record ImpactFinding(
         return value;
     }
 
-    public enum Kind { POTENTIAL }
+    public enum Kind { POTENTIAL, CONFIRMED }
     public enum Outcome { NO_ACTION, REVIEW_REQUIRED }
     public enum UnresolvedReason { UNMAPPED, AMBIGUOUS }
 

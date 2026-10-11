@@ -137,9 +137,9 @@ class ComplianceApplicationTest {
     @Test
     void flywayOwnsTheComplianceRootAndReapplyingDoesNotDuplicateHistory() {
         assertThat(jdbc.queryForObject("SELECT DATABASE()", String.class)).isEqualTo("compliance");
-        assertThat(flyway.info().current().getVersion().toString()).isEqualTo("4");
+        assertThat(flyway.info().current().getVersion().toString()).isEqualTo("5");
         assertThat(jdbc.queryForList("SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank",
-                String.class)).containsExactly("0.1", "1", "2", "3", "4");
+                String.class)).containsExactly("0.1", "1", "2", "3", "4", "5");
         assertThat(jdbc.queryForList("""
                 SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()
                 AND table_name IN ('outbox', 'local_audit', 'processed_event', 'consumed_aggregate_version',
@@ -347,6 +347,13 @@ class ComplianceApplicationTest {
         ObjectNode candidatePayload = (ObjectNode) candidateNode.get("payload");
         ((ObjectNode) candidatePayload.get("product")).put("productId", productId);
         ((ObjectNode) candidatePayload.get("formulaVersion")).put("id", formulaId);
+        candidatePayload.putNull("previousFormulaVersion");
+        for (var item : candidatePayload.get("items")) {
+            var spec = item.get("specificationVersion");
+            jdbc.update("INSERT INTO specification_version_projection VALUES (?, 'supplier_01', ?, ?, NULL, '2026-10-01', '2026-10-01 00:00:00', '{}')",
+                    spec.get("id").asString(), item.get("materialId").asString(), spec.get("versionNumber").asInt());
+            jdbc.update("INSERT INTO specification_component_projection VALUES (?, 'cocoa', 1, 'ing_cocoa', 'cocoa', 'MATCHED')", spec.get("id").asString());
+        }
         EventEnvelope candidate = EventEnvelope.parse(json.writeValueAsBytes(candidateNode), json);
 
         assertThat(idempotentConsumer.consume("compliance.formula-projection.v1", candidate,

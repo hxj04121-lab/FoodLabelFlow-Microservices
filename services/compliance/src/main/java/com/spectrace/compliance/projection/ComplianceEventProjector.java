@@ -97,9 +97,9 @@ public class ComplianceEventProjector {
         if (previousId != null) {
             List<SpecificationVersionHeader> previousProjection = jdbc.query("""
                     SELECT specification_version_id, version_number, previous_version_id
-                    FROM specification_version_projection WHERE specification_version_id = ?
+                    FROM specification_version_projection WHERE specification_version_id = ? AND organisation_id = ? AND material_id = ?
                     """, (rs, row) -> new SpecificationVersionHeader(rs.getString("specification_version_id"),
-                    rs.getInt("version_number"), rs.getString("previous_version_id")), previousId);
+                    rs.getInt("version_number"), rs.getString("previous_version_id")), previousId, event.organisationId(), materialId);
             if (previousProjection.isEmpty()) {
                 // Roll back the aggregate cursor too, so the predecessor can arrive before this retry.
                 throw new IllegalStateException("Previous specification projection is unavailable; retry after predecessor replay");
@@ -148,6 +148,14 @@ public class ComplianceEventProjector {
             fields(item, "formulaItemId", "sequenceNo", "materialId", "specificationVersion", "quantity", "unit");
             JsonNode specVersion = object(item.get("specificationVersion"), "specificationVersion");
             fields(specVersion, "id", "versionNumber");
+            int specNumber = positive(specVersion, "versionNumber");
+            var exact = jdbc.queryForList("SELECT version_number, material_id FROM specification_version_projection WHERE specification_version_id = ?",
+                    text(specVersion, "id"));
+            if (exact.isEmpty()) throw new IllegalStateException("Exact specification projection is unavailable; replay before formula retry");
+            if (((Number) exact.getFirst().get("version_number")).intValue() != specNumber
+                    || !text(item, "materialId").equals(exact.getFirst().get("material_id"))) {
+                throw invalid("Formula item material and exact specification version must match the released projection");
+            }
             JsonNode quantityNode = item.get("quantity");
             boolean nullQuantity = quantityNode == null || quantityNode.isNull();
             BigDecimal quantity = nullQuantity ? null : quantityNode.isNumber() ? quantityNode.decimalValue() : null;
@@ -197,7 +205,7 @@ public class ComplianceEventProjector {
                     VALUES (?, ?, ?)
                     """, labelId, text(declaration, "allergenId"), type);
         }
-        impacts.reevaluateImpactsForFormula(formulaId);
+        impacts.reevaluateProduct(event.organisationId(), text(payload, "productId"));
     }
 
     private List<SpecificationComponent> loadComponents(String versionId) {

@@ -25,6 +25,10 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.spectrace.platform</groupId>
             <artifactId>spectrace-service-starter</artifactId>
             <version>${spectrace-starter.version}</version>

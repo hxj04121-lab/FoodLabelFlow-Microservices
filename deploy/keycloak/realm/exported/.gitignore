@@ -1,0 +1,5 @@
+# Raw `kc.sh export` output. Never commit it: it can contain generated client
+# secrets and password hashes. Diff it against ../spectrace-realm.json locally
+# and port intentional changes into the curated realm file.
+*
+!.gitignore
