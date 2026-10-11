@@ -27,6 +27,6 @@ The available 2026-10-11 readiness snapshot records USD 119.86 in credits, no AW
 
 ## Pull request and Jira
 
-This work is based on `feat/stcn-59-eks-addons` (PR #29, still open; its latest observed checks passed and merge state was CLEAN). PR #27 is also open and its latest observed CI checks passed; Terraform plan was skipped and merge state remained BLOCKED. The new STCN-10 draft PR is the review vehicle for this branch; this report will be amended with its URL and commit after publication.
+This work is based on `feat/stcn-59-eks-addons` (PR #29, still open; its latest observed checks passed and merge state was CLEAN). PR #27 is also open and its latest observed CI checks passed; Terraform plan was skipped and merge state remained BLOCKED. The STCN-10 draft PR is [#39](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39), based on PR #29; the published head at report time is `925c8f5`.
 
 Keep STCN-10 and child Jira issues In Progress until M1 review and the approved staging-window acceptance evidence are recorded. Do not merge automatically when checks pass.
