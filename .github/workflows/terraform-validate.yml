@@ -1,0 +1,61 @@
+name: Terraform validation
+
+on:
+  push:
+    paths: ["infra/terraform/**", ".github/workflows/terraform-validate.yml"]
+  pull_request:
+    paths: ["infra/terraform/**", ".github/workflows/terraform-validate.yml"]
+  workflow_dispatch:
+    inputs:
+      run_plan:
+        description: Run a read-only plan against the staging account
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+      - run: terraform fmt -check -recursive
+        working-directory: infra/terraform
+      - run: terraform init -backend=false -input=false
+        working-directory: infra/terraform
+      - run: terraform validate
+        working-directory: infra/terraform
+
+  plan:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_plan }}
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-southeast-1
+      AWS_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+      - name: Require state backend and IAM role configuration
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: test -n "$AWS_ROLE_ARN" && test -n "$TF_STATE_BUCKET"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" -backend-config="key=spectrace/staging/terraform.tfstate" -backend-config="region=ap-southeast-1" -backend-config="encrypt=true" -backend-config="use_lockfile=true"
+        working-directory: infra/terraform
+      - run: terraform plan -input=false -var='general_desired_size=1' -var='enable_compliance_node_group=false'
+        working-directory: infra/terraform
