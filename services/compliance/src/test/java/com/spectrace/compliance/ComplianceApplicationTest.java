@@ -509,6 +509,38 @@ class ComplianceApplicationTest {
                 Integer.class, labelId + ":1")).isZero();
     }
 
+    @Test
+    void phaseOnePersistsExactImpactWithoutMutatingFormulaAndReevaluatesIdempotently() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String oldId = "impact_old_" + suffix, newId = "impact_new_" + suffix;
+        String formulaId = "impact_formula_" + suffix, labelId = "impact_label_" + suffix;
+        insertFormula(oldId, formulaId, "ing_cocoa", "MATCHED", suffix);
+        jdbc.update("INSERT INTO label_version_projection VALUES (?, 'manufacturer_01', ?, ?, 7, 'rules_us_v1', 'US', ?)",
+                labelId, "product_" + suffix, formulaId, java.sql.Timestamp.from(Instant.now()));
+        var before = jdbc.queryForList("SELECT * FROM formula_item_projection WHERE formula_version_id = ?", formulaId);
+        ObjectNode event = (ObjectNode) json.readTree(contractExample("specification/specification-published-soy-lecithin-v2.json"));
+        event.put("eventId", UUID.randomUUID().toString()); event.put("aggregateId", "material_" + suffix);
+        var payload = (ObjectNode) event.get("payload");
+        ((ObjectNode) payload.get("material")).put("materialId", "material_" + suffix);
+        ((ObjectNode) payload.get("specificationVersion")).put("id", newId);
+        ((ObjectNode) payload.get("previousVersion")).put("id", oldId);
+        var envelope = EventEnvelope.parse(json.writeValueAsBytes(event), json);
+        idempotentConsumer.consume("compliance.specification-projection.v1", envelope, eventProjector::projectSpecification);
+        var finding = json.readTree(jdbc.queryForObject("SELECT finding_json FROM impact_finding_projection WHERE formula_version_id = ?",
+                String.class, formulaId));
+        assertThat(finding.get("kind").asString()).isEqualTo("POTENTIAL");
+        assertThat(finding.get("outcome").asString()).isEqualTo("REVIEW_REQUIRED");
+        assertThat(finding.get("missingAllergens").toString()).contains("all_soy");
+        assertThat(finding.at("/labelVersion/versionNumber").asInt()).isEqualTo(7);
+        assertThat(jdbc.queryForList("SELECT * FROM formula_item_projection WHERE formula_version_id = ?", formulaId)).isEqualTo(before);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM outbox WHERE aggregate_id = ?", Integer.class, finding.get("findingId").asString())).isZero();
+        eventProjectorImpacts().reevaluateImpactsForFormula(formulaId);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM impact_finding_projection WHERE formula_version_id = ?", Integer.class, formulaId)).isEqualTo(1);
+    }
+
+    @Autowired com.spectrace.compliance.impact.ImpactFindingProjectionService impactProjections;
+    private com.spectrace.compliance.impact.ImpactFindingProjectionService eventProjectorImpacts() { return impactProjections; }
+
     private void insertFormula(String specificationId, String formulaId, String ingredientId,
                                String matchStatus, String suffix) {
         jdbc.update("""
