@@ -88,10 +88,34 @@ variable "enable_alb" {
   default     = true
 }
 
+variable "enable_eks_addons" {
+  description = "Install EKS controllers and default-deny network policies after a validated ACM certificate is available."
+  type        = bool
+  default     = false
+  validation {
+    condition     = !var.enable_eks_addons || (var.enable_eks && var.enable_alb && var.certificate_arn != "" && var.domain_name != "" && length(var.alb_ingress_cidrs) > 0)
+    error_message = "EKS add-ons require EKS, an issued ACM certificate and domain, and explicit ALB ingress CIDRs."
+  }
+}
+
+variable "gateway_service_name" {
+  description = "Kubernetes Service name used by the Gateway Ingress."
+  type        = string
+  default     = "gateway"
+  validation {
+    condition     = trimspace(var.gateway_service_name) != ""
+    error_message = "gateway_service_name must match the deployed Gateway Service."
+  }
+}
+
 variable "alb_ingress_cidrs" {
   description = "CIDRs allowed to reach the ALB. Empty leaves the ALB without inbound rules."
   type        = list(string)
   default     = []
+  validation {
+    condition     = alltrue([for cidr in var.alb_ingress_cidrs : can(cidrhost(cidr, 0))])
+    error_message = "Each ALB ingress entry must be a valid CIDR."
+  }
 }
 
 variable "domain_name" {
