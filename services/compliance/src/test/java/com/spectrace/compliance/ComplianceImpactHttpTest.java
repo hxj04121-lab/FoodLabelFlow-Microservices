@@ -71,7 +71,15 @@ class ComplianceImpactHttpTest {
     private String token(Object org, String type, List<String> roles, String audience, Instant expires) throws Exception {
         var claims = new JWTClaimsSet.Builder().subject("actor-test").issuer(ISSUER).audience(audience)
                 .issueTime(Date.from(Instant.now().minusSeconds(120))).expirationTime(Date.from(expires))
-                .claim("org_id", org).claim("org_type", type).claim("realm_access", Map.of("roles", roles)).build();
+                .claim("org_id", org).claim("org_type", type).claim("roles", roles)
+                .claim("realm_access", Map.of("roles", roles)).build();
+        return sign(claims);
+    }
+    private String tokenWithClaim(String name, Object value) throws Exception {
+        var claims = JWTParser.parse(token("org")).getJWTClaimsSet();
+        return sign(new JWTClaimsSet.Builder(claims).claim(name, value).build());
+    }
+    private String sign(JWTClaimsSet claims) throws Exception {
         var token = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(KEY.getKeyID()).build(), claims);
         token.sign(new RSASSASigner(KEY)); return token.serialize();
     }
@@ -79,9 +87,13 @@ class ComplianceImpactHttpTest {
         return token(org, "MANUFACTURER", List.of("CHANGE_MANAGER", "LABEL_OFFICER"), "compliance-test", Instant.now().plusSeconds(300));
     }
     private HttpResponse<String> request(String path, String token, String body) throws Exception {
+        return request(path, token, body, Map.of());
+    }
+    private HttpResponse<String> request(String path, String token, String body, Map<String, String> headers) throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).timeout(Duration.ofSeconds(15))
                 .header("X-Correlation-ID", "g3-http-test").header("Content-Type", "application/json");
         if (token != null) request.header("Authorization", "Bearer " + token);
+        headers.forEach(request::header);
         if (path.equals("/internal/validations") && body != null) {
             var snapshot = json.readTree(body);
             request.header("Idempotency-Key", snapshot.get("labelVersionId").asString() + ":" + snapshot.get("draftRevision").asInt());
@@ -108,6 +120,42 @@ class ComplianceImpactHttpTest {
         assertThat(request("/api/compliance/impact-findings", token("org", "SUPPLIER", List.of("CHANGE_MANAGER"), "compliance-test", Instant.now().plusSeconds(300)), null).statusCode()).isEqualTo(403);
         assertThat(request("/api/compliance/impact-findings", token("org", "MANUFACTURER", List.of("AUDITOR"), "compliance-test", Instant.now().plusSeconds(300)), null).statusCode()).isEqualTo(403);
         assertThat(request("/actuator/health/liveness", null, null).statusCode()).isEqualTo(200);
+    }
+
+    @Test void sharedIdentityRejectsMissingAudienceAndMalformedScalarClaims() throws Exception {
+        for (String claim : List.of("aud", "sub", "org_id", "org_type")) {
+            assertThat(request("/api/compliance/impact-findings", tokenWithClaim(claim, null), null).statusCode())
+                    .as("missing %s", claim).isEqualTo(401);
+        }
+        for (String claim : List.of("sub", "org_id", "org_type")) {
+            for (Object invalid : List.of(List.of("org"), 42, "")) {
+                assertThat(request("/api/compliance/impact-findings", tokenWithClaim(claim, invalid), null).statusCode())
+                        .as("invalid %s: %s", claim, invalid).isEqualTo(401);
+            }
+        }
+        assertThat(request("/api/compliance/impact-findings", tokenWithClaim("iss", "https://other.invalid"), null).statusCode()).isEqualTo(401);
+    }
+
+    @Test void onlyM4TopLevelBusinessRolesGrantPermissions() throws Exception {
+        // A permissive realm_access mirror must never grant a missing business role.
+        for (Object roles : Arrays.asList(null, List.of(), List.of("AUDITOR"))) {
+            assertThat(request("/api/compliance/impact-findings", tokenWithClaim("roles", roles), null).statusCode()).isEqualTo(403);
+        }
+        for (Object invalid : List.of("CHANGE_MANAGER", List.of(42), List.of(""))) {
+            assertThat(request("/api/compliance/impact-findings", tokenWithClaim("roles", invalid), null).statusCode()).isEqualTo(401);
+        }
+        assertThat(request("/api/compliance/impact-findings", token("org"), null).statusCode()).isEqualTo(200);
+        assertThat(request("/api/compliance/impact-findings",
+                token("org", "MANUFACTURER", List.of("LABEL_OFFICER"), "compliance-test", Instant.now().plusSeconds(300)), null).statusCode()).isEqualTo(403);
+    }
+
+    @Test void forgedLegacyHeadersCannotAuthenticateOrChangeVerifiedOrganisation() throws Exception {
+        var f = fixture();
+        var headers = Map.of("X-Auth-User", "spoof", "X-Auth-Org-Id", f.org(),
+                "X-Auth-Org-Type", "MANUFACTURER", "X-Auth-Roles", "CHANGE_MANAGER,LABEL_OFFICER");
+        assertThat(request("/api/compliance/impact-findings", null, null, headers).statusCode()).isEqualTo(401);
+        assertThat(request("/api/compliance/impact-previews", token("other-org"), preview(f, f.org()), headers).statusCode()).isEqualTo(403);
+        assertThat(request("/api/compliance/impact-previews", token(f.org()), preview(f, f.org()), headers).statusCode()).isEqualTo(200);
     }
 
     @Test void twoPhasesRemainImmutableAndConfirmedOutboxIsAtomicAndIdempotent() throws Exception {
