@@ -1,0 +1,37 @@
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: spectrace
+  namespace: rabbitmq
+  annotations:
+    rabbitmq.com/topology-allowed-namespaces: "specification,formulation,compliance,label-workflow"
+spec:
+  replicas: 3
+  image: rabbitmq:4.3.4-management
+  persistence:
+    storageClassName: ebs-gp3
+    storage: 8Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  rabbitmq:
+    additionalConfig: |-
+      default_queue_type = quorum
+      vm_memory_high_watermark.relative = 0.6
+  override:
+    statefulSet:
+      spec:
+        template:
+          spec:
+            containers:
+              - name: rabbitmq
+                readinessProbe:
+                  initialDelaySeconds: 20
+                  periodSeconds: 10
+                livenessProbe:
+                  initialDelaySeconds: 60
+                  periodSeconds: 20

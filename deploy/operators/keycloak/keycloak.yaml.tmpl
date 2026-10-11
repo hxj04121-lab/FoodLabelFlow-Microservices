@@ -1,0 +1,32 @@
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: spectrace
+  namespace: keycloak
+spec:
+  instances: 1
+  image: quay.io/keycloak/keycloak:26.8.0
+  db:
+    vendor: mysql
+    host: ${RDS_ENDPOINT}
+    database: keycloak
+    usernameSecret: {name: keycloak-db, key: username}
+    passwordSecret: {name: keycloak-db, key: password}
+  http:
+    httpEnabled: true
+    httpPort: 8080
+    httpRelativePath: /auth
+  proxy:
+    headers: xforwarded
+  networkPolicy:
+    enabled: false
+  podTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: "1", memory: 1Gi}
