@@ -1,0 +1,51 @@
+# AWS Staging Deployment Progress
+
+Updated: 2026-10-11 (Asia/Shanghai). This report records observed repository, GitHub, and AWS state; an unavailable read is not treated as evidence that a resource or setting is absent.
+
+## Current status
+
+**NOT READY FOR TERRAFORM APPLY.** No AWS resources were created or changed, and no Terraform plan or apply was run. The current `stcn-staging` CLI identity is a quota-read-only role. The locally validated Terraform stack is in PR #27, which is still awaiting review.
+
+## Work completed
+
+- PR #27 provides a separate S3 state-bootstrap stack, two-AZ VPC, one NAT Gateway, private EKS nodes, private Multi-AZ MySQL, internal-by-default ALB, GitHub OIDC plan role, and a manual read-only plan workflow. It has no Apply role or Apply workflow.
+- The Terraform validation workflow for PR #27 passed `fmt`, `init -backend=false`, and `validate` on 2026-10-11. A local run also passed these commands. The root `terraform test` found no root-level tests; the OIDC module test is under separate verification.
+- PR #10 has the PR #18 fail-closed reusable budget gate in its updated branch, removes temporary-branch CI triggers, refreshes its AWS public-price snapshot, and makes an unverified quota result exit nonzero. Budget tests cover missing, invalid, insufficient, and sufficient credit, and the real reusable workflow caller.
+- Planning-only cost model (not a live quote or account charge): $4.89 for an 8-hour EKS/RDS/ALB window, or $5.87 with 20% reserve; $118.56 is a high-use 7-day model with four compliance nodes and a separate k6 host plus reserve. Refresh pricing and rerun the gate for the approved plan and hours.
+
+## Pull requests
+
+| PR | Current observed state | Review and CI | Merge status |
+| --- | --- | --- | --- |
+| [#10](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/10) | Updated branch contains #18's reviewed fail-closed change and this turn's fixes | Previous CI passed before this update; rerun required. M1 requested updated review after fixes. | Not mergeable until new CI and M1 review; do not merge without required approvals. |
+| [#18](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/18) | Approved, based on the prior #10 head | Reviewer approval is recorded at its current head. | Its change is incorporated into #10 for review; approval does not authorize a protected merge. |
+| [#27](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/27) | Terraform modules and plan-only workflow | Validation, backend, frontend, containers, security, and Sonar checks passed on 2026-10-11; no PR review recorded. | Awaiting reviewer approval. |
+
+GitHub currently reports no `staging` Environment. Repository Actions variables are `SECURITY_SCANS_ENABLED`, `SONARQUBE_ENABLED`, and `SONAR_HOST_URL`; no deployment role ARN or state bucket variable is configured. The secrets listing contains only `SONAR_TOKEN`. A repository Actions permissions query returned HTTP 403, so repository-wide Actions policy was not verified.
+
+## AWS account and access
+
+- Account: `359286420735`; region: `ap-southeast-1`.
+- Caller: `AWSReservedSSO_STCN-QuotaReadOnly_01b128d7d97194ad` (assumed role). No credentials were recorded.
+- Live quota reads succeeded: Standard On-Demand EC2 is 16 vCPU; EKS limits include 100 clusters and 30 managed node groups per cluster; RDS DB-instance quota is 40. The architecture's modeled EC2 peak is 16 vCPU only when the optional compliance scale-out and separate k6 host both run; current capacity and headroom were not queried.
+- AWS denied current reads for `budgets:ViewBudget`, `ce:GetCostAndUsage`, `iam:ListOpenIDConnectProviders`, `s3:ListAllMyBuckets`, `eks:ListClusters`, `rds:DescribeDBInstances`, `elasticloadbalancing:DescribeLoadBalancers`, and `ec2:DescribeNatGateways`. Therefore Budget, actual spend/forecast, GitHub OIDC provider, state bucket, and existing billable resources are **UNKNOWN**, not confirmed missing.
+- No live credit balance, applied-quota screenshot, cost export, GitHub deploy role, state backend, or account-resource inventory is available in this run.
+
+## Apply blockers and minimum next actions
+
+| Owner | Blocker | Required action |
+| --- | --- | --- |
+| Repository reviewer / M1 | PR #10 changes requested; PR #27 review required | Rerun CI on updated #10, review the updated fail-closed gate and price data, then approve PRs under branch protection. Do not self-approve or merge without M1/M5. |
+| GitHub administrator | No `staging` Environment or deploy variables; Actions policy not readable | Create `staging`, restrict deployments to the reviewed branch, require an approver, configure `AWS_PLAN_ROLE_ARN` and `TF_STATE_BUCKET`, and verify workflow permissions. Apply credentials must remain separate and protected. |
+| AWS administrator | Current role cannot inspect budget, cost, OIDC, bucket, or deployed resources | Grant a scoped read-only evidence role for the listed actions; verify the USD 120 budget, month-to-date/forecast cost, credits, OIDC provider, state bucket, and existing billable resources. Refresh the identity and quotas before the window. |
+| M1/M5 approvers | No accepted plan-specific approval | Approve the exact Terraform plan only after account, budget, role, resource quantities, run duration, and destroy scope are evidenced. |
+| Project team | Domain, ACM validation, and client ingress CIDRs are not confirmed | Keep the ALB internal; choose domain/DNS and reviewed client CIDRs only if public HTTPS is required. |
+| Project team / STCN-40 | Application deployment and acceptance pipeline are not part of the current PR | Complete image publishing, Kubernetes release configuration, health checks, integration/E2E evidence, and controlled destroy/residue checks before calling staging acceptance complete. |
+
+## Milestones
+
+- **Ready for Terraform Plan:** No. PR #27 must be reviewed; GitHub staging Environment and plan-role settings must be configured; state bucket/bootstrap authorization and current read-only account evidence are missing.
+- **Plan Reviewed:** No. No account-backed plan exists.
+- **Ready for Apply:** No. Requires a passing live budget gate, exact reviewed plan, protected Apply role/workflow, and M1/M5 approval.
+- **Staging Deployed / Services Healthy / Acceptance Tests Passed:** Not started.
+- **Resources Destroyed:** Not applicable; this run created no resources. After an approved window, destroy only the staging stack and verify no billable residue; retain only the separately protected state bucket if authorized.
