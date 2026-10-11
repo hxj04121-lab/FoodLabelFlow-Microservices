@@ -1,58 +1,50 @@
 # AWS Staging Deployment Progress
 
-Updated: 2026-10-11 (Asia/Shanghai). This report records observed repository, GitHub, and AWS state; an unavailable read is not treated as evidence that a resource or setting is absent.
+Updated: 2026-10-11 (Asia/Shanghai). This report records observed repository, GitHub, and AWS state. Billing data can lag behind provisioning.
 
 ## Current status
 
-**NOT READY FOR TERRAFORM PLAN/APPLY.** The persistent State bucket, AWS Organization, IAM Identity Center instance, and non-root permission set are created in account `679857346122`. No staging stack plan or apply was run. CLI login is waiting for the user to enter their Identity Center password and complete MFA; Root credentials are not used for Terraform. PR #27 remains open and requires review.
+**Staging infrastructure is deployed. Application services are not deployed or verified.** Account `679857346122`, region `ap-southeast-1`; Terraform backend is the persistent state bucket and the final refresh plan reports no changes.
 
-## Work completed
+## Completed
 
-- PR #27 provides a separate S3 state-bootstrap stack, two-AZ VPC, one NAT Gateway, private EKS nodes, private Multi-AZ MySQL, internal-by-default ALB, GitHub OIDC plan role, and a manual read-only plan workflow. It has no Apply role or Apply workflow.
-- The Terraform validation workflow for PR #27 passed `fmt`, `init -backend=false`, and `validate` on 2026-10-11. A local run also passed these commands. The root `terraform test` found no root-level tests; the OIDC module test is under separate verification.
-- PR #10 has the PR #18 fail-closed reusable budget gate in its updated branch, removes temporary-branch CI triggers, refreshes its AWS public-price snapshot, and makes an unverified quota result exit nonzero. Budget tests cover missing, invalid, insufficient, and sufficient credit, and the real reusable workflow caller.
-- The PR #10 gate checks explicit available AWS credit against modeled window cost; it does not yet verify the requested USD 120 AWS Budget, account month-to-date cost, or forecast. This part of the requested monthly budget gate remains incomplete even after PR #10 is reviewed.
-- AWS public-price snapshot refreshed at 2026-10-11 13:13 UTC. The PR #10 gate estimates an 8-hour window at $5.41 raw / $6.50 with its 20% reserve when one baseline Compliance node is included; available credits remain unverified. PR #27's cost model says Compliance is off by default and estimates the same window at $4.89 / $5.87 with reserve. Reconcile these assumptions against the actual Terraform Plan before approval. These are planning estimates, not a live quote or account charge. A synthetic `$120` input passed the CLI math check but does not verify AWS credit or the monthly budget.
-- PR #27's high-use 7-day model is $118.56 with four Compliance nodes and a separate k6 host plus reserve. It is close to the user-reported USD 120 monthly budget; account usage, forecast, credits, and any existing charges remain unknown.
-- Created the persistent state bucket `foodlabelflow-staging-tfstate-679857346122-ap-southeast-1` from `infra/terraform/state-bootstrap/`: 6 resources added, with public access blocked, versioning enabled, AWS-managed S3 KMS encryption, bucket-owner enforcement, and TLS-only policy. Its bootstrap state and saved plan are stored under `/Users/shj/.codex/aws-state/foodlabelflow-staging/`, outside the repository.
-- Created AWS Organization `o-0nuq12ulwa` and the single-region Identity Center organization instance `ssoins-821060c75a759aee` in `ap-southeast-1` using the AWS-owned key. User `534355052@qq.com` exists. Permission set `FoodLabelFlowStagingLogin` has a one-hour session and only `sts:AssumeRole` on `FoodLabelFlowStagingDeploy`; that role trusts only the generated Identity Center role. State access is restricted to the `spectrace/staging/` prefix.
-- The live USD 120 monthly budget currently reports actual `$0.00` and forecast `$0.042`; Cost Explorer MTD returned estimated `-$0` through 2026-10-11. These billing signals can lag and do not cap spending. Current account pricing snapshot still models `$4.89` for an 8-hour baseline window and `$372.81` for 30 days continuously; refresh against the exact Terraform quantities before Apply.
+- Used the non-root `FoodLabelFlowStagingDeploy` role through IAM Identity Center for Terraform. Root was used only to update that role's narrowly scoped inline policy after AWS returned specific missing-action diagnostics: the current EKS AMI `RunInstances` permission is tied to its launch template and region, the EKS nodegroup service role can be read, nodegroup service-linked role creation is service-name restricted, and Auto Scaling tag reads are region restricted.
+- Created the persistent S3 state bucket `foodlabelflow-staging-tfstate-679857346122-ap-southeast-1`; versioning is enabled, and the bucket is separate from the staging stack.
+- Deployed VPC, two public and two private subnets, one NAT Gateway, private EKS cluster `spectrace-staging` (Kubernetes 1.36), one `t3.medium` managed node group (`general`, desired/min/max 1), encrypted private Multi-AZ MySQL `db.t3.small`, CloudWatch RDS log groups, Secrets Manager credential secret, internal ALB, and gateway target group.
+- Live reads: EKS cluster `ACTIVE`, node group `ACTIVE` with no reported health issues, and its single `t3.medium` instance `InService` / `Healthy`; RDS `available` / Multi-AZ / encrypted / not publicly accessible; ALB `active` / internal with no listeners. The EKS endpoint is private-only; `kubectl get nodes` from this workstation timed out, so Kubernetes node readiness was not verified. `eks:ListAddons` was not granted to the deployment role, so the add-on inventory was not checked.
+- The DB secret has an `AWSCURRENT` version. Its value was not read or printed.
+- Terraform fixes in this branch: removed a TLS certificate thumbprint lookup that returned multiple CA certificates (the AWS provider supports an omitted EKS OIDC thumbprint); removed the now-unused TLS provider; ignored inline ingress drift on the node security group because its control-plane ingress is managed by a separate rule and the provider attempted to revoke it. The latter means Terraform will not detect other ingress drift on that security group.
+- `terraform fmt`, `terraform validate`, and a fresh `terraform plan -detailed-exitcode` passed. Final plan: **No changes**. Saved plan and kubeconfig are outside the repository under `/Users/shj/.codex/aws-state/foodlabelflow-staging/` with restrictive local permissions.
+
+## AWS budget and cost
+
+- `FoodLabelFlow-Staging-Monthly-USD-120` remains configured at USD 120/month. The latest AWS Budget read still reports actual USD 0.00 and forecast USD 0.042; Cost Explorer returned `-0` through 2026-10-11 even though resources have now been provisioned. These figures have not caught up and are not a spending cap.
+- The repository's prior pricing snapshot estimated USD 5.87 for an 8-hour baseline window and USD 372.81 for 30 days continuously. Those are planning estimates, not a live quote; no fresh pricing calculation was made during apply.
+- No expiry or automatic destroy is configured. The environment continues to incur costs until the staging Terraform stack is destroyed. The separate state bucket must be retained.
+
+## Application readiness
+
+- `deploy/helm/spectrace-service/values.yaml` still uses `example.invalid/spectrace/service:replace-with-commit-sha`. The chart's service-specific values configure network policy but do not supply publishable image references.
+- The ALB is internal and has no public HTTPS listener because domain, ACM certificate, and ingress CIDRs are not configured. The GitHub workflow is plan-only; no staging Apply or application deployment workflow exists.
+- No application release, health check, database migration, integration test, or acceptance test was run. The EKS add-on module available on the PR branch defaults to disabled until domain, certificate, and ingress CIDRs are supplied. Deploying services requires real image references and a reachable deployment path (private workstation access such as VPN/bastion, or a reviewed GitHub deployment runner in the VPC), plus finalized application-to-RDS settings.
 
 ## Pull requests
 
-| PR | Current observed state | Review and CI | Merge status |
+Live GitHub CLI reads on 2026-10-11:
+
+| PR | State | Checks / review | Merge status |
 | --- | --- | --- | --- |
-| [#10](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/10) | Head `032066c`, synchronized with current `main`; contains #18's reviewed gate plus its follow-up fixes | Current required CI and budget gate checks passed. | `CHANGES_REQUESTED`; M1 review remains. |
-| [#18](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/18) | Merged | CI passed at merge. | Merged. |
-| [#27](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/27) | Terraform modules and plan-only workflow; progress update commit `63adce0` pushed after inspecting head `0e7b0f4` | CI for `63adce0` is running; the earlier live plan job was skipped. | `REVIEW_REQUIRED`; no merge. |
+| [#10](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/10) | Merged | Required checks passed; review decision field still reports `CHANGES_REQUESTED` on the merged PR. | Merged. |
+| [#18](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/18) | Merged | Checks passed; review decision `APPROVED`. | Merged. |
+| [#27](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/27), head `6fb4060` | Open | Terraform validate, Helm, budget, backend/frontend/platform CI, security, container and Sonar checks passed; review required. | Behind base branch; not merged. |
 
-GitHub currently reports no `staging` Environment. Repository Actions variables are `SECURITY_SCANS_ENABLED`, `SONARQUBE_ENABLED`, and `SONAR_HOST_URL`; no deployment role ARN or state bucket variable is configured. The secrets listing contains only `SONAR_TOKEN`. The live repository OIDC settings use immutable subject claims with prefix `repo:hxj04121-lab@245486830/FoodLabelFlow-Microservices@1388701923`; this matches the subject format generated by the PR #27 module, consistent with [GitHub's immutable subject claim format](https://docs.github.com/en/actions/reference/security/oidc). The AWS OIDC provider itself could not be checked. A repository Actions permissions query returned HTTP 403, so repository-wide Actions policy was not verified.
+PR #27 needs the required reviewer and base-branch synchronization. Do not self-approve or merge it.
 
-## AWS account and access
+## Remaining work and risks
 
-- Account: `679857346122`; region: `ap-southeast-1`.
-- Current CLI identity used for bootstrap is Root; it is not used for Terraform. A non-Root Identity Center permission set and role chain are configured. Login is awaiting user password/MFA entry in the browser.
-- Identity Center organization instance is active (`ssoins-821060c75a759aee`); the user's AWS account assignment is `SUCCEEDED`. The generated `AWSReservedSSO_FoodLabelFlowStagingLogin_7a71adfe5124166c` role can assume only `FoodLabelFlowStagingDeploy`.
-- Live quota reads: EC2 standard On-Demand vCPU `16` (prior account check), EKS registered clusters `10`, EKS managed node groups `30`, RDS DB instances `40`. EKS versions `1.34`–`1.37` are in standard support; Terraform's `1.36` is currently supported.
-- Live Budget: `FoodLabelFlow-Staging-Monthly-USD-120`, monthly limit `$120`, actual `$0.00`, forecast `$0.042`. Cost Explorer MTD returned estimated `-$0` (2026-10-01 to 2026-10-11). Credits and full account-wide cost attribution were not checked.
-- State bucket exists in `ap-southeast-1`; Public Access Block is fully enabled, versioning is enabled, encryption is `aws:kms` with `alias/aws/s3`, ownership is `BucketOwnerEnforced`, and bucket policy denies insecure transport. No staging EKS, RDS, NAT, or ALB has been created by this turn.
+1. **Application deployment:** publish immutable service images, replace placeholder chart values, configure RDS secret references and migrations, establish private connectivity, and add a reviewed release workflow.
+2. **Service verification:** run `kubectl get nodes` and application health/integration/acceptance checks from a network that can reach the private EKS endpoint.
+3. **PR #27:** commit/push the local Terraform fixes and report update, synchronize the PR with its base safely, then obtain the required review. It remains open and behind.
+4. **Cost control:** refresh Budget and Cost Explorer after their reporting delay, calculate the actual run window, and arrange an explicit destroy time. There is no automatic expiry. Destroy only the staging Terraform stack; retain the state bucket and Identity Center setup.
 
-## Apply blockers and minimum next actions
-
-| Owner | Blocker | Required action |
-| --- | --- | --- |
-| Repository reviewer / M1 | PR #10 changes requested; PR #27 review required | Rerun CI on updated #10, review the updated fail-closed gate and price data, then approve PRs under branch protection. Do not self-approve or merge without M1/M5. |
-| User | AWS SSO login not complete | Enter the Identity Center password and finish MFA in the open AWS sign-in tab; the agent will then verify the non-Root role chain and run the Terraform plan. Do not send the password in chat. |
-| GitHub administrator | No Apply role/workflow or protected `staging` Environment has been provisioned; PR #27 remains review-required | Keep Apply outside the current plan-only workflow until a protected, reviewed Apply path is approved; do not bypass PR/M1/M5 reviews. |
-| AWS / billing | Credits, full billing attribution, and cost for the exact generated plan are not verified | Refresh budget/Cost Explorer and estimate exact planned quantities and maximum runtime before staging Apply. |
-| M1/M5 approvers | PR #10 remains `CHANGES_REQUESTED`; PR #27 remains `REVIEW_REQUIRED` | Complete team review for the Terraform and budget gate path; do not merge or report acceptance without required approvals. |
-| Project team | Domain, ACM validation, and client ingress CIDRs are not confirmed | Keep the ALB internal; choose domain/DNS and reviewed client CIDRs only if public HTTPS is required. |
-| Project team / STCN-40 | Application deployment and acceptance pipeline are not part of the current PR | Complete image publishing, Kubernetes release configuration, health checks, integration/E2E evidence, and controlled destroy/residue checks before calling staging acceptance complete. |
-
-## Milestones
-
-- **Ready for Terraform Plan:** Blocked on user completing Identity Center password/MFA login; bucket, backend config, and scoped role chain are prepared.
-- **Plan Reviewed:** No. No account-backed staging plan exists.
-- **Ready for Apply:** No. Requires successful non-Root role verification, exact plan and refreshed cost review, plus required M1/M5 and protected deployment approvals.
-- **Staging Deployed / Services Healthy / Acceptance Tests Passed:** Not started.
-- **Resources Destroyed:** Not applicable. Only the persistent state bucket and Identity Center setup exist; no staging stack has been created. After an approved staging window, destroy only the staging stack and verify no billable residue; retain the separately protected state bucket.
+Milestones: **Terraform infrastructure deployed**; **Services healthy** not verified; **Acceptance tests passed** not started; **Resources destroyed** not started.

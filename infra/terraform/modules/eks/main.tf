@@ -37,6 +37,9 @@ resource "aws_security_group" "nodes" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   tags = merge(var.tags, { Name = "${var.name}-eks-nodes" })
+
+  # shortcut: ignores all ingress drift, split rules into standalone resources if drift detection is needed.
+  lifecycle { ignore_changes = [ingress] }
 }
 
 resource "aws_security_group_rule" "cluster_api_from_nodes" {
@@ -237,15 +240,10 @@ resource "aws_iam_role" "cluster_autoscaler" {
   tags = var.tags
 }
 
-data "tls_certificate" "cluster" {
-  url = aws_eks_cluster.this.identity[0].oidc[0].issuer
-}
-
 resource "aws_iam_openid_connect_provider" "cluster" {
-  url             = aws_eks_cluster.this.identity[0].oidc[0].issuer
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [one([for certificate in data.tls_certificate.cluster.certificates : certificate.sha1_fingerprint if certificate.is_ca])]
-  tags            = var.tags
+  url            = aws_eks_cluster.this.identity[0].oidc[0].issuer
+  client_id_list = ["sts.amazonaws.com"]
+  tags           = var.tags
 }
 
 data "aws_caller_identity" "current" {}
