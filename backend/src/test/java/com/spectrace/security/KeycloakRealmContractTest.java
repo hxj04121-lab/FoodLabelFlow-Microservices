@@ -95,6 +95,19 @@ class KeycloakRealmContractTest {
     private static final Set<String> UNMANAGED_ATTRIBUTE_POLICIES =
             Set.of("ENABLED", "ADMIN_VIEW", "ADMIN_EDIT");
 
+    /**
+     * Field names of Keycloak 26.0.7 ProtocolMapperRepresentation. A "description"
+     * key on a mapper aborts the whole realm import with "Unrecognized field
+     * description" (observed with Keycloak 26.0.7 while adding the audience mapper),
+     * so the guard covers mappers the same way it covers the user profile.
+     */
+    private static final Set<String> PROTOCOL_MAPPER_FIELDS = Set.of(
+            "id", "name", "protocol", "protocolMapper", "consentRequired",
+            "consentText", "config");
+
+    /** The one audience every resource server validates (gateway and services). */
+    private static final String SHARED_AUDIENCE = "spectrace-api";
+
     private static final List<Pattern> FORBIDDEN_TEXT = List.of(
             Pattern.compile("(?i)begin [a-z ]*private key"),
             Pattern.compile("eyJ[A-Za-z0-9_-]{4,}\\.[A-Za-z0-9_-]{10,}\\."),
@@ -278,6 +291,55 @@ class KeycloakRealmContractTest {
         assertEquals(List.of("spectrace-identity-claims"),
                 toList(findClient("spectrace-web").path("defaultClientScopes")),
                 "spectrace-web must request exactly the SpecTrace claims scope");
+    }
+
+    @Test
+    @DisplayName("access tokens carry the shared resource audience, minted for the external issuer")
+    void accessTokensCarryTheSharedAudience() {
+        JsonNode audienceMapper = findMapper(identityClaimScope, "spectrace-api-audience");
+        assertEquals("oidc-audience-mapper", audienceMapper.path("protocolMapper").asText(),
+                "the audience must come from the dedicated audience mapper");
+        assertEquals(SHARED_AUDIENCE,
+                audienceMapper.path("config").path("included.custom.audience").asText(),
+                "the gateway and every service validate one shared resource audience");
+        assertEquals("true", audienceMapper.path("config").path("access.token.claim").asText(),
+                "the audience belongs in the access token, which is what the gateway inspects");
+        assertEquals("false", audienceMapper.path("config").path("id.token.claim").asText(),
+                "the ID token addresses the browser, not a resource server");
+
+        assertEquals(SHARED_AUDIENCE, realm.path("attributes").path("spectrace.identity.audience").asText(),
+                "the realm records the audience once, so the gateway, the services and the "
+                        + "verification script cannot drift apart");
+
+        for (JsonNode sample : claimSamples.path("samples")) {
+            JsonNode audience = sample.path("access_token").path("aud");
+            assertEquals(List.of(SHARED_AUDIENCE), toList(audience),
+                    sample.path("username").asText() + " must carry exactly the shared audience");
+        }
+
+        String issuer = claimSamples.path("issuer_example").asText();
+        assertTrue(issuer.endsWith("/auth/realms/spectrace"),
+                "the issuer must be the externally visible address that the gateway fronts on "
+                        + "/auth, but the sample says " + issuer);
+        assertTrue(realm.path("attributes").path("spectrace.identity.issuer.note").asText()
+                        .contains("KC_HOSTNAME"),
+                "the realm must record how the issuer is produced, because it is deployment "
+                        + "configuration rather than a realm setting");
+    }
+
+    @Test
+    @DisplayName("protocol mappers only use fields Keycloak accepts")
+    void protocolMappersOnlyUseSupportedFields() {
+        for (JsonNode scope : realm.path("clientScopes")) {
+            for (JsonNode mapper : scope.path("protocolMappers")) {
+                for (Map.Entry<String, JsonNode> property : mapper.properties()) {
+                    assertTrue(PROTOCOL_MAPPER_FIELDS.contains(property.getKey()),
+                            "ProtocolMapperRepresentation has no field '" + property.getKey()
+                                    + "' (mapper " + mapper.path("name").asText()
+                                    + "); Keycloak aborts the whole realm import on unknown fields");
+                }
+            }
+        }
     }
 
     @Test

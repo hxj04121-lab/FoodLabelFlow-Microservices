@@ -304,10 +304,28 @@ def expected_users(realm):
     return users
 
 
-def check_claims(sample, claims, strict_extras):
+def check_claims(sample, claims, strict_extras, audience=None, expected_issuer=None):
     """Compares live Access Token claims with the expected sample."""
 
     problems = []
+    if expected_issuer is not None and claims.get("iss") != expected_issuer:
+        # The gateway and every service validate iss, so a token minted for a
+        # different address is unusable even though it is correctly signed.
+        problems.append(
+            "%s: access token issuer %r is not the externally visible issuer %r"
+            % (sample["username"], claims.get("iss"), expected_issuer)
+        )
+    if audience is not None:
+        token_audience = claims.get("aud")
+        if isinstance(token_audience, str):
+            token_audience = [token_audience]
+        if audience not in (token_audience or []):
+            # Without an audience the gateway and every service reject the token, so
+            # this is the first thing an integration run has to prove.
+            problems.append(
+                "%s: access token audience %r does not contain %r"
+                % (sample["username"], token_audience, audience)
+            )
     for claim in ("org_id", "org_type"):
         actual = claims.get(claim)
         if actual != sample[claim]:
@@ -449,14 +467,27 @@ def redacted_sample(sample, claims):
         "business_roles": sorted(sample["business_roles"]),
         "access_token": {
             "iss": claims.get("iss"),
+            # Keycloak emits aud as a plain string when there is exactly one audience
+            # and as an array when there are several; the sample always shows a list.
+            "aud": sorted(as_list(claims.get("aud"))),
             "typ": claims.get("typ"),
             "azp": claims.get("azp"),
             "org_id": claims.get("org_id"),
             "org_type": claims.get("org_type"),
-            "roles": sorted(claims.get("roles") or []),
-            "realm_access": {"roles": sorted((claims.get("realm_access") or {}).get("roles") or [])},
+            "roles": sorted(as_list(claims.get("roles"))),
+            "realm_access": {"roles": sorted(as_list((claims.get("realm_access") or {}).get("roles")))},
         },
     }
+
+
+def as_list(value):
+    """Normalises a claim that Keycloak may emit as a single string or as a list."""
+
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return list(value)
 
 
 ALL_BUSINESS_ROLES = []
@@ -468,10 +499,17 @@ def main(argv):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("KEYCLOAK_BASE_URL", "http://localhost:8180"),
-        help="Keycloak base URL (default: %(default)s)",
+        default=os.environ.get("KEYCLOAK_BASE_URL", "http://localhost:8180/auth"),
+        help="Keycloak base URL; the gateway fronts the IdP on /auth, so the "
+        "relative path is part of the address (default: %(default)s)",
     )
     parser.add_argument("--realm", default="spectrace")
+    parser.add_argument(
+        "--audience",
+        default=os.environ.get("KEYCLOAK_AUDIENCE"),
+        help="audience every access token must carry; defaults to the realm's "
+        "spectrace.identity.audience attribute",
+    )
     parser.add_argument("--client-id", default="spectrace-web")
     parser.add_argument(
         "--redirect-uri",
@@ -535,13 +573,26 @@ def main(argv):
         print("Static self-check passed: realm users, sample claims and isolation rules agree.")
         return 0
 
-    issuer = "%s/realms/%s" % (args.base_url.rstrip("/"), args.realm)
-    wait_until_ready(issuer, args.ready_timeout)
-    print("Keycloak is ready at %s" % issuer)
+    http_base = "%s/realms/%s" % (args.base_url.rstrip("/"), args.realm)
+    discovery = wait_until_ready(http_base, args.ready_timeout)
+    # Two different addresses on purpose. http_base is where this script can reach
+    # Keycloak; the issuer is the externally visible address the tokens carry and the
+    # gateway validates. Keeping them apart is what lets the script prove the issuer
+    # alignment instead of assuming it.
+    expected_issuer = discovery.get("issuer") or http_base
+    audience = args.audience or realm.get("attributes", {}).get("spectrace.identity.audience")
+    if not audience:
+        raise VerificationError(
+            "no expected audience: set --audience or the realm attribute "
+            "spectrace.identity.audience"
+        )
+    print("Keycloak reachable at %s" % http_base)
+    print("Expected issuer:    %s" % expected_issuer)
+    print("Expected audience: %s" % audience)
 
     for user in users:
         tokens = fetch_tokens(
-            issuer,
+            http_base,
             args.client_id,
             args.redirect_uri,
             user["username"],
@@ -551,7 +602,7 @@ def main(argv):
         access_claims = decode_claims(tokens["access_token"])
         claims_by_user[user["username"]] = access_claims
         sample = samples_by_user[user["username"]]
-        problems.extend(check_claims(sample, access_claims, args.strict_extras))
+        problems.extend(check_claims(sample, access_claims, args.strict_extras, audience, expected_issuer))
         captured.append(redacted_sample(sample, access_claims))
         print(
             "  %-28s org_id=%-24s org_type=%-12s roles=%s"
@@ -567,7 +618,7 @@ def main(argv):
 
     redacted_document = {
         "$comment": sample_file["$comment"],
-        "issuer_example": issuer,
+        "issuer_example": expected_issuer,
         "client_id": args.client_id,
         "claim_locations": sample_file["claim_locations"],
         "keycloak_default_realm_roles": KEYCLOAK_DEFAULT_ROLES,
