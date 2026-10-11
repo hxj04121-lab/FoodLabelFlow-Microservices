@@ -52,3 +52,41 @@ No failure from that wrong page is represented as a product regression.
 No contracts, role vocabulary, AWS resources, repository permissions/settings,
 or Jira Done transitions are changed by this local implementation. Runtime
 claims and acceptance remain bounded to the evidence above.
+
+## M4 integration handoff (11 October)
+
+The implementation was initially local-only at `994a6cd`, which explains why
+M4 could not find it in remote branches. It is being published on XFY as a draft
+for review; publication is not the LB/Keycloak/service acceptance evidence.
+
+Provider artifacts inspected:
+
+- [Realm PR34](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/34),
+  head `71361a7`: real realm `spectrace`, local issuer
+  `http://localhost:8180/realms/spectrace`, six baseline roles. PR remains open.
+- [Starter security PR36](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/36),
+  head `9e1bc34`: JWT/organisation security implementation stacked on PR23.
+  PR remains open; its reported verification is provider evidence, not an M3
+  integration test.
+
+Concrete alignment items before real acceptance:
+
+1. PR34 currently mints no `aud`; both provider PRs call this out. Gateway and
+   browser require a configured audience. Agree a mapper/value with M4 rather
+   than disable audience validation. Also align the final external issuer,
+   Keycloak `/auth` relative path/rewrite and public discovery/JWKS paths;
+   current local Gateway values are fixture choices, not that realm's defaults.
+2. Confirm the coarse Gateway write-role lists against the actual six-role
+   realm. The M1 Specification/Formulation literals are not in PR34. Also align
+   the role-less caller's authentication/authorization behavior with PR36.
+3. PR36's `/api/security/whoami` is in a test application, not a deployed service
+   controller. The production Gateway routes only the four accepted public
+   domains. Agree the runnable caller-claims endpoint and its route with M4/M1;
+   do not treat the local product fixture or a test-only controller as a live
+   caller-claims response.
+4. Use M4's NetworkPolicy allowlist plus M5's LB/public hostname/upstreams to
+   run **browser → LB → Gateway → Keycloak → JWT-validating service**, then
+   record the returned caller organisation claims, trace and deployment URL.
+
+The draft can be reviewed while these bindings and the NetworkPolicy are
+completed; STCN-8 remains pending real integration and designated acceptance.
