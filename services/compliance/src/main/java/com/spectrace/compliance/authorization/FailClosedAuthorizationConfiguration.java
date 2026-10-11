@@ -52,7 +52,7 @@ public class FailClosedAuthorizationConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(JwtDecoder.class)
-    JwtDecoder complianceJwtDecoder(Environment environment) {
+    public JwtDecoder complianceJwtDecoder(Environment environment) {
         String issuer = environment.getProperty("spectrace.security.issuer-uri", "");
         String jwks = environment.getProperty("spectrace.security.jwk-set-uri", "");
         String audience = environment.getProperty("spectrace.security.audience", "");
