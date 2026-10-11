@@ -1,0 +1,11 @@
+serviceName: compliance
+resources:
+  requests: {cpu: "1", memory: "2Gi"}
+  limits: {cpu: "1", memory: "2Gi"}
+nodeSelector:
+  eks.amazonaws.com/nodegroup: compliance
+  node.kubernetes.io/instance-type: c6i.large
+tolerations:
+  - {key: dedicated, operator: Equal, value: compliance, effect: NoSchedule}
+networkPolicy:
+  ingressFromServices: [gateway, label-workflow]
