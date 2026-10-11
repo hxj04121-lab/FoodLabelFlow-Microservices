@@ -88,7 +88,7 @@ A repository scan found no code/config references to `AWS_ACCESS_KEY_ID`, `AWS_S
 2. In Billing → Credits, capture the remaining balance, expiry date, and activity completion status in a redacted screenshot.
 3. Supply the confirmed team notification address. Inspect existing Budgets and configure/reuse the USD 140 project budget with 50/80/100% notifications.
 4. Confirm the team domain and DNS provider, then record the `staging.<domain>` hostname and ACM DNS validation plan.
-5. With a refreshed profile, read-only check for the GitHub OIDC provider and confirm audience `sts.amazonaws.com`; retain only redacted evidence. Request the 20-vCPU quota if the refreshed value is below 20 (and at minimum ensure it is not below 16).
+5. With a refreshed profile, read-only check for the GitHub OIDC provider and confirm audience `sts.amazonaws.com`; retain only redacted evidence. If the refreshed quota is below the required 16 vCPU, request an increase to the recommended 20 vCPU. A verified quota from 16 to below 20 meets the minimum; 20 vCPU is recommended headroom, not a mandatory acceptance threshold.
 
 ## Scope
 
