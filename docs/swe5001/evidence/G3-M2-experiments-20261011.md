@@ -15,9 +15,9 @@ Actual local runs:
 
 Offline failover samples are explicitly synthetic unit-test inputs. k6 inspect parses the full 430s/50%-capacity scenario without sending requests. Neither establishes cloud recovery performance.
 
-The actual M5 Terraform node-group taint differed from the earlier proposal. Existing Helm PR #12 was updated to workload=compliance:NoSchedule and verified with 18 tests; no peer Terraform was rewritten. The experiment branch consumes that history. Generated dataset hashes are retained below and in CI artifacts; owner-import plans are not published authoritative events or database writes.
+The actual M5 Terraform node-group taint differed from the earlier proposal. Helm PR #12 merged at `2062edb` before the correction was pushed. Follow-up [PR #33](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/33) changes the toleration to workload=compliance:NoSchedule and adds optional digest pinning, verified with 18 tests. The experiment branch contains the same correction through ordinary merge history; no peer Terraform was rewritten. Generated dataset hashes are retained below and in CI artifacts; owner-import plans are not published authoritative events or database writes.
 
-[Protocol and commands](../../../perf/g3/README.md). Runtime evidence: [PR #30 CI](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38122464318). Detailed source review is recorded in the runtime and experiment documents. Latest experiment-head CI and M4/M5 review are still required.
+[Protocol and commands](../../../perf/g3/README.md). Runtime evidence: [PR #30 CI](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38122464318). Experiment commit `36b702a87bd24090508d9fc16024dfadb0986ca0` passed [general CI](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38123533623), [k6/data/tooling CI](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38123533636) and [Helm CI](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38123533555). This subsequent documentation correction requires its own latest-head CI. M4/M5 review and cloud acceptance remain outstanding.
 
 ## Actual local generated dataset manifest
 
