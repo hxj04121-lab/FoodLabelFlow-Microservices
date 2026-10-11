@@ -1,0 +1,59 @@
+# M2 Technical Report Sections — SWE5001 SpecTrace-CN
+
+Draft for Huang Xiangjia (M1), 11 October 2026. Draft deadline: 15 October 23:59, following G2/G3 integration on 13–14 October and feature freeze on 14 October. The latest Jira plan supersedes the original work-order dates.
+
+Evidence status: G0 contracts and methodology are accepted and merged. Compliance runtime and experiment preparation are submitted for review. AWS scalability and availability experiments are **BLOCKED / NOT RUN**. This document contains no predicted values presented as measurements.
+
+## Compliance Architecture and Service Boundaries
+
+Compliance is an independently deployable Java 21/Spring service using JDBC and a service-owned MySQL schema. Flyway controls both shared starter tables and Compliance migrations. The service owns allergen knowledge, rule-set versions, persisted validation runs, immutable upstream projections and impact findings. It never queries another service's database. A real MySQL permission test verifies that its database user cannot read a peer schema.
+
+The actual shared M1 starter provides correlation propagation, canonical errors, structured logs, local audit, transactional outbox, publisher confirms and the idempotent consumer. Readiness depends on the local database; broker outages leave committed outbox rows pending while liveness remains available. The service consumes SpecificationPublished, FormulaPublished and LabelPublished and emits ImpactFinding.v1. All envelopes carry the canonical organisation, correlation, event ID and aggregate sequencing fields.
+
+The Helm template fixes each Compliance replica at 1 vCPU/2GiB request=limit on the `compliance` c6i.large node group, with topology spread across two AZs. Helm PR #12 merged before the October 11 interface correction. Follow-up PR #33 aligns the toleration with M5 Terraform's actual `workload=compliance:NoSchedule` taint and adds optional immutable image digest rendering; the experiment stack already contains the same correction. All 18 native Helm checks pass. Template validation does not prove live placement. [Merged Helm PR #12](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/12), [follow-up PR #33](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/33)
+
+## Allergen Derivation and Idempotent Validation
+
+Derivation aggregates every Formula item and its exact released Specification components. A MATCHED vocabulary term still requires Compliance-owned allergen knowledge. Missing knowledge, UNMAPPED and AMBIGUOUS components remain unresolved; a reviewed explicit empty mapping represents a known non-allergenic baseline ingredient. Known required allergens are compared with current Label declarations. Missing or unresolved evidence blocks validation and persists a FAILED run; transport success is not equivalent to PASSED.
+
+`POST /internal/validations` binds the verified actor's organisation, Idempotency-Key and canonical complete draft snapshot. An identical retry returns the stored result/run ID; changed content under the same key returns 409. The reservation, run, findings and local audit commit atomically. Four concurrent identical requests against real MySQL return one run and one audit. A discovered shared-lock upgrade deadlock was repaired using an exclusive-key upsert under READ_COMMITTED; the concurrency test passed after repair. Cross-organisation requests and unavailable/inactive rules leave no reservation behind. [G2 PR #28](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/28), [G2 CI](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38121810199)
+
+## Two-Phase Impact Analysis
+
+Phase 1 evaluates a hypothetical substitution when a supplier releases a candidate Specification. It produces POTENTIAL findings only for relevant current released Formulas whose allergen conclusion changes. All other Formula items still contribute to the conclusion. The preview is read-only, and the Formula's original version references remain unchanged.
+
+Phase 2 requires an explicit manufacturer Formula publication that identifies its predecessor and pins the candidate Specification. The consumer checks specification business numbers, materials, predecessor ownership and the product/organisation boundary. The implemented comparison follows the candidate's immediate Specification predecessor, including the required V1-to-V2 adoption scenario; arbitrary older-ancestor adoption is not claimed. It evaluates the adopted Formula against that product's current published Label and persists CONFIRMED findings. Finding and outbox event commit together with the projection and consumer ledger. Duplicate events and reevaluation cannot emit twice. Only M4's downstream consumer may create a ReviewTask for CONFIRMED + REVIEW_REQUIRED; no M2 test claims that external task flow is already accepted.
+
+The impact APIs enforce verified manufacturer scope and IMPACT.RUN. The inbox uses tenant/filter-bound keyset cursors. A bounded per-replica cache retains exact immutable snapshots, publishes transaction-loaded values only after commit, and never caches misses or a mutable current pointer. Preview batches the current Label metadata lookup for the organisation; rules and current-version selection remain fresh. Real MySQL/Rabbit tests verify Formula immutability, outbox deduplication, rollback, subsequent retry and dead-letter handling. [G3 runtime PR #30](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/30), [runtime CI](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38122464318)
+
+## Contract and Event Consistency
+
+G0 integrates the frozen OpenAPI/JSON schemas, examples, canonical envelope, shared errors and predeclared experiment targets. M4 and M1 approved G0 PR #21, merged as `f08fd23a3f7dd21a5e435c872c3c0d71a53b64da`. The contract suite includes 39 M2 checks, 14 pinned-source checks, 44 M1 checks, 44 LabelPublished compatibility checks and 32 Label HTTP compatibility checks, plus envelope/lint/frozen-target validation. [Accepted G0 PR #21](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/21)
+
+LabelPublished.v1 does not contain a Label business versionNumber. Compliance therefore exposes a fail-closed exact-version resolver port and proposes ADR-G2-M2-002 for M4 approval. It never substitutes aggregateVersion or extracts a number from an opaque ID. Functional tests use an explicitly identified exact provider fixture; production Label projection and end-to-end ReviewTask acceptance remain blocked until the provider/identity/network decision is approved.
+
+The service-local JWT adapter verifies RS256 signatures, issuer, expiry/not-before and audience before reading scalar org_id/org_type and realm roles. LABEL_OFFICER grants LABEL.VALIDATE; CHANGE_MANAGER grants IMPACT.RUN. Missing configuration denies business calls; incomplete issuer/JWKS/audience configuration fails startup. Actual signed HTTP tests cover altered tokens, expiry, wrong audience, invalid organisation claims and wrong roles. M4's realm draft at `5caff0d` aligns scalar organisation and realm_access.roles, but its committed mapper/sample files do not yet provide an explicit resource audience. M2 recorded this integration requirement on STCN-9; it does not substitute azp for aud. M4 shared-security/real realm acceptance remains separate.
+
+## Scalability Experiment: 1 vs 3 Replicas
+
+**NOT RUN.** Reproducible preparation generates seed 5001, 5,000 released Formula versions across 20 manufacturers, exact synthetic owner-import plans and reviewed-case candidates. All generated Specification/Formula envelopes and preview requests pass frozen schemas. M1/M4 must load through owned APIs/importers and return actual count/version/hash evidence; generated files alone are not a loaded dataset.
+
+The native k6 protocol retains 120s warmup, 60s ramp, 60s settle and 300s measured hold at rates 1–256/s, in three trials per condition ordered 1,3,3,1,1,3. Two consecutive SLO-failing holds stop a ladder. Passing holds require p95 ≤2,000ms, errors <1% and zero dropped arrivals. Capacity is the median of the three largest passing discrete rates with all lower rates passing. The required ratio is R3/R1 ≥2. Censored, non-monotonic, incomplete or generator-limited trials are inconclusive. The latency clock starts at actual iteration execution; k6 scheduling delay is not directly measured, and dropped arrivals are checked independently.
+
+The controller verifies actual replica ownership, fixed resources, digest, dedicated placement, two-AZ spread at three replicas and disabled HPA. Acceptance requires unchanged environment metadata, raw samples and reviewed Grafana/UTC artifacts. No R1, R3, scaling ratio or measured p95 is available. Preparation passes 12 Python/native-k6-inspection tests, 12 native k6 loopback checks and schema validation of 40 Specification events, 5,000 Formula events and 20 tenant requests. [Experiment preparation PR #32](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/32), [latest preparation CI](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38124060497)
+
+## Availability and Pod Failover
+
+**NOT RUN.** The prepared controller requires an accepted same-environment R3 result and explicit deletion approval. It applies 50% of R3 to three replicas, observes 120s baseline, deletes one verified Deployment-owned Pod and retains at least 300s after the actual deletion. Analysis requires overall errors <1%, no continuous error-bucket run above 10s, sustained rolling-30s p95 recovery within 60s and a replacement Ready strictly before 180s. Missing telemetry or dropped arrivals invalidate the experiment.
+
+Offline synthetic samples test the analyzer, including late latency regression and the strict 180s boundary. Native k6 inspection validates the full scenario without sending requests. These checks establish tool behaviour only. No pod, node, AZ or regional availability result has been measured. M5 owns authorised window provisioning, teardown and cost/resource residue checks.
+
+## Bottleneck Analysis and Limitations
+
+The service's all-item derivation and response serialization may consume CPU; mutable metadata queries and shared MySQL connections may constrain scaling; gateway protective limits or the load generator may dominate before Compliance saturates. These are hypotheses. The preparation defines corroborating per-Pod CPU/throttling, MySQL query/connection/lock, Gateway/ALB, broker/outbox, generator and cache/GC observations. No bottleneck is asserted without the corresponding measurements.
+
+Remaining acceptance dependencies are M1 producer/starter mainline adoption and synthetic organisation import; M4 exact Label business-version provider, approved realm configuration/tokens and CONFIRMED-to-ReviewTask flow; M5 approved AWS window, budget/access, live placement and telemetry. Local runtime tests pass with actual MySQL/Rabbit and signed JWTs. CI on Java 21 passes for PR #28 and #30; PR #30 new-code Sonar coverage is 88.6%, above the unchanged 80% gate. No test or security threshold was weakened.
+
+## Traceability: Jira → PR → CI → Evidence
+
+The complete 19-subtask plus STCN-117 matrix, exact heads, CI links, existing/new PR distinction and dependency-resume instructions are maintained in [M2 delivery record](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/blob/feature/m2-report-delivery/docs/swe5001/M2-DELIVERY-20261011.md). Runtime evidence is committed in `docs/swe5001/evidence/G2-M2-20261011.md` and `G3-M2-20261011.md`; experiment evidence is in `G3-M2-experiments-20261011.md`. The report is a draft contribution ready for M1 integration, with cloud result sections deliberately unmeasured.
