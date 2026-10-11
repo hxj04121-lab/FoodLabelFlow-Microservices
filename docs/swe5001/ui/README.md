@@ -1,6 +1,6 @@
 # G0-M3：前端流程与线框图
 
-更新：2026-10-07。负责人：M3 Xu Feiyang；评审：M4 Zhu Wenyu。
+更新：2026-10-11。负责人：M3 Xu Feiyang；评审：M4 Zhu Wenyu。
 对应 [STCN-30](https://hxj04121.atlassian.net/browse/STCN-30)。G0 设计成果，待团队评审；不代表运行系统或 Jira 人工验收完成。
 
 ## 查看成果
@@ -26,7 +26,7 @@ python -m http.server 8765 --bind 127.0.0.1 --directory docs/swe5001
 | [G0-M3 工单](../../../.project-control/work-orders/G0/M3-ui-flows-gateway-routes.yaml) | 流程、消费者评审、路由草案的范围和验收 |
 | `frontend/src/app/Shell.tsx`、`frontend/src/api/labels.ts` | 现有导航与基线 DTO；不当作目标契约 |
 
-初稿依据 `6c757a62c04486ca9074714567930b028f9ee238`；10 月 7 日复核 main `56931b460029abe04ec3d61a35de106e36b6008e`，相关架构/工单未变。补审 M1 [PR #8](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/8) 的 `a788fa5fc815c34cb23cf219d5194d92a51937bb`，具体端点写入下表。所有候选契约仍待冻结，M4 角色/Label Workflow 契约尚缺。
+本次依据已合并 main `f08fd23a3f7dd21a5e435c872c3c0d71a53b64da`（PR #21）复核四份 OpenAPI、发布事件和 M4 realm 设计。角色映射与剩余公开读面按 [M1 决定](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/15#issuecomment-6106565508) 移交 G1。
 
 ## 登录前置流程
 
@@ -39,16 +39,16 @@ python -m http.server 8765 --bind 127.0.0.1 --directory docs/swe5001
 
 ## 七步演示映射
 
-接口列使用架构指定的路由域及 M1/M2 已提供的候选端点。它们仍在未合并 PR 中；M4 的具体端点未定。
+接口列对照 main 已合并契约；尚缺的读取入口显式标注，线框不代表运行实现。
 
 | 步骤 | proposal §6.7 内容 | 线框锚点 / 操作者 | 屏幕或 API / 系统观察点 | 下一步与约束 |
 |---|---|---|---|---|
-| 1 | 供应商发布 soy-lecithin Specification V2 | `#step-1` / 供应商 | `POST /api/specifications/versions` 创建；`POST /api/specifications/versions/{specificationVersionId}/release` 发布（PR #8 候选） | V1 只读，另建 V2；服务分配版本号，仅本组织可发布 |
+| 1 | 供应商发布 soy-lecithin Specification V2 | `#step-1` / 供应商 | `POST /api/specifications/versions` 创建；`POST /api/specifications/versions/{specificationVersionId}/release` 发布（已合并） | V1 只读，另建 V2；服务分配版本号，仅本组织可发布 |
 | 2 | SpecificationPublished 传播 | `#step-2` / 系统，由演示人员观察 | 展示事件证据与关联 ID；从日志/看板核对 outbox → RabbitMQ → 投影 | 浏览器不直连 broker，不引入中心审计 API；投影延迟显示等待 |
 | 3 | 匹配使用 V1 的配方，显示 POTENTIAL | `#step-3` / 制造商 | `GET /api/compliance/impact-findings` 和 `GET /api/compliance/impact-findings/{findingId}` | 显示 required/declared/missing/unresolved；不自动改配方，不创建 ReviewTask |
-| 4 | 制造商发布采用 V2 的配方 | `#step-4` / 制造商 | `POST /api/formulations/formula-versions` 创建；`POST /api/formulations/formula-versions/{formulaVersionId}/release` 发布（PR #8 候选） | 完整保留其他 item；发布 body 带读取到的 expectedCurrentFormulaVersionId；冲突后重新确认 |
+| 4 | 制造商发布采用 V2 的配方 | `#step-4` / 制造商 | `POST /api/formulations/formula-versions` 创建；`POST /api/formulations/formula-versions/{formulaVersionId}/release` 发布（已合并） | 完整保留其他 item；发布 body 带读取到的 expectedCurrentFormulaVersionId；冲突后重新确认 |
 | 5 | CONFIRMED + REVIEW_REQUIRED 打开审核任务 | `#step-5` / 制造商 | Compliance finding 详情 + `/api/labels/**` 下的 ReviewTask 查询，待 M4 契约 | 由 Label Workflow 消费事件建任务；到达前显示等待，不在前端伪造任务 |
-| 6 | 草稿、校验、提交、maker-checker 审批、原子发布 | `#step-6`、`#reviewer`、`#publication` / 标签编辑者、不同审批人、发布者 | 所有用户操作经 `/api/labels/**`；LW 内部调用 `POST /internal/validations` | 精确版本元组 PASSED 才提交；创建者不能批准自己；APPROVED 才发布 |
+| 6 | 草稿、校验、提交、maker-checker 审批、原子发布 | `#step-6`、`#reviewer`、`#publication` / 标签编辑者、不同审批人、发布者 | `POST /api/labels/drafts`；`POST /{labelVersionId}/validations`、`/submit`、`/decisions`、`/publish`（suffix 均在 /api/labels 下）；LW 内部调用 validations | 精确版本元组 PASSED 才提交；创建者不能批准自己；APPROVED 才发布 |
 | 7 | LabelPublished 更新 Compliance 投影 | `#step-7` / 系统，由演示人员观察 | 当前标签由 LW 读取；事件与关联 ID 在日志/看板取证，随后刷新 finding | 历史 finding 不改写；投影就绪后重新评估，不能声称原 finding 被即时清除 |
 
 ## 屏幕状态与业务保护
@@ -65,7 +65,7 @@ python -m http.server 8765 --bind 127.0.0.1 --directory docs/swe5001
 
 错误展示保留 `code`、`message`、`traceId`、`evidenceId`（后两项可为空）；响应关联 ID 单独显示用于支持排查。429 按服务返回的 Retry-After（若有）等待，避免自动重放写操作。
 
-PR #8 的 Formulation 隐藏跨组织资源时返回404，与架构的403要求尚未统一。UI 对404显示“资源不存在或不可访问”，对403显示权限不足；两者都不能展示目标内容。确定状态码后再固定负向 E2E 断言。配方每项 quantity/unit 必须同时有值或同时为 null；当前候选不提供草稿 PUT/PATCH，不能把线框说明解释成已有保存编辑 API。
+main 已统一跨组织403、不存在404；两者都不展示目标内容。配方每项 quantity/unit 必须同时有值或同时为 null。公开契约未提供草稿 PUT/PATCH、声明编辑、ReviewTask lookup、current/history；这些画面是后续设计要求，不表示现有接口可直接实现。详细字段边界见消费者核对表。
 
 ## 线框走查脚本
 
@@ -96,14 +96,16 @@ PR #8 的 Formulation 隐藏跨组织资源时返回404，与架构的403要求�
 | 视觉检查 | 宽/窄屏入口画面已截图检查；其余画面以 DOM、链接走查和源代码核对为证。检测器无机械问题；独立设计审查结论为适合本地 G0 评审 |
 | 尚未验证 | 真实 Keycloak/API/事件、staging、人工验收、打印输出、完整键盘操作，以及所有后续画面的逐屏截图验收 |
 
-这些检查验证设计稿的完整性与可浏览性，不替代 G1/G2/G3 的运行测试。STCN-30/32 本地成果可供 M4 评审；STCN-31 仍是部分评审，PR 评论尚未发表。
+这些历史检查验证设计稿的完整性与可浏览性，不替代运行测试。
 
-2026-10-07 补审检查：PR #8 的10个 Specification、8个 Formulation 候选操作已用于字段/流程核对；本次39个本地链接/锚点、22个唯一 HTML ID、七步顺序和六组架构路由检查通过，`git diff --check` 通过。M2 的三份已审 HTTP/payload/types 文件与10月3日版本无差异。此次仅更新文档与线框注释，未重跑10月3日浏览器走查，也未执行后端或真实认证测试。
+## 2026-10-11 G0 收尾
 
-## 尚需团队决定
+| 子任务 | 本次交付 | 验收边界 |
+|---|---|---|
+| STCN-30 | 七步线框、屏幕状态和 API 映射；更新 M4 已合并端点与403说明 | 待 M4 人工走查验收 |
+| STCN-31 | 四份合并 OpenAPI 的页面字段核对、C-01..08 结论和契约 PR 反馈 | 不代表后续公开读面或角色联调完成 |
+| STCN-32 | 六组架构 prefix、CORS origin/headers 与内部路径边界草案 | G0 是设计交付，网关实现不在本次提交 |
 
-- M1：PR #8 候选已覆盖规格/配方公开 DTO、版本详情与 create/release；跟进合并、跨组织404/403及 component 证据定位，确认最终 demo 种子。
-- M2：inbox 列表的时间字段/显示名称策略；更多字段见消费者核对表。
-- M4：角色/claim 映射，LW 草稿、校验、ReviewTask、decision、publication 契约。
-- M5：Pages 实际 origin、固定网关域名、staging 窗口；见路由草案。
-- M4 人工走查后才能记录正式验收；本次不更改 Jira 状态或其他成员的契约。
+本次 Node 24 下 `npm ci --ignore-scripts`、`npm run check:integration` 通过（M1/M2/M4、canonical envelope、UNRESOLVED source、HTTP compatibility）。安装报告现有依赖有9项审计告警（3 moderate、6 high）；本次文档提交未改依赖，不宣称已修复这些告警。本次静态检查通过：22个唯一 ID、31个 HTML 链接、七步顺序正确且无 script。浏览器九个演示链接均跳转正确；创建者审批按钮保持禁用。六组路由与架构一致，git diff --check 通过。本次未重做窄屏/打印或真实服务测试。
+
+M1 已把公开读取接口、adapter、角色映射移交 G1/STCN-51；此处仅记录交接，不进行 G1 实现。M4/M5 的部署域名、issuer/audience、回调与正式人工验收仍需各负责人记录。未修改 Jira 状态。
