@@ -62,7 +62,7 @@ check('fixed three-replica placement requires c6i.large and compliance group',()
   const pod=dep.spec.template.spec;
   assert.deepEqual(pod.nodeSelector,{'eks.amazonaws.com/nodegroup':'compliance','node.kubernetes.io/instance-type':'c6i.large'});
   assert.deepEqual(pod.containers[0].resources,{requests:{cpu:'1',memory:'2Gi'},limits:{cpu:'1',memory:'2Gi'}});
-  assert(pod.tolerations.some(t=>t.key==='dedicated'&&t.value==='compliance'&&t.effect==='NoSchedule'));
+  assert(pod.tolerations.some(t=>t.key==='workload'&&t.value==='compliance'&&t.effect==='NoSchedule'));
   const zone=pod.topologySpreadConstraints.find(t=>t.topologyKey==='topology.kubernetes.io/zone');
   assert.equal(zone.minDomains,2);assert.equal(zone.maxSkew,1);assert.equal(zone.whenUnsatisfiable,'DoNotSchedule');
   const host=pod.topologySpreadConstraints.find(t=>t.topologyKey==='kubernetes.io/hostname');
@@ -93,4 +93,14 @@ check('empty ingress/egress values render explicit deny rules',()=>{
   const np=docs.find(d=>d.kind==='NetworkPolicy');
   assert.deepEqual(np.spec.ingress,[]);assert.deepEqual(np.spec.egress,[]);
 });
+
+
+check('immutable image digest renders by digest',()=>{
+  const digest='sha256:'+'a'.repeat(64);
+  const docs=render('compliance',['--set','image.digest='+digest]);
+  const deployment=docs.find(d=>d.kind==='Deployment');
+  assert(deployment.spec.template.spec.containers[0].image.endsWith('@'+digest));
+});
+check('invalid image digest is rejected',()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'--set','image.digest=sha256:short'],false));
+
 console.log(`${count} Helm checks passed. Rendered constraints are not live pod-placement evidence.`);

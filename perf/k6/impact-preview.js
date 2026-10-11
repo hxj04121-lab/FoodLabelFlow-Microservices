@@ -13,8 +13,10 @@ if (dry && !/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(baseUrl)) {
 const cases = new SharedArray('preview cases', () => JSON.parse(open(__ENV.REQUEST_FILE || 'fixtures/local-preview.json')).cases);
 if (!cases.length) throw new Error('Request fixture must contain at least one reviewed case.');
 const tokens = dry ? {} : JSON.parse(__ENV.AUTH_TOKENS_JSON || '{}');
+const failover = !dry && __ENV.EXPERIMENT === 'failover';
 const rate = dry ? 2 : Number(__ENV.RATE);
-if (!dry && (!targets.arrivalRatesPerSecond.includes(rate) || !__ENV.TRIAL_ID || !['1', '3'].includes(__ENV.REPLICAS))) {
+if (failover && (Number(__ENV.CAPACITY_3) <= 0 || rate !== Number(__ENV.CAPACITY_3) * targets.failover.loadFractionOfMeasuredThreeReplicaCapacity || __ENV.REPLICAS !== '3')) throw new Error('Failover requires three replicas and 50% of measured capacity.');
+if (!dry && (!(failover ? targets.arrivalRatesPerSecond.includes(rate * 2) : targets.arrivalRatesPerSecond.includes(rate)) || !__ENV.TRIAL_ID || !['1', '3'].includes(__ENV.REPLICAS))) {
   throw new Error('Runtime candidate requires a predeclared RATE, TRIAL_ID and REPLICAS=1|3.');
 }
 if (!dry && cases.some(c => !tokens[c.request.organisationId])) {
@@ -28,6 +30,8 @@ export const options = {
   scenarios: dry ? {
     dry_run: { executor: 'ramping-arrival-rate', startRate: rate, timeUnit: '1s', preAllocatedVUs: slots,
       maxVUs: slots * 2, stages: [{ duration: '5s', target: rate }], gracefulStop: '3s' },
+  } : failover ? {
+    failover: {executor: 'constant-arrival-rate', rate: rate * 2, timeUnit: '2s', duration: `${targets.failover.preKillSeconds + targets.failover.postKillSeconds + 10}s`, preAllocatedVUs: slots, maxVUs: slots * 2, gracefulStop: '3s'},
   } : {
     warmup: { executor: 'constant-arrival-rate', rate: 1, timeUnit: '1s', duration: `${targets.warmupSeconds}s`,
       preAllocatedVUs: 3, maxVUs: 6, gracefulStop: '0s' },
@@ -83,7 +87,7 @@ function validPreview(response, body, fixture, correlation) {
     body.findings.every(f => validFinding(f, fixture.request) && fixture.expected.findings.some(e => e.findingId === f.findingId && e.outcome === f.outcome));
 }
 function phase() {
-  if (dry) return 'hold';
+  if (dry || failover) return 'hold';
   if (exec.scenario.name === 'warmup') return 'warmup';
   const elapsed = (Date.now() - exec.scenario.startTime) / 1000;
   return elapsed < targets.rateRampSeconds ? 'ramp' : elapsed < targets.rateRampSeconds + targets.settleSeconds ? 'settle' : 'hold';

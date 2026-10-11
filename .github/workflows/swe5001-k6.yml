@@ -1,10 +1,10 @@
 name: SWE5001 k6 local stub
 on:
   pull_request:
-    paths: ['perf/k6/**', 'contracts/**', 'docs/swe5001/test-plan-G0-M2-targets.v1.json', '.github/workflows/swe5001-k6.yml']
+    paths: ['perf/k6/**', 'perf/g3/**', 'contracts/**', 'docs/swe5001/test-plan-G0-M2-targets.v1.json', '.github/workflows/swe5001-k6.yml']
   push:
-    branches: ['feature/stcn-50-*']
-    paths: ['perf/k6/**', '.github/workflows/swe5001-k6.yml']
+    branches: ['feature/stcn-50-*', 'feature/g3-m2-*']
+    paths: ['perf/k6/**', 'perf/g3/**', '.github/workflows/swe5001-k6.yml']
 permissions:
   contents: read
 jobs:
@@ -31,10 +31,17 @@ jobs:
       - name: Run fixture checks and actual k6 against loopback stub
         working-directory: perf/k6
         run: npm ci --ignore-scripts --no-audit --no-fund && npm test
+      - name: Verify deterministic dataset, capacity and failover tooling offline
+        run: |
+          python -m unittest discover -s perf/g3 -v
+          python perf/g3/experiment.py dataset perf/g3/.evidence/dataset --commit "$GITHUB_SHA"
+          node perf/g3/validate-dataset.mjs perf/g3/.evidence/dataset
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: k6-local-evidence
-          path: perf/k6/.evidence/
+          path: |
+            perf/k6/.evidence/
+            perf/g3/.evidence/
           include-hidden-files: true
           if-no-files-found: error
