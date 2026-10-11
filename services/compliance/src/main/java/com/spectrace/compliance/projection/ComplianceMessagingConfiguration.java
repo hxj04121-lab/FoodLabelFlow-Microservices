@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class ComplianceMessagingConfiguration {
 
-    static final String SPEC_QUEUE = "compliance.specification-published.v1";
-    static final String FORMULA_QUEUE = "compliance.formula-published.v1";
-    static final String LABEL_QUEUE = "compliance.label-published.v1";
+    static final String SPEC_QUEUE = "compliance.specification-published";
+    static final String FORMULA_QUEUE = "compliance.formula-published";
+    static final String LABEL_QUEUE = "compliance.label-published";
 }

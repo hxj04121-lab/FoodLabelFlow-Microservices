@@ -47,3 +47,11 @@ Red-team review found and repaired ambiguous private cache keys, unverified Form
 - M5 must supply an approved AWS window, budget/access and deployed services. No live cloud or paid resource action was run.
 
 Current Jira plan: G2/G3 integration October 13–14, feature freeze October 14, report draft October 15 23:59. Older work-order dates are historical.
+
+## October 11 review follow-up: active main delivery
+
+M1 identified that #13/#24/#28/#30 were merged into retired intermediate branches rather than main. `feature/g3-m2-mainline` is a new main-targeted delivery branch, preserving those existing commits and current main through ordinary merges. Peer M4 security/realm and #33 reviews must be accepted before merging this delivery branch; their presence here does not approve them. The experiment/report chain must target this active branch rather than the closed G3 branch.
+
+Compliance now consumes `compliance.specification-published`, `compliance.formula-published` and `compliance.label-published`, matching M5 #39 at f191198. Routing keys stay `specification.published.v1`, `formula.published.v1` and `label.published.v1`; the idempotent consumer ledger IDs stay versioned. The real Rabbit fixture declares the external queue names independently of listener constants so an accidental `.v1` queue suffix cannot silently pass. Local fixture policies are supplied by the starter; production topology/policies and the M5 ImpactFinding routing correction require separate owner/staging acceptance.
+
+Current M5 #27 at 6fb4060 and main both use `dedicated=compliance:NoSchedule`. The stack retains that exact toleration, rejects the obsolete `workload` key and preserves image digest support; 19 native Helm checks pass. AWS load, failover, placement and measured bottleneck acceptance remain BLOCKED / NOT RUN.
