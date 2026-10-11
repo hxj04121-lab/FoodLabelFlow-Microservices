@@ -38,6 +38,36 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  platform-services:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify starter and service skeletons with MySQL Testcontainers
+        run: mvn -B -ntp verify
+      - name: Upload platform and service coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-coverage
+          path: |
+            platform/starter/target/site/jacoco/jacoco.xml
+            services/*/target/site/jacoco/jacoco.xml
+          if-no-files-found: error
+      - name: Upload platform and service test reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-test-reports
+          path: |
+            platform/starter/target/surefire-reports/**
+            services/*/target/surefire-reports/**
+          if-no-files-found: ignore
+          retention-days: 14
+
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -97,7 +127,7 @@ jobs:
     # Waiting on a short-lived branch push fails with a misleading
     # "Not authorized or project not found" error after a successful upload.
     if: ${{ vars.SONARQUBE_ENABLED == 'true' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') }}
-    needs: [backend, frontend]
+    needs: [backend, frontend, platform-services]
     permissions:
       contents: read
     steps:
@@ -121,6 +151,13 @@ jobs:
         with:
           name: backend-coverage
           path: backend/target/site/jacoco
+      - name: Compile platform and services for analysis
+        run: mvn -B -ntp -DskipTests package
+      - name: Download platform and service coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: platform-coverage
+          path: .
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci

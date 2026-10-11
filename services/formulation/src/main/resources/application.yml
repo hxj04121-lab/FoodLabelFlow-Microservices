@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: formulation
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/formulation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME:formulation}
+    password: ${SPRING_DATASOURCE_PASSWORD:local-only-formulation}
+  flyway:
+    locations: classpath:db/migration
+  jdbc:
+    template:
+      query-timeout: 5s
+server:
+  port: ${SERVER_PORT:8080}
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db
