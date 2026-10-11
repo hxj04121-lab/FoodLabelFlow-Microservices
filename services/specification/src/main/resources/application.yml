@@ -17,6 +17,16 @@ spring:
   jdbc:
     template:
       query-timeout: 5s
+  jackson:
+    deserialization:
+      # Request bodies are closed objects in the contract (additionalProperties: false).
+      fail-on-unknown-properties: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Keycloak realm issuer; the decoder is created lazily, so the service starts without Keycloak.
+          issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8180/realms/spectrace}
 server:
   port: ${SERVER_PORT:8080}
 management:

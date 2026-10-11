@@ -32,6 +32,17 @@ public class IdempotentConsumer {
 
     public enum Outcome { APPLIED, DUPLICATE, STALE }
 
+    /** How a consumer treats versions of the same aggregate. */
+    public enum Versions {
+        /** Latest-state projections: an aggregateVersion not newer than the last applied one is STALE. */
+        LATEST_ONLY,
+        /**
+         * Projections that keep every version (for example the released-specification set that formulas
+         * may pin): events are deduplicated by eventId only, so an older version arriving late is applied.
+         */
+        ALL
+    }
+
     /** Domain handling of one event, run inside the consumer's transaction. */
     @FunctionalInterface
     public interface Handler {
@@ -51,6 +62,10 @@ public class IdempotentConsumer {
     }
 
     public Outcome consume(String consumer, Message message, Handler handler) {
+        return consume(consumer, message, Versions.LATEST_ONLY, handler);
+    }
+
+    public Outcome consume(String consumer, Message message, Versions versions, Handler handler) {
         EventEnvelope event;
         try {
             event = EventEnvelope.parse(message.getBody(), json);
@@ -59,22 +74,26 @@ public class IdempotentConsumer {
                     exception.getMessage());
             throw new AmqpRejectAndDontRequeueException("Malformed event envelope", exception);
         }
-        return consume(consumer, event, handler);
+        return consume(consumer, event, versions, handler);
     }
 
     public Outcome consume(String consumer, EventEnvelope event, Handler handler) {
+        return consume(consumer, event, Versions.LATEST_ONLY, handler);
+    }
+
+    public Outcome consume(String consumer, EventEnvelope event, Versions versions, Handler handler) {
         if (consumer == null || consumer.isBlank() || consumer.length() > 100) {
             throw new IllegalArgumentException("consumer name is required (at most 100 characters)");
         }
         try (CorrelationId.Scope ignored = CorrelationId.bind(event.correlationId())) {
-            Outcome outcome = transactions.execute(status -> apply(consumer, event, handler));
+            Outcome outcome = transactions.execute(status -> apply(consumer, event, versions, handler));
             log.info("{} {} {} for aggregate {} v{}", consumer, outcome, event.eventType(), event.aggregateId(),
                     event.aggregateVersion());
             return outcome;
         }
     }
 
-    private Outcome apply(String consumer, EventEnvelope event, Handler handler) {
+    private Outcome apply(String consumer, EventEnvelope event, Versions versions, Handler handler) {
         Timestamp now = Timestamp.from(clock.instant());
         // The primary key makes a concurrent or later redelivery wait for this transaction, then fail as a duplicate.
         try {
@@ -87,6 +106,10 @@ public class IdempotentConsumer {
             // Only this deduplication key is a successful redelivery. A handler or aggregate-version
             // constraint failure must escape the transaction so AUTO acknowledgement can retry/DLQ.
             return Outcome.DUPLICATE;
+        }
+        if (versions == Versions.ALL) {
+            handler.handle(event);
+            return Outcome.APPLIED;
         }
         List<Long> applied = jdbc.queryForList("""
                 SELECT aggregate_version FROM consumed_aggregate_version
