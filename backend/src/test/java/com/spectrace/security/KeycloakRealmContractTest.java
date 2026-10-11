@@ -294,6 +294,16 @@ class KeycloakRealmContractTest {
     }
 
     @Test
+    @DisplayName("access tokens include the immutable Keycloak subject")
+    void accessTokensCarryAnImmutableSubject() {
+        JsonNode subjectMapper = findMapper(identityClaimScope, "subject");
+        assertEquals("oidc-sub-mapper", subjectMapper.path("protocolMapper").asText(),
+                "sub must come from Keycloak's user id, never a username or request parameter");
+        assertEquals("true", subjectMapper.path("config").path("access.token.claim").asText());
+        assertEquals("true", subjectMapper.path("config").path("introspection.token.claim").asText());
+    }
+
+    @Test
     @DisplayName("access tokens carry the shared resource audience, minted for the external issuer")
     void accessTokensCarryTheSharedAudience() {
         JsonNode audienceMapper = findMapper(identityClaimScope, "spectrace-api-audience");
