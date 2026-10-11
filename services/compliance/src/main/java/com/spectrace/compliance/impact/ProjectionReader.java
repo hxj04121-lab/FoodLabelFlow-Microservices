@@ -54,25 +54,32 @@ public class ProjectionReader {
     }
 
     public List<Label> currentLabels(String organisation, String product) {
+        return currentLabelRows(organisation, product).stream().map(ProductLabel::label).toList();
+    }
+
+    public Map<String, List<Label>> currentLabelsByProduct(String organisation) {
+        return currentLabelRows(organisation, null).stream().collect(java.util.stream.Collectors.groupingBy(
+                ProductLabel::product, java.util.stream.Collectors.mapping(ProductLabel::label, java.util.stream.Collectors.toList())));
+    }
+
+    private List<ProductLabel> currentLabelRows(String organisation, String product) {
         return jdbc.query("""
-                SELECT l.label_version_id, l.formula_version_id, l.version_number, l.rule_set_version_id, l.jurisdiction_code
-                FROM label_version_projection l WHERE l.organisation_id = ? AND l.product_id = ? AND NOT EXISTS (
+                SELECT l.label_version_id, l.formula_version_id, l.version_number, l.rule_set_version_id, l.jurisdiction_code, l.product_id
+                FROM label_version_projection l WHERE l.organisation_id = ? AND (? IS NULL OR l.product_id = ?) AND NOT EXISTS (
                     SELECT 1 FROM label_version_projection newer WHERE newer.organisation_id = l.organisation_id
                     AND newer.product_id = l.product_id AND newer.jurisdiction_code = l.jurisdiction_code
                     AND (newer.released_at > l.released_at OR (newer.released_at = l.released_at
                          AND newer.label_version_id > l.label_version_id)))
-                ORDER BY l.jurisdiction_code
+                ORDER BY l.product_id, l.jurisdiction_code
                 """, (rs, n) -> {
-                    String labelId = rs.getString(1);
-                    String formulaId = rs.getString(2);
-                    int versionNumber = rs.getInt(3);
-                    String ruleSetId = rs.getString(4);
-                    String jurisdiction = rs.getString(5);
-                    return cache.get(privateKey("label", organisation, labelId), () -> new Label(
-                            new LabelVersion(organisation, labelId, versionNumber, formulaId,
-                                    Set.copyOf(jdbc.queryForList("SELECT allergen_id FROM label_declaration_projection WHERE label_version_id = ?",
-                                            String.class, labelId))), ruleSetId, jurisdiction));
-                }, organisation, product);
+                    String labelId = rs.getString(1), formulaId = rs.getString(2), rules = rs.getString(4), jurisdiction = rs.getString(5);
+                    int version = rs.getInt(3);
+                    var label = cache.get(privateKey("label", organisation, labelId), () -> new Label(
+                            new LabelVersion(organisation, labelId, version, formulaId, Set.copyOf(jdbc.queryForList(
+                                    "SELECT allergen_id FROM label_declaration_projection WHERE label_version_id = ?", String.class, labelId))),
+                            rules, jurisdiction));
+                    return new ProductLabel(rs.getString(6), label);
+                }, organisation, product, product);
     }
 
     public RuleSetVersion rules(String id, String jurisdiction) {
@@ -104,5 +111,6 @@ public class ProjectionReader {
     }
     public record Specification(String organisationId, String materialId, SpecificationVersion version) { }
     public record Label(LabelVersion version, String ruleSetId, String jurisdiction) { }
+    private record ProductLabel(String product, Label label) { }
     private record SpecificationHeader(String organisationId, String materialId, int versionNumber, String previousId) { }
 }

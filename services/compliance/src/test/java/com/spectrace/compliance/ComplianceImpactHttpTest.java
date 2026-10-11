@@ -56,6 +56,7 @@ class ComplianceImpactHttpTest {
         registry.add("spectrace.security.jwk-set-uri", () -> "http://127.0.0.1:" + JWKS.getAddress().getPort() + "/jwks");
         registry.add("spectrace.security.audience", () -> "compliance-test");
     }
+    @org.junit.jupiter.api.AfterAll static void stopJwks() { JWKS.stop(0); }
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbc;
     @Autowired JsonMapper json;
@@ -64,6 +65,7 @@ class ComplianceImpactHttpTest {
     @Autowired ImpactFindingProjectionService impacts;
     @Autowired ProjectionReader reader;
     @Autowired PlatformTransactionManager transactions;
+    @Autowired org.springframework.amqp.rabbit.core.RabbitTemplate rabbit;
     private final HttpClient client = HttpClient.newHttpClient();
 
     private String token(Object org, String type, List<String> roles, String audience, Instant expires) throws Exception {
@@ -80,6 +82,10 @@ class ComplianceImpactHttpTest {
         var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).timeout(Duration.ofSeconds(15))
                 .header("X-Correlation-ID", "g3-http-test").header("Content-Type", "application/json");
         if (token != null) request.header("Authorization", "Bearer " + token);
+        if (path.equals("/internal/validations") && body != null) {
+            var snapshot = json.readTree(body);
+            request.header("Idempotency-Key", snapshot.get("labelVersionId").asString() + ":" + snapshot.get("draftRevision").asInt());
+        }
         if (body != null) request.POST(HttpRequest.BodyPublishers.ofString(body));
         return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
@@ -159,6 +165,45 @@ class ComplianceImpactHttpTest {
             assertThat(request("/api/compliance/impact-findings?" + query, auth, null).statusCode()).isEqualTo(400);
         assertThat(request("/api/compliance/impact-findings/missing", auth, null).statusCode()).isEqualTo(404);
         assertThat(body(request("/api/compliance/impact-findings?kind=CONFIRMED", auth, null)).get("items").isEmpty()).isTrue();
+    }
+
+    @Test void realRabbitConsumerCommitsOnceAndDeadLettersUnavailableAdoptionWithoutPartialWrites() throws Exception {
+        var f = fixture();
+        var event = adoption(f);
+        var message = new org.springframework.amqp.core.Message(json.writeValueAsBytes(event.toJson(json)));
+        rabbit.send("spectrace.events", "formula.published.v1", message);
+        org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(20)).untilAsserted(() ->
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM impact_finding_projection WHERE organisation_id = ? AND kind='CONFIRMED'", Integer.class, f.org())).isEqualTo(1));
+        rabbit.send("spectrace.events", "formula.published.v1", message);
+        org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM processed_event WHERE event_id = ?", Integer.class, event.eventId())).isEqualTo(1));
+        var poisonFixture = fixture();
+        var poison = adoption(poisonFixture);
+        var payload = (ObjectNode) poison.payload();
+        ((ObjectNode) payload.get("previousFormulaVersion")).put("id", "unavailable-predecessor");
+        rabbit.send("spectrace.events", "formula.published.v1", new org.springframework.amqp.core.Message(json.writeValueAsBytes(poison.toJson(json))));
+        org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+            var dead = rabbit.receive("compliance.formula-published.v1.dlq", 1000);
+            assertThat(dead).isNotNull();
+            assertThat(json.readTree(dead.getBody()).get("eventId").asString()).isEqualTo(poison.eventId());
+            assertThat(dead.getMessageProperties().getHeaders()).containsKey("x-death");
+        });
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM formula_version_projection WHERE formula_version_id = ?", Integer.class, poisonFixture.newFormula())).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM processed_event WHERE event_id = ?", Integer.class, poison.eventId())).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM impact_finding_projection WHERE organisation_id = ? AND kind='CONFIRMED'", Integer.class, poisonFixture.org())).isZero();
+    }
+
+    @Test void verifiedActorCanValidateOverHttpAndReplayExactPersistedRun() throws Exception {
+        var f = fixture();
+        String snapshot = json.writeValueAsString(Map.of("organisationId", f.org(), "labelVersionId", f.label(), "versionNumber", 7,
+                "draftRevision", 1, "formulaVersionId", f.oldFormula(), "jurisdiction", "US", "ruleSetVersionId", "rules_us_v1", "declarations", List.of()));
+        var first = request("/internal/validations", token(f.org()), snapshot);
+        assertThat(first.statusCode()).as(first.body()).isEqualTo(201);
+        assertThat(body(first).get("status").asString()).isEqualTo("PASSED");
+        var replay = request("/internal/validations", token(f.org()), snapshot);
+        assertThat(replay.statusCode()).isEqualTo(200);
+        assertThat(body(replay).get("validationRunId")).isEqualTo(body(first).get("validationRunId"));
+        assertThat(request("/internal/validations", token("other-org"), snapshot).statusCode()).isEqualTo(403);
     }
 
     private Fixture fixture() throws Exception {

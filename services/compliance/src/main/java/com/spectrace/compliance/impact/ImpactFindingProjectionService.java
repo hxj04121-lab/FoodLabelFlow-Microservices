@@ -48,8 +48,9 @@ public class ImpactFindingProjectionService {
         var ruleSet = reader.rules(rules, jurisdiction);
         var knowledge = reader.knowledge(rules);
         var findings = new java.util.ArrayList<ImpactFinding>();
+        var currentLabels = reader.currentLabelsByProduct(organisation);
         for (var formula : affected(previous.version().id(), organisation)) {
-            var labels = reader.currentLabels(organisation, formula.productId()).stream()
+            var labels = currentLabels.getOrDefault(formula.productId(), List.of()).stream()
                     .filter(label -> label.jurisdiction().equals(jurisdiction)).toList();
             if (labels.isEmpty()) throw ProjectionReader.unavailable();
             var label = labels.getFirst();
