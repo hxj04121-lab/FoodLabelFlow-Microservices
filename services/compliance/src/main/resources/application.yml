@@ -9,6 +9,10 @@ spring:
     # Starter tables (outbox, local_audit, processed_event, consumed_aggregate_version) are V0_x;
     # this service's own migrations in db/migration start at V1.
     locations: classpath:db/spectrace-platform,classpath:db/migration
+    fail-on-missing-locations: true
+    validate-on-migrate: true
+    baseline-on-migrate: false
+    clean-disabled: true
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
