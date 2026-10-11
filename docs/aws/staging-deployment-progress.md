@@ -11,6 +11,7 @@ Updated: 2026-10-11 (Asia/Shanghai). This report records observed repository, Gi
 - PR #27 provides a separate S3 state-bootstrap stack, two-AZ VPC, one NAT Gateway, private EKS nodes, private Multi-AZ MySQL, internal-by-default ALB, GitHub OIDC plan role, and a manual read-only plan workflow. It has no Apply role or Apply workflow.
 - The Terraform validation workflow for PR #27 passed `fmt`, `init -backend=false`, and `validate` on 2026-10-11. A local run also passed these commands. The root `terraform test` found no root-level tests; the OIDC module test is under separate verification.
 - PR #10 has the PR #18 fail-closed reusable budget gate in its updated branch, removes temporary-branch CI triggers, refreshes its AWS public-price snapshot, and makes an unverified quota result exit nonzero. Budget tests cover missing, invalid, insufficient, and sufficient credit, and the real reusable workflow caller.
+- The PR #10 gate checks explicit available AWS credit against modeled window cost; it does not yet verify the requested USD 120 AWS Budget, account month-to-date cost, or forecast. This part of the requested monthly budget gate remains incomplete even after PR #10 is reviewed.
 - Planning-only cost model (not a live quote or account charge): $4.89 for an 8-hour EKS/RDS/ALB window, or $5.87 with 20% reserve; $118.56 is a high-use 7-day model with four compliance nodes and a separate k6 host plus reserve. Refresh pricing and rerun the gate for the approved plan and hours.
 
 ## Pull requests
