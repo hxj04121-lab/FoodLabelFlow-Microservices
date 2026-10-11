@@ -96,7 +96,7 @@ class SpecificationApiTest {
         assertThat(spec.status()).isEqualTo(200);
         assertThat(spec.body().get("versionNumber").asInt()).isEqualTo(1);
         assertThat(spec.body().get("lifecycleStatus").asString()).isEqualTo("RELEASED");
-        assertThat(spec.body().get("organisationId").asString()).isEqualTo("supplier_chocolate_demo");
+        assertThat(spec.body().get("organisationId").asString()).isEqualTo("org-supplier-beta");
         assertThat(spec.body().get("releasedAt").asString()).isEqualTo("2026-01-01T09:00:00Z");
         assertThat(spec.body().get("components").findValuesAsString("specComponentId"))
                 .containsExactly("sc_chocolate_v1_cocoa", "sc_chocolate_v1_sugar");
@@ -104,7 +104,7 @@ class SpecificationApiTest {
 
         Response suppliers = call("GET", "/api/specifications/suppliers", MANUFACTURER, null);
         assertThat(suppliers.body().get("items").findValuesAsString("organisationId"))
-                .containsExactlyInAnyOrder("supplier_base_demo", "supplier_chocolate_demo");
+                .containsExactlyInAnyOrder("org-supplier-alpha", "org-supplier-beta");
         assertThat(call("GET", "/api/specifications/ingredients?q=soy", MANUFACTURER, null).body().get("items")
                 .findValuesAsString("ingredientId")).containsExactly("ing_soy_lecithin");
         assertThat(call("GET", "/api/specifications/suppliers/sup_missing", MANUFACTURER, null).status()).isEqualTo(404);
@@ -176,7 +176,7 @@ class SpecificationApiTest {
         assertThat(validate("events/specification-published.v1.schema.json", event)).isEmpty();
         assertThat(event.get("eventType").asString()).isEqualTo("SpecificationPublished.v1");
         assertThat(event.get("producer").asString()).isEqualTo("specification-service");
-        assertThat(event.get("organisationId").asString()).isEqualTo("supplier_chocolate_demo");
+        assertThat(event.get("organisationId").asString()).isEqualTo("org-supplier-beta");
         assertThat(event.get("aggregateVersion").asInt()).isEqualTo(released.body().get("versionNumber").asInt());
         JsonNode payload = event.get("payload");
         assertThat(payload.get("specificationVersion").get("id").asString()).isEqualTo(id);
@@ -268,7 +268,7 @@ class SpecificationApiTest {
                 {"supplierId":"sup_chocolate_demo","materialCode":"DARK_70","materialName":"Dark Chocolate 70%","provenanceId":"prov_project_seed"}""";
         Response created = call("POST", "/api/specifications/materials", CHOCOLATE_AUTHOR, body);
         assertThat(created.status()).as(created.raw()).isEqualTo(201);
-        assertThat(created.body().get("organisationId").asString()).isEqualTo("supplier_chocolate_demo");
+        assertThat(created.body().get("organisationId").asString()).isEqualTo("org-supplier-beta");
         assertThat(created.body().get("description").isNull()).isTrue();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM local_audit WHERE action = 'MATERIAL_CREATED'", Integer.class)).isPositive();
 
@@ -289,7 +289,7 @@ class SpecificationApiTest {
         NegativeAuthKit.endpoint(TOKENS, "POST", URI.create("http://localhost:" + port + "/api/specifications/versions"))
                 .jsonBody(draftBody("mat_milk_powder", LocalDate.now(ZoneOffset.UTC), "ing_milk_powder"))
                 .allowedCaller(BASE_AUTHOR)
-                .callerWithoutRole(Caller.of("base-viewer", "supplier_base_demo", "SUPPLIER", "AUDITOR"))
+                .callerWithoutRole(Caller.of("base-viewer", "org-supplier-alpha", "SUPPLIER", "AUDITOR"))
                 .callerFromOtherOrganisation(CHOCOLATE_AUTHOR)
                 .contentThatMustNotLeak("ing_milk_powder", "mat_milk_powder")
                 .verify();
@@ -297,7 +297,7 @@ class SpecificationApiTest {
 
     @Test
     void tokensWithoutOrganisationClaimsAreRejected() throws Exception {
-        Caller noOrganisationType = new Caller("x", "supplier_base_demo", "AUDITOR_ORG", List.of("SPEC_AUTHOR"));
+        Caller noOrganisationType = new Caller("x", "org-supplier-alpha", "AUDITOR_ORG", List.of("SPEC_AUTHOR"));
         assertThat(call("GET", "/api/specifications/suppliers", noOrganisationType, null).status()).isEqualTo(403);
         assertThat(call("GET", "/api/specifications/suppliers", null, null).status()).isEqualTo(401);
     }

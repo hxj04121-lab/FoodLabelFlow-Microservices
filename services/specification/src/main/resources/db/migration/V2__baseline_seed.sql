@@ -5,8 +5,8 @@ INSERT INTO provenance (provenance_id, source_type, source_dataset, source_recor
 ('prov_project_seed', 'PROJECT_SEEDED', 'SpecTrace SWE5006 v3 fixture', NULL, NULL, '2026-09-01', 'Project-seeded supplier/material/formula relationships for deterministic demo.', 'USDA product records do not publish supplier material relationships.', '2026-09-01 00:00:00', 'build_spectrace_v3_package.py');
 
 INSERT INTO supplier (supplier_id, organisation_id, supplier_code, supplier_name, provenance_id) VALUES
-('sup_chocolate_demo', 'supplier_chocolate_demo', 'CHOCO_SUP', 'Demo Chocolate Supplier', 'prov_project_seed'),
-('sup_base_demo', 'supplier_base_demo', 'BASE_SUP', 'Demo Base Ingredients Supplier', 'prov_project_seed');
+('sup_chocolate_demo', 'org-supplier-beta', 'CHOCO_SUP', 'Demo Chocolate Supplier', 'prov_project_seed'),
+('sup_base_demo', 'org-supplier-alpha', 'BASE_SUP', 'Demo Base Ingredients Supplier', 'prov_project_seed');
 
 INSERT INTO ingredient (ingredient_id, canonical_name, ingredient_kind, source_type, provenance_id) VALUES
 ('ing_chocolate', 'Chocolate Base Ingredient', 'COMPOUND', 'PROJECT_SEEDED', 'prov_project_seed'),

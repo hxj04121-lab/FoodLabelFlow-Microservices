@@ -2,9 +2,12 @@
 """Split the baseline catalog seed (backend V3__baseline_seed.sql at a3520e1) into the
 Specification and Formulation service seeds (G2-M1.3, STCN-66; architecture v3 section 7.4).
 
-IDs, version numbers and timestamps are preserved. Organisations are derived deterministically:
-each baseline supplier becomes a SUPPLIER organisation and each brand_owner (case-insensitive)
-a MANUFACTURER organisation. Re-running produces byte-identical output.
+IDs, version numbers and timestamps are preserved. Organisation IDs are the four Keycloak realm
+organisations (deploy/keycloak/realm/spectrace-realm.json), because org_id in the token is the
+BR-11 ownership key: each baseline supplier maps to one SUPPLIER organisation, and products are
+split between the two MANUFACTURER organisations by alternating within each fixture group (in
+product_id order), so both manufacturers own soy, no-soy and control products. brand_owner stays
+a product attribute. Re-running produces byte-identical output.
 
 Usage: python3 perf/data/split_baseline_seed.py   (from the repository root)
 """
@@ -20,6 +23,16 @@ FORM_OUT = ROOT / "services/formulation/src/main/resources/db/migration/V2__base
 ORG_OUT = ROOT / "docs/swe5001/data/organisations.csv"
 
 SEED_SUBJECT = "baseline:user_admin"
+
+# Realm organisations (G1-M4.1). Keep in sync with deploy/keycloak/realm/spectrace-realm.json.
+SUPPLIER_ORGANISATIONS = {
+    "sup_base_demo": ("org-supplier-alpha", "Supplier Alpha"),
+    "sup_chocolate_demo": ("org-supplier-beta", "Supplier Beta"),
+}
+MANUFACTURER_ORGANISATIONS = (
+    ("org-manufacturer-north", "Manufacturer North"),
+    ("org-manufacturer-south", "Manufacturer South"),
+)
 
 
 def rows(sql, table):
@@ -79,10 +92,6 @@ def insert(table, columns, records):
     return "\n".join(lines) + "\n"
 
 
-def slug(text):
-    return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:100]
-
-
 def main():
     sql = BASELINE.read_text(encoding="utf-8")
     provenance = rows(sql, "data_provenance")
@@ -102,11 +111,18 @@ def main():
 
     organisations = {}
     for s in suppliers:
-        s["organisation_id"] = "supplier_" + slug(s["supplier_id"].removeprefix("sup_"))
-        organisations[s["organisation_id"]] = ("SUPPLIER", s["supplier_name"], s["supplier_id"])
-    for p in products:
-        p["organisation_id"] = "manufacturer_" + slug(p["brand_owner"])
-        organisations.setdefault(p["organisation_id"], ("MANUFACTURER", p["brand_owner"], None))
+        if s["supplier_id"] not in SUPPLIER_ORGANISATIONS:
+            raise SystemExit(f"no realm organisation for baseline supplier {s['supplier_id']}")
+        org_id, name = SUPPLIER_ORGANISATIONS[s["supplier_id"]]
+        s["organisation_id"] = org_id
+        organisations[org_id] = ("SUPPLIER", name, s["supplier_id"])
+    position = {}
+    for p in sorted(products, key=lambda p: p["product_id"]):
+        index = position.get(p["fixture_group"], 0)
+        position[p["fixture_group"]] = index + 1
+        org_id, name = MANUFACTURER_ORGANISATIONS[index % len(MANUFACTURER_ORGANISATIONS)]
+        p["organisation_id"] = org_id
+        organisations[org_id] = ("MANUFACTURER", name, None)
 
     used_provenance = {r["data_provenance_id"] for r in suppliers + ingredients + materials + specs + products + formulas}
     prov_columns = ["provenance_id", "source_type", "source_dataset", "source_record_id", "source_url",

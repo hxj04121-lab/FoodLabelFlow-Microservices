@@ -77,10 +77,10 @@ class FormulationApiTest {
     @BeforeEach
     void projectSoyLecithinV2() {
         store.upsertReleasedSpecification("spec_chocolate_v2", "mat_chocolate_base", 2, "sup_chocolate_demo",
-                "supplier_chocolate_demo", LocalDate.of(2026, 9, 1), Instant.parse("2026-09-01T09:00:00Z"), Instant.now(),
+                "org-supplier-beta", LocalDate.of(2026, 9, 1), Instant.parse("2026-09-01T09:00:00Z"), Instant.now(),
                 "prov_project_seed");
         store.upsertReleasedSpecification("spec_wheat_flour_future", "mat_wheat_flour", 9, "sup_base_demo",
-                "supplier_base_demo", LocalDate.now(ZoneOffset.UTC).plusDays(30), Instant.now(), Instant.now(), "prov_project_seed");
+                "org-supplier-alpha", LocalDate.now(ZoneOffset.UTC).plusDays(30), Instant.now(), Instant.now(), "prov_project_seed");
     }
 
     private String draft(String productId, String chocolateSpec, String extra) {
@@ -102,7 +102,7 @@ class FormulationApiTest {
     void baselineProductsFormulasAndTraceAreServedToTheOwningManufacturer() throws Exception {
         Response products = call("GET", "/api/formulations/products", MAKER, null);
         assertThat(products.status()).isEqualTo(200);
-        assertThat(products.body().get("items").findValuesAsString("organisationId")).containsOnly("manufacturer_4c_foods_corp");
+        assertThat(products.body().get("items").findValuesAsString("organisationId")).containsOnly("org-manufacturer-north");
         assertThat(products.body().get("items").findValuesAsString("productId")).contains(PRODUCT);
 
         Response seeded = call("GET", "/api/formulations/formula-versions/formula_1106963_v1", OTHER_MAKER, null);
@@ -115,7 +115,7 @@ class FormulationApiTest {
 
         Response trace = call("GET", "/api/formulations/formula-versions/formula_1106963_v1/trace", OTHER_MAKER, null);
         assertThat(trace.status()).isEqualTo(200);
-        assertThat(trace.body().get("items").findValuesAsString("supplierOrganisationId")).contains("supplier_chocolate_demo");
+        assertThat(trace.body().get("items").findValuesAsString("supplierOrganisationId")).contains("org-supplier-beta");
 
         Response released = call("GET", "/api/formulations/released-specifications?materialId=mat_chocolate_base", SUPPLIER, null);
         assertThat(released.body().get("items").findValuesAsString("materialId")).containsOnly("mat_chocolate_base");
@@ -161,7 +161,7 @@ class FormulationApiTest {
         assertThat(validate("events/formula-published.v1.schema.json", envelope)).isEmpty();
         JsonNode event = json.readTree(envelope);
         assertThat(event.get("aggregateId").asString()).isEqualTo(PRODUCT);
-        assertThat(event.get("organisationId").asString()).isEqualTo("manufacturer_4c_foods_corp");
+        assertThat(event.get("organisationId").asString()).isEqualTo("org-manufacturer-north");
         assertThat(event.get("payload").get("previousFormulaVersion").get("id").asString()).isEqualTo(previous);
         assertThat(event.get("payload").get("items").get(0).get("specificationVersion").get("id").asString()).isEqualTo("spec_chocolate_v2");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM local_audit WHERE action = 'FORMULA_RELEASED' AND entity_id = ?",
@@ -243,7 +243,7 @@ class FormulationApiTest {
         NegativeAuthKit.endpoint(TOKENS, "POST", URI.create("http://localhost:" + port + "/api/formulations/formula-versions"))
                 .jsonBody(draft("prod_usda_1106980", "spec_chocolate_v1", ""))
                 .allowedCaller(MAKER)
-                .callerWithoutRole(Caller.of("viewer-4c", "manufacturer_4c_foods_corp", "MANUFACTURER", "AUDITOR"))
+                .callerWithoutRole(Caller.of("viewer-4c", "org-manufacturer-north", "MANUFACTURER", "AUDITOR"))
                 .callerFromOtherOrganisation(OTHER_MAKER)
                 .contentThatMustNotLeak("PLAIN BREAD CRUMBS", "formula_1106980_v1")
                 .verify();

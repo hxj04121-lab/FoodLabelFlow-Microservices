@@ -54,23 +54,23 @@ class SpecificationPublishedConsumerTest {
     @Test
     void releasesArriveOutOfOrderAndRedeliveredAndAllVersionsAreKeptOnce() throws Exception {
         String v2 = UUID.randomUUID().toString();
-        publish(envelope(v2, "supplier_chocolate_demo", "mat_hazelnut", 2, "supplier_chocolate_demo"));
+        publish(envelope(v2, "org-supplier-beta", "mat_hazelnut", 2, "org-supplier-beta"));
         await().atMost(Duration.ofSeconds(20)).until(() -> projected("mat_hazelnut") == 1);
-        publish(envelope(UUID.randomUUID().toString(), "supplier_chocolate_demo", "mat_hazelnut", 1, "supplier_chocolate_demo"));
-        publish(envelope(v2, "supplier_chocolate_demo", "mat_hazelnut", 2, "supplier_chocolate_demo"));
+        publish(envelope(UUID.randomUUID().toString(), "org-supplier-beta", "mat_hazelnut", 1, "org-supplier-beta"));
+        publish(envelope(v2, "org-supplier-beta", "mat_hazelnut", 2, "org-supplier-beta"));
         await().atMost(Duration.ofSeconds(20)).until(() -> projected("mat_hazelnut") == 2
                 && jdbc.queryForObject("SELECT COUNT(*) FROM processed_event WHERE consumer = ?", Integer.class,
                 SpecificationPublishedConsumer.QUEUE) == 2);
         assertThat(jdbc.queryForList("SELECT version_number FROM released_spec_projection WHERE material_id = 'mat_hazelnut' ORDER BY 1",
                 Integer.class)).containsExactly(1, 2);
         assertThat(jdbc.queryForObject("SELECT supplier_organisation_id FROM released_spec_projection WHERE specification_version_id = 'spec_mat_hazelnut_v2'",
-                String.class)).isEqualTo("supplier_chocolate_demo");
+                String.class)).isEqualTo("org-supplier-beta");
     }
 
     @Test
     void anEventWhosePayloadBelongsToAnotherOrganisationIsDeadLettered() {
         String eventId = UUID.randomUUID().toString();
-        publish(envelope(eventId, "supplier_chocolate_demo", "mat_forged", 1, "supplier_base_demo"));
+        publish(envelope(eventId, "org-supplier-beta", "mat_forged", 1, "org-supplier-alpha"));
         Message dead = await().atMost(Duration.ofSeconds(20))
                 .until(() -> rabbit.receive(SpecificationPublishedConsumer.QUEUE + ".dlq"), message -> message != null);
         assertThat(new String(dead.getBody(), StandardCharsets.UTF_8)).contains(eventId);

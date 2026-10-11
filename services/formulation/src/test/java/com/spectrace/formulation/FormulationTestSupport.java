@@ -20,11 +20,11 @@ public class FormulationTestSupport {
     public static final TestTokens TOKENS = new TestTokens();
 
     /** Owns prod_usda_1106285 and prod_usda_1106980 (baseline brand owner "4C Foods Corp."). */
-    public static final Caller MAKER = Caller.of("maker-4c", "manufacturer_4c_foods_corp", "MANUFACTURER",
+    public static final Caller MAKER = Caller.of("maker-4c", "org-manufacturer-north", "MANUFACTURER",
             "FORMULA_AUTHOR", "FORMULA_RELEASER");
-    public static final Caller OTHER_MAKER = Caller.of("maker-dean", "manufacturer_dean_foods_company", "MANUFACTURER",
+    public static final Caller OTHER_MAKER = Caller.of("maker-dean", "org-manufacturer-south", "MANUFACTURER",
             "FORMULA_AUTHOR", "FORMULA_RELEASER");
-    public static final Caller SUPPLIER = Caller.of("choc-author", "supplier_chocolate_demo", "SUPPLIER", "SPEC_AUTHOR");
+    public static final Caller SUPPLIER = Caller.of("choc-author", "org-supplier-beta", "SUPPLIER", "SPEC_AUTHOR");
 
     private static final Path CONTRACTS = Path.of("../../contracts").toAbsolutePath().normalize();
 
