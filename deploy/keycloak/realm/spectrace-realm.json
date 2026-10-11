@@ -1,0 +1,498 @@
+{
+  "realm": "spectrace",
+  "enabled": true,
+  "displayName": "SpecTrace-CN (local demo realm)",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "attributes": {
+    "spectrace.deployment.tier": "local-demo",
+    "spectrace.realm.source": "deploy/keycloak/realm/spectrace-realm.json",
+    "spectrace.realm.claims.contract": "org_id, org_type, roles in the access token"
+  },
+  "roles": {
+    "realm": [
+      {
+        "name": "LABEL_OFFICER",
+        "description": "Creates labels, validates structured declarations and submits for review. Permissions: LABEL.CREATE, LABEL.VALIDATE, LABEL.SUBMIT_REVIEW."
+      },
+      {
+        "name": "APPROVER",
+        "description": "Approves, rejects or requests changes on pending labels. Permissions: LABEL.APPROVE, LABEL.REQUEST_CHANGES, LABEL.REJECT."
+      },
+      {
+        "name": "PUBLISHER",
+        "description": "Publishes approved labels. Permissions: LABEL.PUBLISH."
+      },
+      {
+        "name": "AUDITOR",
+        "description": "Reads audit and validation evidence. Permissions: AUDIT.READ."
+      },
+      {
+        "name": "ADMIN_DATA_MAINTENANCE",
+        "description": "Maintains supplier, formula and rule fixture data. Permissions: FORMULA.RELEASE, RULE_SET.MAINTAIN, DATA.MAINTAIN."
+      },
+      {
+        "name": "CHANGE_MANAGER",
+        "description": "Creates change requests and launches impact analysis. Permissions: CHANGE_REQUEST.CREATE, IMPACT.RUN."
+      }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "spectrace-identity-claims",
+      "description": "BR-11 organisation claims (org_id, org_type) and the effective realm roles for SpecTrace clients. Values come from trusted single-valued user attributes and role assignments only; no request parameter can set them.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false",
+        "consent.screen.text": ""
+      },
+      "protocolMappers": [
+        {
+          "name": "org_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "org_id",
+            "claim.name": "org_id",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "org_type",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "org_type",
+            "claim.name": "org_type",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm_access.roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "preferred_username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "spectrace-web",
+      "name": "SpecTrace web reference client",
+      "description": "Public browser client: authorisation code flow with PKCE S256 only; implicit flow, direct access grants and service accounts disabled; no client secret. Local development redirect URIs only. See deploy/keycloak/README.md.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "consentRequired": false,
+      "fullScopeAllowed": true,
+      "frontchannelLogout": true,
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*##http://127.0.0.1:5173/*",
+        "backchannel.logout.session.required": "true",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "display.on.consent.screen": "false"
+      },
+      "defaultClientScopes": [
+        "spectrace-identity-claims"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "spectrace-partner",
+      "name": "SpecTrace partner client (onboarding pending)",
+      "description": "Confidential client for the reviewed partner onboarding (G3): client credentials only, no realm role or organisation binding yet, so it fails closed. The secret is generated at import and injected at deploy time, never committed.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "frontchannelLogout": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "display.on.consent.screen": "false"
+      },
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    }
+  ],
+  "users": [
+    {
+      "username": "supplier.alpha.maker",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alpha Supplier Maker",
+      "lastName": "Local Demo",
+      "email": "supplier.alpha.maker@spectrace.local",
+      "attributes": {
+        "org_id": [
+          "org-supplier-alpha"
+        ],
+        "org_type": [
+          "SUPPLIER"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "LocalDevOnly!supplier.alpha.maker",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": [
+        "LABEL_OFFICER"
+      ]
+    },
+    {
+      "username": "supplier.alpha.checker",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alpha Supplier Checker",
+      "lastName": "Local Demo",
+      "email": "supplier.alpha.checker@spectrace.local",
+      "attributes": {
+        "org_id": [
+          "org-supplier-alpha"
+        ],
+        "org_type": [
+          "SUPPLIER"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "LocalDevOnly!supplier.alpha.checker",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": [
+        "APPROVER",
+        "PUBLISHER"
+      ]
+    },
+    {
+      "username": "supplier.beta.maker",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Beta Supplier Maker",
+      "lastName": "Local Demo",
+      "email": "supplier.beta.maker@spectrace.local",
+      "attributes": {
+        "org_id": [
+          "org-supplier-beta"
+        ],
+        "org_type": [
+          "SUPPLIER"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "LocalDevOnly!supplier.beta.maker",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": [
+        "LABEL_OFFICER"
+      ]
+    },
+    {
+      "username": "supplier.beta.checker",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Beta Supplier Checker",
+      "lastName": "Local Demo",
+      "email": "supplier.beta.checker@spectrace.local",
+      "attributes": {
+        "org_id": [
+          "org-supplier-beta"
+        ],
+        "org_type": [
+          "SUPPLIER"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "LocalDevOnly!supplier.beta.checker",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": [
+        "APPROVER",
+        "PUBLISHER"
+      ]
+    },
+    {
+      "username": "manufacturer.north.maker",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "North Manufacturer Maintainer",
+      "lastName": "Local Demo",
+      "email": "manufacturer.north.maker@spectrace.local",
+      "attributes": {
+        "org_id": [
+          "org-manufacturer-north"
+        ],
+        "org_type": [
+          "MANUFACTURER"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "LocalDevOnly!manufacturer.north.maker",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": [
+        "ADMIN_DATA_MAINTENANCE",
+        "CHANGE_MANAGER"
+      ]
+    },
+    {
+      "username": "manufacturer.north.checker",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "North Manufacturer Checker",
+      "lastName": "Local Demo",
+      "email": "manufacturer.north.checker@spectrace.local",
+      "attributes": {
+        "org_id": [
+          "org-manufacturer-north"
+        ],
+        "org_type": [
+          "MANUFACTURER"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "LocalDevOnly!manufacturer.north.checker",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": [
+        "APPROVER"
+      ]
+    },
+    {
+      "username": "manufacturer.south.maker",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "South Manufacturer Maintainer",
+      "lastName": "Local Demo",
+      "email": "manufacturer.south.maker@spectrace.local",
+      "attributes": {
+        "org_id": [
+          "org-manufacturer-south"
+        ],
+        "org_type": [
+          "MANUFACTURER"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "LocalDevOnly!manufacturer.south.maker",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": [
+        "ADMIN_DATA_MAINTENANCE",
+        "CHANGE_MANAGER"
+      ]
+    },
+    {
+      "username": "manufacturer.south.checker",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "South Manufacturer Checker",
+      "lastName": "Local Demo",
+      "email": "manufacturer.south.checker@spectrace.local",
+      "attributes": {
+        "org_id": [
+          "org-manufacturer-south"
+        ],
+        "org_type": [
+          "MANUFACTURER"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "LocalDevOnly!manufacturer.south.checker",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": [
+        "APPROVER"
+      ]
+    },
+    {
+      "username": "spectrace.auditor",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "SpecTrace Auditor",
+      "lastName": "Local Demo",
+      "email": "spectrace.auditor@spectrace.local",
+      "attributes": {
+        "org_id": [
+          "org-manufacturer-north"
+        ],
+        "org_type": [
+          "MANUFACTURER"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "LocalDevOnly!spectrace.auditor",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": [
+        "AUDITOR"
+      ]
+    },
+    {
+      "username": "spectrace.no-role",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "SpecTrace Unassigned",
+      "lastName": "Local Demo",
+      "email": "spectrace.no-role@spectrace.local",
+      "attributes": {
+        "org_id": [
+          "org-manufacturer-south"
+        ],
+        "org_type": [
+          "MANUFACTURER"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "LocalDevOnly!spectrace.no-role",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "realmRoles": []
+    }
+  ],
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "id": "7b1f1a5e-5f5d-4a4a-9d1f-4a0d0f6a7c11",
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"org_id\",\"required\":{\"roles\":[\"admin\"]},\"displayName\":\"Organisation ID (BR-11)\",\"group\":\"spectrace-organisation\",\"validations\":{\"length\":{\"min\":3,\"max\":64},\"pattern\":{\"pattern\":\"^[a-z0-9][a-z0-9-]{2,63}$\",\"error-message\":\"org_id must be a lowercase identifier such as org-supplier-alpha\"}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"org_type\",\"required\":{\"roles\":[\"admin\"]},\"displayName\":\"Organisation type (BR-11)\",\"group\":\"spectrace-organisation\",\"validations\":{\"options\":{\"options\":[\"SUPPLIER\",\"MANUFACTURER\"]}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which may be viewed and edited by the user\"},{\"name\":\"spectrace-organisation\",\"displayHeader\":\"Organisation (BR-11)\",\"displayDescription\":\"Assigned by controlled provisioning. Users can read but not edit these attributes.\"}],\"unmanagedAttributePolicy\":\"ADMIN_VIEW\"}"
+          ]
+        }
+      }
+    ]
+  },
+  "defaultDefaultClientScopes": [
+    "spectrace-identity-claims"
+  ],
+  "defaultOptionalClientScopes": []
+}

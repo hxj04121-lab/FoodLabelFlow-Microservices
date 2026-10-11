@@ -1,0 +1,64 @@
+# Keycloak for the SpecTrace-CN local profile (G1-M4.1 "realm as code").
+#
+# The realm is declared once in ./realm/spectrace-realm.json and imported on
+# container start, so initialisation never depends on clicking through the
+# admin console.
+#
+# Import / start:
+#   docker compose -f deploy/keycloak/docker-compose.keycloak.yml up -d keycloak
+#
+# Use it together with the application stack (shared Docker network, so the
+# backend and the future gateway can reach http://keycloak:8080):
+#   docker compose -f docker-compose.yml -f deploy/keycloak/docker-compose.keycloak.yml up -d
+#
+# Export the realm as currently configured in the running local instance:
+#   docker compose -f deploy/keycloak/docker-compose.keycloak.yml stop keycloak
+#   docker compose -f deploy/keycloak/docker-compose.keycloak.yml --profile tools run --rm keycloak-export
+#
+# Local-only administration credentials; staging and production inject real
+# secrets from the deployment secret store and never reuse these values.
+
+services:
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.0.7}
+    command:
+      - start-dev
+      - --import-realm
+      - --http-port=8080
+      - --hostname-strict=false
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-local-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-stage0-local-only}
+      KC_LOG_LEVEL: ${KEYCLOAK_LOG_LEVEL:-info}
+    ports:
+      - "${KEYCLOAK_HOST_PORT:-8180}:8080"
+    volumes:
+      # Named volume keeps the dev-file database across restarts. `down -v`
+      # resets the realm to the state declared in spectrace-realm.json.
+      - spectrace_keycloak_data:/opt/keycloak/data
+      # Realm as code: read-only import source. Only the realm file is mounted,
+      # because --import-realm imports *every* JSON file in the import directory
+      # and any non-realm JSON there (documentation, claim samples, a raw export)
+      # aborts the whole start-up import.
+      - ./realm/spectrace-realm.json:/opt/keycloak/data/import/spectrace-realm.json:ro
+    restart: unless-stopped
+
+  # Offline export tool. Same image and data directory, different command.
+  # Stop `keycloak` first: the dev-file H2 database is locked while the server
+  # runs. Output lands in ./realm/exported, which is git-ignored because a raw
+  # export can contain generated client secrets.
+  keycloak-export:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.0.7}
+    profiles:
+      - tools
+    command:
+      - export
+      - --dir=/export
+      - --realm=spectrace
+      - --users=realm_file
+    volumes:
+      - spectrace_keycloak_data:/opt/keycloak/data
+      - ./realm/exported:/export
+
+volumes:
+  spectrace_keycloak_data:
