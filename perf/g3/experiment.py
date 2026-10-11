@@ -260,7 +260,7 @@ def placement(config, replicas):
         node = json.loads(kubectl(config, "get", "node", pod["spec"]["nodeName"], "-o", "json"))
         labels = node["metadata"]["labels"]
         require(labels.get("eks.amazonaws.com/nodegroup") == "compliance" and labels.get("node.kubernetes.io/instance-type") == "c6i.large", "Wrong node placement")
-        require(any(t["key"] == "workload" and t.get("value") == "compliance" and t["effect"] == "NoSchedule" for t in node["spec"].get("taints", [])), "Missing dedicated node taint")
+        require(any(t["key"] == "dedicated" and t.get("value") == "compliance" and t["effect"] == "NoSchedule" for t in node["spec"].get("taints", [])), "Missing dedicated node taint")
         require(all(c["imageID"].endswith(config["imageDigest"].split("@", 1)[1]) for c in pod["status"]["containerStatuses"] if c["name"] == "compliance"), "Running image digest differs")
         zone = labels["topology.kubernetes.io/zone"]; zones.add(zone)
         result.append({"name": pod["metadata"]["name"], "uid": pod["metadata"]["uid"], "node": node["metadata"]["name"], "zone": zone,
