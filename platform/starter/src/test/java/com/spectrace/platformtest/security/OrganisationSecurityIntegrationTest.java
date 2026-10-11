@@ -115,6 +115,20 @@ class OrganisationSecurityIntegrationTest {
         assertTrue(observed.containsKey(NegativeAuthKit.Case.OTHER_ORGANISATION));
     }
 
+    @Test
+    @DisplayName("method security rejects an authenticated caller without the authority as 403")
+    void methodSecurityProducesTheCanonicalForbiddenEnvelope() throws Exception {
+        HttpResponse<String> response = get("/api/security/platform-admin",
+                tokens.token(Caller.of("supplier-alpha-maker", "org-supplier-alpha", "SUPPLIER", "LABEL_OFFICER")),
+                "corr-403");
+
+        assertEquals(403, response.statusCode(), response.body());
+        JsonNode body = JSON.readTree(response.body());
+        assertEquals("AUTHORIZATION_DENIED", body.get("code").asString());
+        assertEquals("corr-403", body.get("traceId").asString());
+        assertEquals("corr-403", response.headers().firstValue("X-Correlation-ID").orElseThrow());
+    }
+
     private HttpResponse<String> get(String path, String token, String correlationId) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(uri(path))
                 .timeout(Duration.ofSeconds(10))

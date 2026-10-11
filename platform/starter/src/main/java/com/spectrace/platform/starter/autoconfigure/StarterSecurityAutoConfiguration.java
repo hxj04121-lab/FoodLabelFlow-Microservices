@@ -78,7 +78,7 @@ public class StarterSecurityAutoConfiguration {
     }
 
     /** The configured JWKS URL, or Keycloak's well-known path under the configured issuer. */
-    static String jwkSetUri(SecurityProperties properties) {
+    public static String jwkSetUri(SecurityProperties properties) {
         if (properties.getJwkSetUri() != null && !properties.getJwkSetUri().isBlank()) {
             return properties.getJwkSetUri();
         }

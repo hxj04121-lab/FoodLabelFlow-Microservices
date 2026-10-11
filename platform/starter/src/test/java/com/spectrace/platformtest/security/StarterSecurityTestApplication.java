@@ -5,6 +5,7 @@ import com.spectrace.platform.starter.security.OrganisationGuard;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,6 +43,16 @@ public class StarterSecurityTestApplication {
                     "labelVersionId", labelId,
                     "displayName", "Chocolate Bar",
                     "organisationId", caller.organisationId());
+        }
+
+        /**
+         * Guarded by method security rather than by an explicit guard call, so the security filter
+         * chain itself produces the 403 and the access-denied handler is exercised.
+         */
+        @GetMapping("/api/security/platform-admin")
+        @PreAuthorize("hasAuthority('PLATFORM_ADMIN')")
+        Map<String, String> platformAdmin() {
+            return Map.of("scope", "platform");
         }
     }
 }
