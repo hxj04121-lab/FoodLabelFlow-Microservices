@@ -2,5 +2,7 @@
 *.tfstate
 *.tfstate.*
 backend.hcl
+.kubeconfig
+.plans/
 crash.log
 crash.*.log

@@ -145,3 +145,19 @@ module "github_oidc" {
   provider_thumbprints = var.github_oidc_thumbprints
   tags                 = var.tags
 }
+
+module "github_platform_deploy" {
+  count  = var.enable_github_platform_deploy_role ? 1 : 0
+  source = "./modules/github-platform-deploy"
+
+  repository        = var.github_repository
+  environment       = var.github_environment
+  branch            = var.github_branch
+  cluster_name      = module.eks[0].cluster_name
+  oidc_provider_arn = module.github_oidc[0].provider_arn
+  workload_namespaces = [
+    "gateway", "keycloak", "rabbitmq", "observability",
+    "specification", "formulation", "compliance", "label-workflow"
+  ]
+  tags = var.tags
+}

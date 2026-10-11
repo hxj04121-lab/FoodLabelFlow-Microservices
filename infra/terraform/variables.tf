@@ -152,6 +152,16 @@ variable "github_environment" {
   default     = "staging"
 }
 
+variable "enable_github_platform_deploy_role" {
+  description = "Create the separate, namespace-scoped OIDC deploy role; keep disabled until IAM and GitHub Environment controls are reviewed."
+  type        = bool
+  default     = false
+  validation {
+    condition     = !var.enable_github_platform_deploy_role || (var.enable_eks && var.github_repository != "")
+    error_message = "The platform deploy role requires EKS and an exact GitHub repository."
+  }
+}
+
 variable "github_oidc_thumbprints" {
   description = "Thumbprints for token.actions.githubusercontent.com when creating the account OIDC provider. Leave empty to reuse an existing provider."
   type        = list(string)

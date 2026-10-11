@@ -1,0 +1,216 @@
+name: Reusable service CI/CD
+
+on:
+  workflow_call:
+    inputs:
+      service_name: {type: string, required: true}
+      service_path: {type: string, required: true}
+      dockerfile: {type: string, required: false, default: Dockerfile}
+      helm_chart: {type: string, required: true}
+      namespace: {type: string, required: true}
+    secrets:
+      SONAR_TOKEN: {required: true}
+      STAGING_SMOKE_JWT: {required: false}
+    outputs:
+      image:
+        value: ${{ jobs.publish.outputs.image }}
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate service inputs
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+          SERVICE_PATH: ${{ inputs.service_path }}
+        run: |
+          [[ "$SERVICE_NAME" =~ ^[a-z0-9-]+$ ]]
+          [[ "$SERVICE_PATH" != /* && "$SERVICE_PATH" != *..* ]]
+          test -d "$SERVICE_PATH"
+      - uses: actions/setup-java@v4
+        if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        if: ${{ hashFiles(format('{0}/package.json', inputs.service_path)) != '' }}
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ format('{0}/package-lock.json', inputs.service_path) }}
+      - name: Build and unit/integration test JVM service
+        if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
+        env:
+          SERVICE_PATH: ${{ inputs.service_path }}
+        run: mvn -B -ntp -f "$SERVICE_PATH/pom.xml" verify
+      - name: Build and test Node service
+        if: ${{ hashFiles(format('{0}/package.json', inputs.service_path)) != '' }}
+        env:
+          SERVICE_PATH: ${{ inputs.service_path }}
+        run: cd "$SERVICE_PATH" && npm ci && npm test && npm run build
+      - name: Reject unsupported service layout
+        if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) == '' && hashFiles(format('{0}/package.json', inputs.service_path)) == '' }}
+        run: echo "Service must contain pom.xml or package.json" >&2; exit 1
+      - name: Sonar quality gate
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          args: -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ inputs.service_path }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - uses: actions/setup-java@v4
+        if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: OWASP Dependency-Check gate
+        if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
+        working-directory: ${{ inputs.service_path }}
+        run: mvn -B -ntp org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false
+
+  kind:
+    if: ${{ github.event_name == 'pull_request' }}
+    needs: [checks, security]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1.12.0
+      - uses: azure/setup-helm@v4
+        with: {version: v4.3.0}
+      - name: Build and load service image
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+          SERVICE_PATH: ${{ inputs.service_path }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+        run: |
+          image="local/${SERVICE_NAME}:${GITHUB_SHA}"
+          docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "$image" "$SERVICE_PATH"
+          kind load docker-image "$image"
+          echo "image=$image" >> "$GITHUB_ENV"
+      - name: Trivy container image gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ format('local/{0}:{1}', inputs.service_name, github.sha) }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Deploy service chart to kind
+        env:
+          RELEASE: ${{ inputs.service_name }}
+          NAMESPACE: ${{ inputs.namespace }}
+          CHART: ${{ inputs.helm_chart }}
+        run: |
+          helm upgrade --install "$RELEASE" "$CHART" --namespace "$NAMESPACE" --create-namespace \
+            --set image.repository="${image%:*}" --set image.tag="${image##*:}" --wait --timeout 5m
+          kubectl -n "$NAMESPACE" rollout status "deployment/$RELEASE" --timeout=180s
+
+  publish:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [checks, security]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build commit-pinned image locally
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+          SERVICE_PATH: ${{ inputs.service_path }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+        run: docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}" "$SERVICE_PATH"
+      - name: Trivy container image gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ghcr.io/${{ github.repository }}/${{ inputs.service_name }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push immutable SHA image tag
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+        run: docker push "ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}"
+      - id: image
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.STAGING_WINDOW_OPEN == 'true' }}
+    needs: [publish]
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-southeast-1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enforce the merged STCN-37 budget gate
+        run: |
+          test -f scripts/aws_staging_budget.py && test -f infra/aws-staging-budget.json || { echo "STCN-37 budget gate is required" >&2; exit 1; }
+          python3 scripts/aws_staging_budget.py budget --input infra/aws-staging-budget.json
+      - name: Require the separate staging deploy role
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
+        run: test -n "$AWS_DEPLOY_ROLE_ARN" && test "$AWS_DEPLOY_ROLE_ARN" != "$AWS_PLAN_ROLE_ARN"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: azure/setup-kubectl@v4
+      - uses: azure/setup-helm@v4
+        with: {version: v4.3.0}
+      - name: Configure EKS context and deploy commit-pinned image
+        env:
+          CLUSTER_NAME: ${{ vars.STAGING_EKS_CLUSTER_NAME }}
+          NAMESPACE: ${{ inputs.namespace }}
+          RELEASE: ${{ inputs.service_name }}
+          CHART: ${{ inputs.helm_chart }}
+          IMAGE: ${{ needs.publish.outputs.image }}
+        run: |
+          test -n "$CLUSTER_NAME" && test -n "$IMAGE"
+          aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+          helm upgrade --install "$RELEASE" "$CHART" --namespace "$NAMESPACE" \
+            --set image.repository="${IMAGE%:*}" --set image.tag="${IMAGE##*:}" --wait --timeout 10m
+      - name: Gateway smoke test and organisation claim check
+        env:
+          GATEWAY_URL: ${{ vars.STAGING_GATEWAY_URL }}
+          SMOKE_JWT: ${{ secrets.STAGING_SMOKE_JWT }}
+          SMOKE_PATH: ${{ vars.STAGING_PROTECTED_SMOKE_PATH }}
+        run: |
+          test -n "$GATEWAY_URL" && test -n "$SMOKE_JWT" && test -n "$SMOKE_PATH"
+          curl --fail --silent --show-error "$GATEWAY_URL/actuator/health"
+          python3 - <<'PY'
+          import base64, json, os
+          payload = os.environ["SMOKE_JWT"].split(".")[1]
+          claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+          assert claims.get("org_id") and claims.get("org_type") and claims.get("roles")
+          PY
+          curl --fail --silent --show-error -H "Authorization: Bearer $SMOKE_JWT" "$GATEWAY_URL$SMOKE_PATH"

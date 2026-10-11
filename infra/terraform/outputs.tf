@@ -55,3 +55,7 @@ output "ebs_csi_addon_version" {
 output "github_deploy_role_arn" {
   value = var.github_repository == "" ? null : module.github_oidc[0].role_arn
 }
+
+output "github_platform_deploy_role_arn" {
+  value = var.enable_github_platform_deploy_role ? module.github_platform_deploy[0].role_arn : null
+}
