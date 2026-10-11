@@ -22,10 +22,10 @@ class ComplianceEventProjectorLabelVersionTest {
     void projectionStoresOnlyTheBusinessVersionResolvedByExactPublishedLabelId() throws Exception {
         RecordingJdbcTemplate jdbc = new RecordingJdbcTemplate();
         List<String> reevaluatedFormulaIds = new ArrayList<>();
-        ImpactFindingProjectionService impacts = new ImpactFindingProjectionService(jdbc, json) {
+        ImpactFindingProjectionService impacts = new ImpactFindingProjectionService(jdbc, json, null, null) {
             @Override
-            public void reevaluateImpactsForFormula(String formulaVersionId) {
-                reevaluatedFormulaIds.add(formulaVersionId);
+            public void reevaluateProduct(String organisation, String product) {
+                reevaluatedFormulaIds.add(product);
             }
         };
         EventEnvelope event = labelEvent(9);
@@ -44,13 +44,13 @@ class ComplianceEventProjectorLabelVersionTest {
         assertThat(labelInsert.args()[0]).isEqualTo("label-001-v2");
         assertThat(labelInsert.args()[4]).isEqualTo(4);
         assertThat(labelInsert.args()[4]).isNotEqualTo(event.aggregateVersion());
-        assertThat(reevaluatedFormulaIds).containsExactly("formula-001-v3");
+        assertThat(reevaluatedFormulaIds).containsExactly("product-001");
     }
 
     @Test
     void missingVerifiedProviderLookupFailsClosedWithoutPersistingAggregateVersionAsBusinessVersion() throws Exception {
         RecordingJdbcTemplate jdbc = new RecordingJdbcTemplate();
-        ImpactFindingProjectionService impacts = new ImpactFindingProjectionService(jdbc, json);
+        ImpactFindingProjectionService impacts = new ImpactFindingProjectionService(jdbc, json, null, null);
         EventEnvelope event = labelEvent(9);
         ComplianceEventProjector projector = new ComplianceEventProjector(jdbc, json, impacts,
                 new LabelVersionNumberConfiguration().failClosedLabelVersionNumberResolver());
@@ -65,7 +65,7 @@ class ComplianceEventProjectorLabelVersionTest {
     @Test
     void nonPositiveProviderVersionIsAnIntegrationFailureAndWritesNothing() throws Exception {
         RecordingJdbcTemplate jdbc = new RecordingJdbcTemplate();
-        ImpactFindingProjectionService impacts = new ImpactFindingProjectionService(jdbc, json);
+        ImpactFindingProjectionService impacts = new ImpactFindingProjectionService(jdbc, json, null, null);
         ComplianceEventProjector projector = new ComplianceEventProjector(jdbc, json, impacts,
                 (organisationId, labelVersionId) -> 0);
 
