@@ -17,7 +17,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /** The service starts against its own MySQL database, migrates the starter tables and reports readiness. */
 @Import(MySqlTestcontainers.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spectrace.test.database=formulation")
+        properties = {"spectrace.test.database=formulation", "spectrace.messaging.relay.enabled=false",
+                "spring.rabbitmq.listener.simple.auto-startup=false"})
 class FormulationApplicationTest {
 
     @LocalServerPort
@@ -36,11 +37,11 @@ class FormulationApplicationTest {
         assertThat(readiness.body()).contains("\"status\":\"UP\"");
         assertThat(readiness.headers().firstValue("X-Correlation-ID")).isPresent();
 
-        HttpResponse<String> unknown = client.send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/formulation/unknown")).build(),
+        HttpResponse<String> anonymous = client.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/formulations/products")).build(),
                 HttpResponse.BodyHandlers.ofString());
-        assertThat(unknown.statusCode()).isEqualTo(404);
-        assertThat(unknown.body()).contains("\"code\":\"RESOURCE_NOT_FOUND\"");
+        assertThat(anonymous.statusCode()).isEqualTo(401);
+        assertThat(anonymous.body()).contains("\"code\":\"AUTHENTICATION_REQUIRED\"");
     }
 
     @Test
