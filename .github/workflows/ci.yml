@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "chore/**", "feature/**"]
   pull_request:
-    branches: [main, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-45-outbox-consumer', 'feature/stcn-1-g0-m1-contracts', 'g0-m4-label-workflow-contracts', 'feature/stcn49-compliance-starter', 'codex/g2-m2-compliance-phase1', 'feature/g3-m2-compliance']
+    branches: [main, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-45-outbox-consumer', 'feature/stcn-1-g0-m1-contracts', 'g0-m4-label-workflow-contracts', 'feature/stcn49-compliance-starter', 'codex/g2-m2-compliance-phase1', 'feature/g3-m2-compliance', 'feature/g3-m2-experiments', 'codex/stcn-29-contract-steward-review']
 
 permissions:
   contents: read
