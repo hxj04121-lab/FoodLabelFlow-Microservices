@@ -18,6 +18,7 @@ import org.springframework.core.env.MapPropertySource;
  *   <li>Every metric carries an {@code application} tag.</li>
  *   <li>Console logs are ECS JSON; the MDC {@code correlationId} appears in each line.</li>
  *   <li>Graceful shutdown inside the chart's 30 s termination grace period.</li>
+ *   <li>RabbitMQ publisher confirms and returns for the outbox relay; listener acks after the handler returns.</li>
  * </ul>
  */
 public class StarterDefaults implements EnvironmentPostProcessor {
@@ -45,6 +46,12 @@ public class StarterDefaults implements EnvironmentPostProcessor {
         values.put("spring.lifecycle.timeout-per-shutdown-phase", "20s");
         values.put("spring.mvc.problemdetails.enabled", "false");
         values.put("server.error.whitelabel.enabled", "false");
+        // Outbox relay: correlated publisher confirms and returns; consumers ack after commit, then retry
+        // through the quorum queue's delivery limit and dead-letter exchange.
+        values.put("spring.rabbitmq.publisher-confirm-type", "correlated");
+        values.put("spring.rabbitmq.publisher-returns", "true");
+        values.put("spring.rabbitmq.listener.simple.acknowledge-mode", "auto");
+        values.put("spring.rabbitmq.listener.simple.default-requeue-rejected", "true");
         return Map.copyOf(values);
     }
 }

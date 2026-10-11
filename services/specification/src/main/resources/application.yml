@@ -6,10 +6,27 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:specification}
     password: ${SPRING_DATASOURCE_PASSWORD:local-only-specification}
   flyway:
-    locations: classpath:db/migration
+    # Starter tables (outbox, local_audit, processed_event, consumed_aggregate_version) are V0_x;
+    # this service's own migrations in db/migration start at V1.
+    locations: classpath:db/spectrace-platform,classpath:db/migration
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:spectrace}
+    password: ${RABBITMQ_PASSWORD:local-only-rabbitmq}
   jdbc:
     template:
       query-timeout: 5s
+  jackson:
+    deserialization:
+      # Request bodies are closed objects in the contract (additionalProperties: false).
+      fail-on-unknown-properties: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Keycloak realm issuer; the decoder is created lazily, so the service starts without Keycloak.
+          issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8180/realms/spectrace}
 server:
   port: ${SERVER_PORT:8080}
 management:
@@ -17,4 +34,5 @@ management:
     health:
       group:
         readiness:
+          # The broker is not a readiness dependency: committed events wait in the outbox.
           include: readinessState,db
