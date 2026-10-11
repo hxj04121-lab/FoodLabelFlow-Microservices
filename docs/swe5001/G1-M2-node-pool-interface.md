@@ -22,3 +22,7 @@ Acceptance remains pending actual M5 Terraform, approved gate prerequisites, run
 ## October 11 actual M5 Terraform alignment
 
 PR #27 at 540e99f7d11701b3173609a8be5ba61b50d382c4 defines the node group `compliance`, c6i.large, min 1/max 4 over the two private subnets, and taint **workload=compliance:NoSchedule**. The earlier `dedicated` proposal above is superseded for this staging implementation. The G3 experiment branch updates Helm's enforced toleration and tests to `workload`; M5 source is preserved. Immutable `image.digest` rendering is now supported for controlled trials. This is a static interface comparison; no real scheduling or Terraform apply was run. M5/M4 review and approved window remain required.
+
+### October 11 22:40 review correction — current contract
+
+The paragraph immediately above records the earlier 540e99f snapshot only. M5 #27 now uses **dedicated=compliance:NoSchedule** at 6fb4060438aa5f67fd2e1eb3c1e6560f0560874f (`infra/terraform/modules/eks/main.tf`), matching main's chart and M1's review on #33. The current values/schema/exact-toleration assertion retain `dedicated`; an obsolete `workload` override is rejected. Digest rendering remains the functional chart addition. Native Helm verification now has 19 checks. Live placement and AWS authorization remain unverified; no Terraform or cluster action occurred.
