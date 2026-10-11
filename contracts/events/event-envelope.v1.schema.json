@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpecTrace-CN event envelope v1 (canonical, M1)",
+  "description": "Canonical envelope for every SpecTrace-CN domain event (architecture v3 6.3). Owner: M1 Huang Xiangjia (G0-M1.5, STCN-25); consumer interface agreed with M2 (ADR-G0-M2-001 item 5). Each event schema composes this envelope with allOf and pins eventType, producer and payload. Semantics: eventId is unique per publication and is the consumer deduplication key (processed_event); schemaVersion is the envelope version, not the payload version, which is carried by the .vN suffix of eventType; organisationId is the tenant that owns the aggregate; correlationId is created at the gateway and propagated unchanged; aggregateId/aggregateVersion identify the aggregate whose state the event reflects, and consumers discard events whose aggregateVersion is not newer than their projection. Delivery is at-least-once and ordering is not assumed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "schemaVersion",
+    "occurredAt",
+    "producer",
+    "organisationId",
+    "correlationId",
+    "aggregateId",
+    "aggregateVersion",
+    "payload"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique per publication; written to the outbox in the same transaction as the state change."
+    },
+    "eventType": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*\\.v[1-9][0-9]*$",
+      "description": "Event name plus payload version, e.g. SpecificationPublished.v1."
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Envelope version. A breaking envelope change requires a new envelope schema and ADR."
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$",
+      "description": "RFC 3339 timestamp in UTC (Z suffix) of the committed state change."
+    },
+    "producer": {
+      "type": "string",
+      "enum": [
+        "specification-service",
+        "formulation-service",
+        "compliance-service",
+        "label-workflow-service",
+        "notification-service"
+      ]
+    },
+    "organisationId": {
+      "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id"
+    },
+    "correlationId": {
+      "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id"
+    },
+    "aggregateId": {
+      "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id"
+    },
+    "aggregateVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}

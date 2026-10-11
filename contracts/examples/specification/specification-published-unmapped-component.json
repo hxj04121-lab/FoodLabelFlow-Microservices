@@ -1,0 +1,25 @@
+{
+  "eventId": "20000000-0000-4000-8000-000000000003",
+  "eventType": "SpecificationPublished.v1",
+  "schemaVersion": 1,
+  "occurredAt": "2026-10-05T01:00:00Z",
+  "producer": "specification-service",
+  "organisationId": "supplier_01",
+  "correlationId": "corr_003",
+  "aggregateId": "mat_003",
+  "aggregateVersion": 2,
+  "payload": {
+    "organisationId": "supplier_01",
+    "supplier": { "supplierId": "sup_001", "supplierCode": "COURSE-SUP-01", "supplierName": "Course cocoa supplier" },
+    "material": { "materialId": "mat_003", "materialCode": "FLAV-CARRIER-01", "materialName": "Flavour carrier" },
+    "specificationVersion": { "id": "spec_003_v2", "versionNumber": 2 },
+    "previousVersion": { "id": "spec_003_v1", "versionNumber": 1 },
+    "effectiveDate": "2026-10-05",
+    "releasedAt": "2026-10-05T01:00:00Z",
+    "components": [
+      { "specComponentId": "spec_003_v2_c01", "sequenceNo": 1, "ingredientId": "ing_sugar", "ingredientName": "sugar", "rawPhrase": "sugar", "matchStatus": "MATCHED" },
+      { "specComponentId": "spec_003_v2_c02", "sequenceNo": 2, "ingredientId": "ing_placeholder_unmapped", "ingredientName": "unmapped placeholder", "rawPhrase": "natural flavouring (carrier undisclosed)", "matchStatus": "UNMAPPED" }
+    ],
+    "provenance": { "provenanceId": "prov_project_seed", "sourceType": "PROJECT_SEEDED" }
+  }
+}

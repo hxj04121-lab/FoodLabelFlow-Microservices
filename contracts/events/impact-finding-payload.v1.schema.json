@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ImpactFinding v1 payload (HTTP and event Published Language)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "findingId",
+    "organisationId",
+    "kind",
+    "outcome",
+    "requiredAllergens",
+    "declaredAllergens",
+    "missingAllergens",
+    "unresolvedAllergens",
+    "specificationChange",
+    "formulaVersion",
+    "labelVersion",
+    "ruleSetVersion",
+    "jurisdiction"
+  ],
+  "properties": {
+    "findingId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^\\S+$"
+    },
+    "organisationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^\\S+$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "POTENTIAL",
+        "CONFIRMED"
+      ]
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "NO_ACTION",
+        "REVIEW_REQUIRED"
+      ]
+    },
+    "requiredAllergens": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id"
+      }
+    },
+    "declaredAllergens": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id"
+      }
+    },
+    "missingAllergens": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/Id"
+      }
+    },
+    "unresolvedAllergens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "formulaItemId",
+          "specificationVersionId",
+          "specComponentId",
+          "ingredientId",
+          "rawPhrase",
+          "reason"
+        ],
+        "properties": {
+          "formulaItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^\\S+$"
+          },
+          "specificationVersionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^\\S+$"
+          },
+          "specComponentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^\\S+$"
+          },
+          "ingredientId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rawPhrase": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "UNMAPPED",
+              "AMBIGUOUS"
+            ]
+          }
+        }
+      },
+      "description": "Unresolved ingredient/component evidence; an unknown allergen is never fabricated.",
+      "uniqueItems": true
+    },
+    "specificationChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "previous",
+        "candidate"
+      ],
+      "properties": {
+        "previous": {
+          "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/VersionReference"
+        },
+        "candidate": {
+          "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/VersionReference"
+        }
+      }
+    },
+    "formulaVersion": {
+      "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/VersionReference"
+    },
+    "labelVersion": {
+      "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/VersionReference"
+    },
+    "ruleSetVersion": {
+      "$ref": "../openapi/compliance-types.v1.schema.json#/$defs/VersionReference"
+    },
+    "jurisdiction": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "NO_ACTION"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "properties": {
+          "missingAllergens": {
+            "maxItems": 0
+          },
+          "unresolvedAllergens": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "REVIEW_REQUIRED"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "missingAllergens": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "unresolvedAllergens": {
+                "minItems": 1
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
