@@ -131,6 +131,7 @@ jobs:
         run: |
           npx playwright install chromium
           npx playwright test --grep-invert 'captures.*live'
+          npm run test:signin
           npx nyc report --reporter=lcov --reporter=text-summary
       - name: Cache SonarQube packages
         uses: actions/cache@v4

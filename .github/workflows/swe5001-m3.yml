@@ -1,0 +1,96 @@
+name: SWE5001 M3 gateway and sign-in
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['platform/gateway/**', 'frontend/**', '.github/workflows/swe5001-m3.yml']
+  push:
+    branches: [main, XFY]
+    paths: ['platform/gateway/**', 'frontend/**', '.github/workflows/swe5001-m3.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: mvn -B -ntp -f platform/gateway/pom.xml verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m3-gateway-evidence
+          path: |
+            platform/gateway/target/surefire-reports/**
+            platform/gateway/target/site/jacoco/**
+          retention-days: 14
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npx playwright test --config playwright.signin.config.ts
+        working-directory: frontend
+      - run: npm run test:pages
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m3-signin-evidence
+          path: frontend/test-results/**
+          retention-days: 14
+  pages:
+    # Repository owner enables this only after M4/M5 confirm URLs and Pages uses Actions.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.FRONTEND_PAGES_ENABLED == 'true'
+    needs: [gateway, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build reference consumer at the repository Pages base path
+        working-directory: frontend
+        env:
+          VITE_AUTH_ENABLED: 'true'
+          VITE_SITE_BASE: /${{ github.event.repository.name }}/
+          VITE_OIDC_AUTHORITY: ${{ vars.VITE_OIDC_AUTHORITY }}
+          VITE_OIDC_AUDIENCE: ${{ vars.VITE_OIDC_AUDIENCE }}
+          VITE_GATEWAY_ORIGIN: ${{ vars.VITE_GATEWAY_ORIGIN }}
+        run: |
+          node scripts/check-pages-config.mjs
+          npm ci
+          npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: frontend/dist
+      - uses: actions/deploy-pages@v4
+        id: deployment

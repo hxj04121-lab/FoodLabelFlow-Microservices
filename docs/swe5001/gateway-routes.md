@@ -94,3 +94,7 @@ Origin 是 scheme + host + port，不含路径；GitHub Pages 项目路径属于
 - M2：限流/请求体容量参数；M4：realm、issuer/audience、Keycloak /auth 和 admin 边界；M5：稳定域名、ALB、service DNS/端口。
 
 M4 realm 设计现已提供 spectrace-web public PKCE S256 及顶层 org_id/org_type/roles；设计文件不代表 realm 已部署。G1 确认结果再记录于本文件；若改变契约，遵循 M2 + ADR 流程。G0 的本次提交不包含 Gateway 运行代码或 G1 测试结论。
+
+## G1 本地实现进度（2026-10-11）
+
+G0 文档已合并后，XFY 继续添加 [本地 Gateway](../../platform/gateway/README.md)、[登录与 Pages 构建](../../frontend/README-G1.md)，测试范围及联调依赖见 [G1 本地验证记录](evidence/G1-M3-local-progress.md)。当前实现不新增公开契约；C-03/C-04/C-07 的团队决定仍待 M4/M2 对齐。实际部署的来源、issuer/audience、角色和 service 地址必须显式配置，不能把本地 fixture 当团队认可值。

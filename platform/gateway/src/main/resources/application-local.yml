@@ -1,0 +1,19 @@
+# Local fixtures only. These are not the team's accepted deployed realm or role mapping.
+gateway:
+  realm: spectrace-local
+  issuer: http://localhost:8080/auth/realms/spectrace-local
+  jwk-set-uri: http://localhost:8180/auth/realms/spectrace-local/protocol/openid-connect/certs
+  audience: spectrace-api-local
+  keycloak: http://localhost:8180
+  specification: http://localhost:8081
+  formulation: http://localhost:8082
+  compliance: http://localhost:8083
+  label-workflow: http://localhost:8084
+  allowed-origins:
+    - http://localhost:5173
+    - http://127.0.0.1:5173
+  write-roles:
+    specification: [SPEC_AUTHOR, SPEC_RELEASER]
+    formulation: [FORMULA_AUTHOR, FORMULA_RELEASER]
+    compliance: [CHANGE_MANAGER]
+    label-workflow: [LABEL_OFFICER, APPROVER, PUBLISHER]
