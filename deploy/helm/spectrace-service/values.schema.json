@@ -307,7 +307,7 @@
             "contains": {
               "properties": {
                 "key": {
-                  "const": "workload"
+                  "const": "dedicated"
                 },
                 "operator": {
                   "const": "Equal"
