@@ -3,7 +3,7 @@
   "eventType": "LabelPublished.v1",
   "schemaVersion": 1,
   "occurredAt": "2026-10-07T10:00:00Z",
-  "producer": "label-workflow",
+  "producer": "label-workflow-service",
   "organisationId": "org-manufacturer-001",
   "correlationId": "corr-publish-001",
   "aggregateId": "label-001-v2",

@@ -1,0 +1,6 @@
+{
+  "code": "AUTHORIZATION_DENIED",
+  "message": "The actor is not permitted.",
+  "traceId": "corr_example_001",
+  "evidenceId": null
+}

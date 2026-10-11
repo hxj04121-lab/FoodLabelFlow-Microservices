@@ -1,0 +1,67 @@
+{
+  "eventId": "10000000-0000-4000-8000-000000000004",
+  "eventType": "ImpactFinding.v1",
+  "schemaVersion": 1,
+  "occurredAt": "2026-10-06T02:00:01Z",
+  "producer": "compliance-service",
+  "organisationId": "manufacturer_01",
+  "correlationId": "corr_004",
+  "aggregateId": "finding_004",
+  "aggregateVersion": 1,
+  "payload": {
+    "findingId": "finding_004",
+    "organisationId": "manufacturer_01",
+    "kind": "CONFIRMED",
+    "outcome": "REVIEW_REQUIRED",
+    "requiredAllergens": [
+      "all_soy",
+      "all_wheat"
+    ],
+    "declaredAllergens": [
+      "all_soy",
+      "all_wheat"
+    ],
+    "missingAllergens": [],
+    "unresolvedAllergens": [
+      {
+        "formulaItemId": "formula_003_v2_i01",
+        "specificationVersionId": "spec_003_v2",
+        "specComponentId": "spec_003_v2_c02",
+        "ingredientId": "ing_placeholder_unmapped",
+        "rawPhrase": "natural flavouring (carrier undisclosed)",
+        "reason": "UNMAPPED"
+      },
+      {
+        "formulaItemId": "formula_003_v2_i03",
+        "specificationVersionId": "spec_003_v2",
+        "specComponentId": "spec_003_v2_c02",
+        "ingredientId": "ing_placeholder_unmapped",
+        "rawPhrase": "natural flavouring (carrier undisclosed)",
+        "reason": "UNMAPPED"
+      }
+    ],
+    "specificationChange": {
+      "previous": {
+        "id": "spec_003_v1",
+        "versionNumber": 1
+      },
+      "candidate": {
+        "id": "spec_003_v2",
+        "versionNumber": 2
+      }
+    },
+    "formulaVersion": {
+      "id": "formula_003_v2",
+      "versionNumber": 2
+    },
+    "labelVersion": {
+      "id": "label_003_v1",
+      "versionNumber": 1
+    },
+    "ruleSetVersion": {
+      "id": "rules_us_v1",
+      "versionNumber": 1
+    },
+    "jurisdiction": "US"
+  }
+}
