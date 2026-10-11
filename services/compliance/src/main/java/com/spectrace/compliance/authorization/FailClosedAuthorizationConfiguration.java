@@ -1,5 +1,6 @@
 package com.spectrace.compliance.authorization;
 
+import com.nimbusds.jwt.SignedJWT;
 import com.spectrace.platform.starter.error.ApiException;
 import com.spectrace.platform.starter.security.OrganisationAuthenticationConverter;
 import com.spectrace.platform.starter.security.OrganisationGuard;
@@ -9,6 +10,7 @@ import com.spectrace.platform.starter.security.SecurityProperties;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.text.ParseException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,7 +27,6 @@ import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.MappedJwtClaimSetConverter;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 import tools.jackson.databind.json.JsonMapper;
@@ -63,8 +64,6 @@ public class FailClosedAuthorizationConfiguration {
             throw new IllegalStateException("issuer-uri, jwk-set-uri and audience must all be explicitly configured");
         }
         var decoder = NimbusJwtDecoder.withJwkSetUri(jwks).jwsAlgorithm(SignatureAlgorithm.RS256).build();
-        // Preserve subject type so arrays/numbers cannot be coerced into a usable actor id.
-        decoder.setClaimSetConverter(MappedJwtClaimSetConverter.withDefaults(Map.of("sub", value -> value)));
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(JwtValidators.createDefaultWithIssuer(issuer),
                 jwt -> jwt.getAudience() != null && jwt.getAudience().contains(audience) ? OAuth2TokenValidatorResult.success()
                         : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Invalid audience", null))));
@@ -98,7 +97,16 @@ public class FailClosedAuthorizationConfiguration {
     }
 
     private static void requireScalarIdentity(Jwt jwt, SecurityProperties properties) {
-        var claims = jwt.getClaims();
+        final Map<String, Object> claims;
+        try {
+            // Signature/issuer/audience were already verified by the decoder. Nimbus's registered
+            // claim parser can coerce a numeric sub to a String before Spring's claim converter;
+            // inspect the verified JWS payload to retain the original JSON identity types.
+            claims = SignedJWT.parse(jwt.getTokenValue()).getPayload().toJSONObject();
+        } catch (ParseException malformed) {
+            throw new BadCredentialsException("The verified access token payload is unusable", malformed);
+        }
+        if (claims == null) throw new BadCredentialsException("The verified access token payload is unusable");
         Object org = claims.get(properties.getOrganisationIdClaim());
         Object type = claims.get(properties.getOrganisationTypeClaim());
         Object subject = claims.get("sub");
