@@ -33,7 +33,7 @@ class PhaseOneImpactMatcherTest {
             List.of(new FormulaItem("formula_001_i01", PREVIOUS.id(), PREVIOUS.components())));
     private static final RuleSetVersion RULES = new RuleSetVersion("rules_us_v1", 1, "US");
     private static final Map<String, Set<String>> MAPPINGS = Map.of(
-            "ing_wheat_flour", Set.of("all_wheat"), "ing_soy_lecithin", Set.of("all_soy"));
+            "ing_cocoa", Set.of(), "ing_wheat_flour", Set.of("all_wheat"), "ing_soy_lecithin", Set.of("all_soy"));
 
     private final PhaseOneImpactMatcher matcher = new PhaseOneImpactMatcher();
 
@@ -122,5 +122,37 @@ class PhaseOneImpactMatcherTest {
         LabelVersion unrelatedLabel = new LabelVersion("manufacturer_01", "label_other", 1,
                 unrelated.formulaVersionId(), Set.of());
         assertThat(matcher.match(PREVIOUS, CANDIDATE, unrelated, unrelatedLabel, RULES, MAPPINGS)).isEmpty();
+    }
+
+    @Test
+    void unchangedConclusionsAreExcludedEvenWhenTheSpecificationVersionChanges() {
+        var unchanged = new SpecificationVersion("spec_001_v2", 2, PREVIOUS.id(), PREVIOUS.components());
+        var label = new LabelVersion("manufacturer_01", "label_001_v1", 1, FORMULA.formulaVersionId(), Set.of());
+        assertThat(matcher.match(PREVIOUS, unchanged, FORMULA, label, RULES, MAPPINGS)).isEmpty();
+    }
+
+    @Test
+    void matchedVocabularyWithoutComplianceKnowledgeIsStillUnresolved() {
+        var unknown = new SpecificationComponent("new_c", "ing_new", "new supplier ingredient", MatchStatus.MATCHED);
+        var candidate = new SpecificationVersion("spec_001_v2", 2, PREVIOUS.id(), List.of(WHEAT, unknown));
+        var label = new LabelVersion("manufacturer_01", "label_001_v1", 1, FORMULA.formulaVersionId(), Set.of("all_wheat"));
+        var finding = matcher.match(PREVIOUS, candidate, FORMULA, label, RULES, MAPPINGS).orElseThrow();
+        assertThat(finding.outcome()).isEqualTo(Outcome.REVIEW_REQUIRED);
+        assertThat(finding.unresolvedAllergens()).singleElement().extracting(ImpactFinding.UnresolvedAllergen::ingredientId)
+                .isEqualTo("ing_new");
+    }
+
+    @Test
+    void aggregatesAllItemsAndRejectsCrossOrganisationLabels() {
+        var formula = new FormulaVersion("manufacturer_01", "multi", 1, List.of(
+                FORMULA.items().getFirst(), new FormulaItem("milk-item", "milk-spec", List.of(
+                        new SpecificationComponent("milk-c", "ing_milk_powder", "milk", MatchStatus.MATCHED)))));
+        var mappings = new java.util.HashMap<>(MAPPINGS);
+        mappings.put("ing_milk_powder", Set.of("all_milk"));
+        var label = new LabelVersion("manufacturer_01", "multi-label", 1, "multi", Set.of("all_wheat"));
+        assertThat(matcher.match(PREVIOUS, CANDIDATE, formula, label, RULES, mappings).orElseThrow().requiredAllergens())
+                .containsExactly("all_milk", "all_soy", "all_wheat");
+        var foreign = new LabelVersion("manufacturer_02", "multi-label", 1, "multi", Set.of());
+        assertThat(matcher.match(PREVIOUS, CANDIDATE, formula, foreign, RULES, mappings)).isEmpty();
     }
 }

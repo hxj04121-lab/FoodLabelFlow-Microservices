@@ -2,6 +2,35 @@
 
 **State:** implementation draft; CI and human acceptance are pending.
 
+## 11 October continuation (supersedes earlier environment and dependency observations)
+
+The existing branch and commits were preserved. Docker Engine 29.7.2 is reachable; actual MySQL
+8.4.11 and RabbitMQ 4.1 tests are being rerun. PR25 was merged into provider PR23 on 10 October,
+so its unique-key rollback correction is now adopted there. Main and PR21/24 remain unmerged.
+
+Red-team fixes in this continuation:
+
+- A vocabulary `MATCHED` component without Compliance knowledge is UNRESOLVED. Explicit reviewed
+  zero-allergen demo assessments distinguish cocoa/sugar/neutral fixtures from an unknown ingredient.
+- Unchanged full-formula allergen conclusions produce no POTENTIAL finding. All items contribute;
+  tests cover a second milk-containing item and a foreign-organisation Label.
+- A candidate arriving before its predecessor rolls back its projection and aggregate cursor, allowing
+  the predecessor replay and candidate retry. Duplicate and stale events cannot mutate existing versions.
+- Baseline rule IDs `ruleset_us_falcpa_demo_v1/v2` are retained for M1/M4 seed compatibility, including
+  the original ACTIVE/DRAFT distinction. No old Flyway migration is rewritten.
+- Validation uses READ_COMMITTED to avoid missing-key gap-lock races; concurrent requests must return
+  one persisted run and audit. Missing declaration arrays are rejected.
+
+[ADR-G2-M2-002](adr/ADR-G2-M2-002-label-business-version-provider.md) records the exact minimum M4
+interface and approval questions. The frozen Label event and ImpactFinding schemas are unchanged.
+The default identity and Label-version ports still fail closed; consumer fixtures are not a real
+M4 provider. Real staging, broker topology and final security acceptance remain owner gates.
+
+Latest Jira board 34 was read directly on 11 October: G1 is 12 October, G2 13 October, G3 14 October
+(23:59 feature freeze), report drafts 15 October and integration 16 October. The older work-order
+17–20 October G3 dates cannot be used for planning; M5's combined 13–14 October window is unconfirmed.
+See the evidence note in `docs/swe5001/evidence/` for the completed run and limitations.
+
 This change implements the Compliance-owned validation and projection slice for STCN-12 / STCN-69–73: seeded allergen and rule data, idempotent validation runs, immutable Specification/Formula/Label projections, duplicate/stale event handling, and the read-only Phase 1 `SpecificationPublished → POTENTIAL` matcher. Unresolved components remain blocking review findings. The matcher does not write Formula state.
 
 ## Unresolved-result semantics

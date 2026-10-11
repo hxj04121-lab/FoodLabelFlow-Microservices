@@ -137,9 +137,9 @@ class ComplianceApplicationTest {
     @Test
     void flywayOwnsTheComplianceRootAndReapplyingDoesNotDuplicateHistory() {
         assertThat(jdbc.queryForObject("SELECT DATABASE()", String.class)).isEqualTo("compliance");
-        assertThat(flyway.info().current().getVersion().toString()).isEqualTo("2");
+        assertThat(flyway.info().current().getVersion().toString()).isEqualTo("4");
         assertThat(jdbc.queryForList("SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank",
-                String.class)).containsExactly("0.1", "1", "2");
+                String.class)).containsExactly("0.1", "1", "2", "3", "4");
         assertThat(jdbc.queryForList("""
                 SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()
                 AND table_name IN ('outbox', 'local_audit', 'processed_event', 'consumed_aggregate_version',
@@ -169,8 +169,10 @@ class ComplianceApplicationTest {
 
     @Test
     void flywayCleanCannotDeleteTheServiceDatabase() {
+        Integer historyBefore = jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE", Integer.class);
         assertThatThrownBy(flyway::clean).isInstanceOf(FlywayException.class).hasMessageContaining("cleanDisabled");
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE", Integer.class)).isEqualTo(3);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE", Integer.class))
+                .isEqualTo(historyBefore);
     }
 
     @Test
@@ -299,10 +301,11 @@ class ComplianceApplicationTest {
         ((ObjectNode) candidatePayload.get("previousVersion")).put("id", oldSpecId);
         EventEnvelope candidate = EventEnvelope.parse(json.writeValueAsBytes(candidateNode), json);
 
-        assertThat(idempotentConsumer.consume("compliance.specification-projection.v1", candidate,
-                eventProjector::projectSpecification)).isEqualTo(IdempotentConsumer.Outcome.APPLIED);
-        assertThat(idempotentConsumer.consume("compliance.specification-projection.v1", candidate,
-                eventProjector::projectSpecification)).isEqualTo(IdempotentConsumer.Outcome.DUPLICATE);
+        assertThatThrownBy(() -> idempotentConsumer.consume("compliance.specification-projection.v1", candidate,
+                eventProjector::projectSpecification)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("predecessor replay");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM consumed_aggregate_version WHERE consumer = ? AND aggregate_id = ?",
+                Integer.class, "compliance.specification-projection.v1", materialId)).isZero();
 
         ObjectNode staleNode = candidateNode.deepCopy();
         staleNode.put("eventId", UUID.randomUUID().toString());
@@ -315,12 +318,20 @@ class ComplianceApplicationTest {
         stalePayload.put("releasedAt", "2026-09-30T07:55:00Z");
         EventEnvelope stale = EventEnvelope.parse(json.writeValueAsBytes(staleNode), json);
         assertThat(idempotentConsumer.consume("compliance.specification-projection.v1", stale,
+                eventProjector::projectSpecification)).isEqualTo(IdempotentConsumer.Outcome.APPLIED);
+        assertThat(idempotentConsumer.consume("compliance.specification-projection.v1", candidate,
+                eventProjector::projectSpecification)).isEqualTo(IdempotentConsumer.Outcome.APPLIED);
+        assertThat(idempotentConsumer.consume("compliance.specification-projection.v1", candidate,
+                eventProjector::projectSpecification)).isEqualTo(IdempotentConsumer.Outcome.DUPLICATE);
+        staleNode.put("eventId", UUID.randomUUID().toString());
+        stale = EventEnvelope.parse(json.writeValueAsBytes(staleNode), json);
+        assertThat(idempotentConsumer.consume("compliance.specification-projection.v1", stale,
                 eventProjector::projectSpecification)).isEqualTo(IdempotentConsumer.Outcome.STALE);
 
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM specification_version_projection WHERE specification_version_id = ?",
                 Integer.class, newSpecId)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM specification_version_projection WHERE specification_version_id = ?",
-                Integer.class, oldSpecId)).isZero();
+                Integer.class, oldSpecId)).isEqualTo(1);
     }
 
     @Test
@@ -424,6 +435,78 @@ class ComplianceApplicationTest {
                 SELECT formula_item_id, sequence_no, material_id, specification_version_id, quantity, unit
                 FROM formula_item_projection WHERE formula_version_id = ? ORDER BY sequence_no, formula_item_id
                 """, formulaId)).containsExactlyElementsOf(itemsBefore);
+    }
+
+    @Test
+    void aMatchedButUnknownIngredientPersistsFailedRatherThanPassingSilently() {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String formulaId = "unknown_formula_" + suffix;
+        String labelId = "unknown_label_" + suffix;
+        insertFormula("unknown_spec_" + suffix, formulaId, "ing_supplier_new", "MATCHED", suffix);
+        var snapshot = new DraftSnapshot("manufacturer_01", labelId, 1, 1, formulaId, "US", "rules_us_v1", List.of());
+        var actor = new ValidationAuthorizationPort.Actor("test-actor", "manufacturer_01");
+        var result = validations.evaluate(labelId + ":1", snapshot, actor);
+        assertThat(result.run().status()).isEqualTo("FAILED");
+        assertThat(result.run().findings()).anySatisfy(finding ->
+                assertThat(finding.resultCode()).isEqualTo("FORMULA_COMPONENT_UNRESOLVED"));
+        assertThat(validations.evaluate(labelId + ":1", snapshot, actor).run()).isEqualTo(result.run());
+    }
+
+    @Test
+    void baselineRuleSetIdsAndExplicitNonAllergenAssessmentsRemainUsable() {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String formulaId = "baseline_formula_" + suffix;
+        String labelId = "baseline_label_" + suffix;
+        insertFormula("baseline_spec_" + suffix, formulaId, "ing_cocoa", "MATCHED", suffix);
+        var snapshot = new DraftSnapshot("manufacturer_01", labelId, 1, 1, formulaId, "US",
+                "ruleset_us_falcpa_demo_v1", List.of());
+        assertThat(validations.evaluate(labelId + ":1", snapshot,
+                new ValidationAuthorizationPort.Actor("test-actor", "manufacturer_01")).run().status()).isEqualTo("PASSED");
+        assertThat(jdbc.queryForObject("SELECT lifecycle_status FROM compliance_rule_set WHERE rule_set_version_id = ?",
+                String.class, "ruleset_us_falcpa_demo_v2")).isEqualTo("DRAFT");
+    }
+
+    @Test
+    void concurrentIdenticalRequestsReturnOneStoredRunAndOneAudit() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String formulaId = "concurrent_formula_" + suffix;
+        String labelId = "concurrent_label_" + suffix;
+        insertFormula("concurrent_spec_" + suffix, formulaId, "ing_cocoa", "MATCHED", suffix);
+        var snapshot = new DraftSnapshot("manufacturer_01", labelId, 1, 1, formulaId, "US", "rules_us_v1", List.of());
+        var actor = new ValidationAuthorizationPort.Actor("test-actor", "manufacturer_01");
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(4)) {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            var results = new java.util.ArrayList<java.util.concurrent.Future<ValidationService.Submission>>();
+            for (int i = 0; i < 4; i++) results.add(executor.submit(() -> {
+                start.await();
+                return validations.evaluate(labelId + ":1", snapshot, actor);
+            }));
+            start.countDown();
+            var submissions = new java.util.ArrayList<ValidationService.Submission>();
+            for (var result : results) submissions.add(result.get(20, java.util.concurrent.TimeUnit.SECONDS));
+            assertThat(submissions.stream().filter(ValidationService.Submission::created)).hasSize(1);
+            assertThat(submissions.stream().map(value -> value.run().validationRunId()).distinct()).hasSize(1);
+            String runId = submissions.getFirst().run().validationRunId();
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM local_audit WHERE entity_id = ?", Integer.class, runId))
+                    .isEqualTo(1);
+        }
+    }
+
+    @Test
+    void validationRejectsForeignOrganisationsAndUnavailableRuleSetsWithoutPersisting() {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String formulaId = "guards_formula_" + suffix;
+        String labelId = "guards_label_" + suffix;
+        insertFormula("guards_spec_" + suffix, formulaId, "ing_cocoa", "MATCHED", suffix);
+        var snapshot = new DraftSnapshot("manufacturer_01", labelId, 1, 1, formulaId, "US", "rules_us_v1", List.of());
+        assertThatThrownBy(() -> validations.evaluate(labelId + ":1", snapshot,
+                new ValidationAuthorizationPort.Actor("foreign", "manufacturer_02"))).isInstanceOf(ApiException.class);
+        var inactive = new DraftSnapshot("manufacturer_01", labelId, 1, 1, formulaId, "US",
+                "ruleset_us_falcpa_demo_v2", List.of());
+        assertThatThrownBy(() -> validations.evaluate(labelId + ":1", inactive,
+                new ValidationAuthorizationPort.Actor("test", "manufacturer_01"))).isInstanceOf(ApiException.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM validation_idempotency WHERE idempotency_key = ?",
+                Integer.class, labelId + ":1")).isZero();
     }
 
     private void insertFormula(String specificationId, String formulaId, String ingredientId,

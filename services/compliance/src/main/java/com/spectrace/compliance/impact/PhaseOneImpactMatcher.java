@@ -51,22 +51,11 @@ public final class PhaseOneImpactMatcher {
         }
         if (!referencesPrevious) return Optional.empty();
 
-        Set<String> required = new TreeSet<>();
-        List<UnresolvedAllergen> unresolved = new ArrayList<>();
-        for (FormulaItem item : evaluatedItems) {
-            for (SpecificationComponent component : item.components()) {
-                if (component.matchStatus() != MatchStatus.MATCHED || component.ingredientId() == null) {
-                    UnresolvedReason reason = component.matchStatus() == MatchStatus.AMBIGUOUS
-                            ? UnresolvedReason.AMBIGUOUS : UnresolvedReason.UNMAPPED;
-                    unresolved.add(new UnresolvedAllergen(item.formulaItemId(), item.specificationVersionId(),
-                            component.specComponentId(), component.ingredientId(), component.rawPhrase(), reason));
-                    continue;
-                }
-                required.addAll(ingredientAllergens.getOrDefault(component.ingredientId(), Set.of()));
-            }
-        }
-        unresolved.sort(Comparator.comparing(UnresolvedAllergen::formulaItemId)
-                .thenComparing(UnresolvedAllergen::specComponentId));
+        var before = AllergenDerivation.derive(formula.items(), ingredientAllergens);
+        var after = AllergenDerivation.derive(evaluatedItems, ingredientAllergens);
+        if (before.sameConclusion(after)) return Optional.empty();
+        List<String> required = after.required();
+        List<UnresolvedAllergen> unresolved = after.unresolved();
         Set<String> declared = new TreeSet<>(label.declaredAllergens());
         Set<String> missing = new TreeSet<>(required);
         missing.removeAll(declared);

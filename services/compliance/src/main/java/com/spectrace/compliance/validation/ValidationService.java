@@ -18,11 +18,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -42,23 +42,24 @@ public class ValidationService {
         this.audit = audit;
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Submission evaluate(String idempotencyKey, DraftSnapshot request, ValidationAuthorizationPort.Actor actor) {
         validateRequest(idempotencyKey, request, actor);
         String hash = snapshotHash(request);
         Existing existing = findExisting(request.organisationId(), idempotencyKey);
         if (existing != null) return replayOrConflict(existing, hash);
 
-        try {
-            jdbc.update("""
+        jdbc.update("""
                     INSERT INTO validation_idempotency
                         (organisation_id, idempotency_key, snapshot_sha256, created_at)
                     VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE idempotency_key = VALUES(idempotency_key)
                     """, request.organisationId(), idempotencyKey, hash, Timestamp.from(Instant.now()));
-        } catch (DuplicateKeyException concurrentRequest) {
-            Existing winner = findExisting(request.organisationId(), idempotencyKey);
-            if (winner == null) throw concurrentRequest;
-            return replayOrConflict(winner, hash);
+        // The upsert serialises contenders with an exclusive row lock. Duplicate INSERT exceptions
+        // acquire shared locks in MySQL and can deadlock when every contender upgrades to FOR UPDATE.
+        Existing reservation = findExisting(request.organisationId(), idempotencyKey);
+        if (!reservation.snapshotHash().equals(hash) || reservation.responseJson() != null) {
+            return replayOrConflict(reservation, hash);
         }
 
         Set<String> activeAllergenRules = assertRuleSet(request);
@@ -85,11 +86,19 @@ public class ValidationService {
                                     + component.matchStatus() + "."));
                     continue;
                 }
-                jdbc.queryForList("""
+                List<String> mapped = jdbc.queryForList("""
                         SELECT allergen_id FROM ingredient_allergen_mapping
                         WHERE ingredient_id = ? AND rule_set_version_id = ?
-                        """, String.class, component.ingredientId(), request.ruleSetVersionId()).stream()
-                        .filter(activeAllergenRules::contains).forEach(required::add);
+                        """, String.class, component.ingredientId(), request.ruleSetVersionId());
+                Integer assessed = jdbc.queryForObject("""
+                        SELECT COUNT(*) FROM ingredient_non_allergen_assessment
+                        WHERE ingredient_id = ? AND rule_set_version_id = ?
+                        """, Integer.class, component.ingredientId(), request.ruleSetVersionId());
+                if (mapped.isEmpty() && (assessed == null || assessed == 0)) {
+                    findings.add(new ValidationRun.Finding("FORMULA_COMPONENT_UNRESOLVED", "ERROR", false, true,
+                            "Formula component " + component.componentId() + " has no Compliance allergen knowledge."));
+                }
+                mapped.stream().filter(activeAllergenRules::contains).forEach(required::add);
             }
         }
 

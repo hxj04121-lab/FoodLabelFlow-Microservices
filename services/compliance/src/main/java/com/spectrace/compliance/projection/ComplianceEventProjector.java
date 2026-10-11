@@ -100,7 +100,10 @@ public class ComplianceEventProjector {
                     FROM specification_version_projection WHERE specification_version_id = ?
                     """, (rs, row) -> new SpecificationVersionHeader(rs.getString("specification_version_id"),
                     rs.getInt("version_number"), rs.getString("previous_version_id")), previousId);
-            if (!previousProjection.isEmpty()) {
+            if (previousProjection.isEmpty()) {
+                // Roll back the aggregate cursor too, so the predecessor can arrive before this retry.
+                throw new IllegalStateException("Previous specification projection is unavailable; retry after predecessor replay");
+            } else {
                 SpecificationVersion candidate = new SpecificationVersion(specificationId, versionNumber, previousId, components);
                 SpecificationVersionHeader previousHeader = previousProjection.getFirst();
                 if (previousHeader.versionNumber() != previousNumber) {

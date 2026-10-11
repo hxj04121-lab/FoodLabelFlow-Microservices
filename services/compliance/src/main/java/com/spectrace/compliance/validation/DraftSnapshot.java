@@ -14,7 +14,10 @@ public record DraftSnapshot(
         List<Declaration> declarations) {
 
     public DraftSnapshot {
-        declarations = declarations == null ? List.of() : List.copyOf(declarations);
+        if (declarations == null || declarations.stream().anyMatch(java.util.Objects::isNull)) {
+            throw com.spectrace.platform.starter.error.ApiException.invalid("A declarations array is required.");
+        }
+        declarations = List.copyOf(declarations);
     }
 
     public record Declaration(String allergenId, String declarationType) { }

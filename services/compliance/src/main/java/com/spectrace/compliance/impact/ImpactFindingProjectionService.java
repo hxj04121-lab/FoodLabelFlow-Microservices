@@ -160,6 +160,8 @@ public class ImpactFindingProjectionService {
 
     private Map<String, Set<String>> loadAllergenMappings(String ruleSetId) {
         Map<String, Set<String>> mappings = new HashMap<>();
+        jdbc.queryForList("SELECT ingredient_id FROM ingredient_non_allergen_assessment WHERE rule_set_version_id = ?",
+                String.class, ruleSetId).forEach(id -> mappings.put(id, new HashSet<>()));
         jdbc.query("""
                 SELECT ingredient_id, allergen_id FROM ingredient_allergen_mapping
                 WHERE rule_set_version_id = ? ORDER BY ingredient_id, allergen_id
