@@ -56,6 +56,8 @@ try (CorrelationId.Scope ignored = CorrelationId.bind(envelope.correlationId()))
 
 ## Security module (M4)
 
+**Until G1-M4.2 (STCN-55, PR #36) is merged, the starter ships no security auto-configuration: every endpoint is unauthenticated. Do not assume authentication is on.**
+
 `com.spectrace.platform.starter.security` is reserved for G1-M4.2 (JWT resource server, organisation context, role and organisation guards). The correlation filter runs before the security filter chain, so 401/403 responses already carry `X-Correlation-ID`, and anything the security chain rejects with `sendError` is rendered as an `ApiError` by the starter's `/error` controller. Use `ApiException.unauthenticated()` / `forbidden()` or `ApiErrors.response(...)` for the codes `AUTHENTICATION_REQUIRED` and `AUTHORIZATION_DENIED`.
 
 ## Local platform
@@ -97,7 +99,10 @@ public SpecificationVersion release(...) {
 - the row is marked published only after a positive correlated confirm **and** no unroutable return;
 - otherwise it records `attempts` and `last_error` and is retried on the next poll.
 
-Delivery is at-least-once.
+Delivery is at-least-once. Operating notes:
+- `attempts` counts delivery attempts, **including** the successful one, so it is not an error counter. A published row normally has `attempts = 1`.
+- Retries have no cap. Alert on the age of the oldest unpublished row and on a non-null `last_error` (G2-M5 alerts, STCN-88), not on `attempts`.
+- A poll keeps its database transaction (and the claimed rows' locks) open while it waits for confirms, up to `spectrace.messaging.relay.confirm-timeout` (default 5 s). Keep that timeout small.
 
 Consumer — at most once per consumer, newest version only:
 
