@@ -18,3 +18,7 @@ Before integration M5 confirms group name, taint, Kubernetes version >=1.30, sub
 Three general t3.medium nodes use 6 vCPU; four Compliance c6i.large nodes use 8; the separate c6i.large k6 host uses 2, totaling 16 nominal vCPU before rolling-update surge. M5 PR10 declares 16 required and 20 recommended quota, but live account quota/credit/access remain unverified. Its reusable budget workflow also needs an explicit fail-closed enforcement path: caller github.event_name is not workflow_call, so omitted credit can currently return success. Review is recorded in G0 M2 steward notes; M2 does not change M5's branch or infer apply authorization.
 
 Acceptance remains pending actual M5 Terraform, approved gate prerequisites, runtime pod placement and M4 review. These static assets cannot satisfy G1's staging deployment criterion.
+
+## October 11 actual M5 Terraform alignment
+
+PR #27 at 540e99f7d11701b3173609a8be5ba61b50d382c4 defines the node group `compliance`, c6i.large, min 1/max 4 over the two private subnets, and taint **workload=compliance:NoSchedule**. The earlier `dedicated` proposal above is superseded for this staging implementation. The G3 experiment branch updates Helm's enforced toleration and tests to `workload`; M5 source is preserved. Immutable `image.digest` rendering is now supported for controlled trials. This is a static interface comparison; no real scheduling or Terraform apply was run. M5/M4 review and approved window remain required.
