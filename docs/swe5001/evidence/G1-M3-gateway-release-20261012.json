@@ -1,0 +1,8 @@
+{
+  "commit": "9653ee08708a72c42e568c4c48daeef53302482d",
+  "image": "ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway:9653ee08708a72c42e568c4c48daeef53302482d",
+  "digestReference": "ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway@sha256:978b36420ba1ccd1ad53748c633069be1f3fa6a74b387007a2749661a1553faf",
+  "port": 8080,
+  "readiness": "/actuator/health/readiness",
+  "liveness": "/actuator/health/liveness"
+}

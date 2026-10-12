@@ -8,7 +8,9 @@ export function matchesCaller(value: CallerIdentity, identity: Identity | undefi
   if (!identity || !value || value.subject !== identity.subject || value.org_id !== identity.organisationId
     || value.org_type !== identity.organisationType || !Array.isArray(value.roles)
     || value.roles.some(r => typeof r !== 'string')) return false
-  return [...new Set(value.roles)].sort().join('\n') === [...new Set(identity.roles)].sort().join('\n')
+  const actual = new Set(value.roles)
+  const expected = new Set(identity.roles)
+  return actual.size === expected.size && [...actual].every(role => expected.has(role))
 }
 type Session = { status: 'loading' | 'signedOut' | 'signedIn' | 'error'; identity?: Identity; message?: string }
 let session: Session = { status: 'loading' }
