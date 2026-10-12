@@ -12,3 +12,6 @@ frontend/playwright-report/
 frontend/.nyc_output/
 frontend/coverage/
 .DS_Store
+
+# M1 demo inputs contain live bearer tokens.
+tokens.json

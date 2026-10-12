@@ -1,0 +1,59 @@
+# Merge after deploy/local/compose.yaml. Own project name avoids replacing another local stack.
+name: spectrace-m3-g1
+
+x-service-identity: &service-identity
+  OIDC_ISSUER_URI: http://localhost:${G1_GATEWAY_HOST_PORT:-8080}/auth/realms/spectrace
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
+    command: ["start-dev", "--import-realm", "--http-port=8080", "--hostname-strict=false"]
+    environment:
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME: http://localhost:${G1_GATEWAY_HOST_PORT:-8080}/auth
+      # Keep the inherited 9000 /health/ready probe unchanged when /auth is enabled.
+      KC_HTTP_MANAGEMENT_RELATIVE_PATH: /
+    volumes:
+      - type: bind
+        source: ${G1_REALM_FILE:?Set G1_REALM_FILE to the absolute path of M4's realm JSON}
+        target: /opt/keycloak/data/import/spectrace-realm.json
+        read_only: true
+        bind:
+          create_host_path: false
+
+  specification:
+    environment: *service-identity
+  formulation:
+    environment: *service-identity
+
+  gateway:
+    build:
+      context: ../../platform/gateway
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:${G1_GATEWAY_HOST_PORT:-8080}:8080"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      GATEWAY_REALM: spectrace
+      GATEWAY_ISSUER: http://localhost:${G1_GATEWAY_HOST_PORT:-8080}/auth/realms/spectrace
+      GATEWAY_JWK_SET_URI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
+      GATEWAY_AUDIENCE: spectrace-api
+      GATEWAY_KEYCLOAK: http://keycloak:8080
+      GATEWAY_SPECIFICATION: http://specification:8080
+      GATEWAY_FORMULATION: http://formulation:8080
+      GATEWAY_COMPLIANCE: http://compliance:8080
+      GATEWAY_LABEL_WORKFLOW: http://label-workflow:8080
+      GATEWAY_ALLOWED_ORIGINS: ${G1_FRONTEND_ORIGIN:-http://localhost:5173}
+      GATEWAY_SPECIFICATION_WRITE_ROLES: ADMIN_DATA_MAINTENANCE
+      GATEWAY_FORMULATION_WRITE_ROLES: ADMIN_DATA_MAINTENANCE
+      GATEWAY_COMPLIANCE_WRITE_ROLES: CHANGE_MANAGER
+      GATEWAY_LABEL_WRITE_ROLES: LABEL_OFFICER,APPROVER,PUBLISHER
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

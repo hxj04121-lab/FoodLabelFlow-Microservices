@@ -23,6 +23,8 @@ jobs:
           java-version: '21'
           cache: maven
       - run: mvn -B -ntp -f platform/gateway/pom.xml verify
+      - name: Validate merged local Gateway and service identity configuration
+        run: python3 platform/gateway/check-compose.py
       - name: Verify the Java 21 gateway container
         shell: bash
         run: |

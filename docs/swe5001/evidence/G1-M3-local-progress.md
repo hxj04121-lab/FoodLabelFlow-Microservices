@@ -138,3 +138,33 @@ Remaining acceptance is explicit:
 STCN-51/52 implementation and tests can advance for review now. STCN-53's
 pipeline is prepared, but actual stable-origin publication and the complete
 browser→LB→Gateway→Keycloak→service claims chain are still unverified.
+
+## M1 service handoff incorporated (12 October)
+
+M1 supplied source-build commands, Specification/Formulation private addresses
+`http://specification:8080` / `http://formulation:8080`, host8081/8082, public
+prefixes, revalidation/tenant rules, and [PR44](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/44)
+for separate external issuer/private JWKS configuration. GHCR publication and
+the starter-security switch remain provider work; neither is assumed complete.
+
+Added `platform/gateway/compose.local.yaml`, merged after the existing local
+Compose file. It connects Gateway to those private service addresses, imports
+an explicitly supplied provider realm, and derives one Gateway-fronted issuer
+for Keycloak, Gateway and both service validators. This follows M4's `/auth`
+binding; it does not mix M1's direct-IdP `8180/realms` default into that session.
+Health endpoints and downstream403 remain unchanged. The separate project name
+avoids recreating another local stack; provider realm and actual tokens stay
+outside tracked files. No realm-role assignment is modified.
+
+`python platform/gateway/check-compose.py` passed local config-only checks for
+Gateway ports8080/9080: matching issuers, internal JWKS, exact role allowlists,
+realm-import mount, image build context and health-prefix separation. Missing
+realm input is rejected. The check is also part of M3 CI and starts no containers.
+It does not validate the content of a real realm or simulate a login.
+
+Local Docker engine still does not respond, so real Keycloak → JWT-validating
+Specification/Formulation execution has not occurred here. A supplier maker
+without ADMIN_DATA_MAINTENANCE should be denied403 after valid authentication;
+an immutable-sub defect yields401 earlier and must not be treated as that
+expected permission denial. M4 must resolve the provider identity/role inputs
+before the complete publication demo is claimed as successful.
