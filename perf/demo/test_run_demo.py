@@ -1,4 +1,4 @@
-"""Exercises run_demo.py against an in-process fake Gateway: the happy path and the BLOCKED/403 paths."""
+"""HTTP simulation cannot establish unobserved asynchronous acceptance."""
 import json
 import sys
 import tempfile
@@ -9,6 +9,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import run_demo  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "data"))
+import demo_soy_lecithin  # noqa: E402
 
 EXPECTED = json.loads(run_demo.EXPECTED.read_text())
 ADOPT = EXPECTED["step4_adoption"]
@@ -47,10 +49,12 @@ class FakeGateway(BaseHTTPRequestHandler):
             if mode == "blocked":
                 return self.reply(404, {"code": "NOT_FOUND"})
             if "POTENTIAL" in path:
-                found = [{"outcome": "REVIEW_REQUIRED", "candidate": "spec_demo_v2"}] * NORTH["REVIEW_REQUIRED"] \
-                    + [{"outcome": "NO_ACTION", "candidate": "spec_demo_v2"}] * NORTH["NO_ACTION"]
+                found = [{"outcome": "REVIEW_REQUIRED", "specificationChange": {"candidate": {"id": "spec_demo_v2"}}}] * NORTH["REVIEW_REQUIRED"]
+                if mode == "unexpected-unchanged-finding":
+                    found += [{"outcome": "NO_ACTION", "specificationChange": {"candidate": {"id": "spec_demo_v2"}}}]
                 return self.reply(200, {"items": found})
-            return self.reply(200, {"items": [{"outcome": "REVIEW_REQUIRED", "formula": "formula_demo_v2"}]})
+            return self.reply(200, {"items": [{"findingId": "confirmed-1", "outcome": "REVIEW_REQUIRED",
+                "formulaVersion": {"id": "formula_demo_v2"}, "specificationChange": {"candidate": {"id": "spec_demo_v2"}}}]})
         if path == f"/api/formulations/products/{ADOPT['productId']}":
             return self.reply(200, {"currentFormulaVersion": {"id": ADOPT["expectedCurrentFormulaVersionId"], "versionNumber": 1}})
         if path.startswith("/api/formulations/formula-versions/") and method == "GET":
@@ -84,14 +88,19 @@ class RunDemoTest(unittest.TestCase):
 
     def tearDown(self):
         self.server.shutdown()
+        self.server.server_close()
 
     def statuses(self):
         return {step["step"]: step["status"] for step in self.demo.steps}
 
-    def test_happy_path_passes_every_step_and_adopts_v2_keeping_other_items(self):
+    def test_http_success_preserves_adoption_but_cannot_pass_unobserved_async_steps(self):
         FakeGateway.mode = "ok"
         run_demo.run(self.demo, EXPECTED)
-        self.assertEqual(self.statuses(), {n: "PASS" for n in range(1, 8)})
+        self.assertEqual(self.statuses(), {1: "PASS", 2: "PASS", 3: "PASS", 4: "PASS", 5: "BLOCKED", 6: "PASS", 7: "BLOCKED"})
+        self.assertEqual(run_demo.exit_code(self.demo.steps), 2)
+        self.assertEqual(self.demo.steps[4]["findingStatus"], "PASS")
+        self.assertEqual(self.demo.steps[4]["reviewTaskStatus"], "NOT_OBSERVED")
+        self.assertEqual(self.demo.steps[6]["projectionStatus"], "NOT_OBSERVED")
         create = next(c for c in FakeGateway.calls if c[1] == "/api/formulations/formula-versions")
         self.assertEqual([i["specificationVersionId"] for i in create[2]["items"]], ["spec_demo_v2", "spec_wheat_flour_v1"])
         release = next(c for c in FakeGateway.calls if c[1] == "/api/formulations/formula-versions/formula_demo_v2/release")
@@ -111,6 +120,27 @@ class RunDemoTest(unittest.TestCase):
         run_demo.run(self.demo, EXPECTED)
         self.assertEqual(self.statuses(), {1: "FAIL"})
         self.assertIn("ADMIN_DATA_MAINTENANCE", self.demo.steps[0]["reason"])
+        self.assertEqual(run_demo.exit_code(self.demo.steps), 1)
+
+    def test_extra_unchanged_conclusion_finding_is_rejected(self):
+        FakeGateway.mode = "unexpected-unchanged-finding"
+        run_demo.run(self.demo, EXPECTED)
+        self.assertEqual(self.statuses()[3], "FAIL")
+        self.assertEqual(run_demo.exit_code(self.demo.steps), 1)
+
+    def test_expected_seed_emits_only_changed_conclusions(self):
+        self.assertEqual(EXPECTED, demo_soy_lecithin.build_expected())
+        self.assertEqual(EXPECTED["step3_expectedPotentialFindings"], {
+            org: {"total": 10, "REVIEW_REQUIRED": 10, "NO_ACTION": 0}
+            for org in ("org-manufacturer-north", "org-manufacturer-south")})
+        unchanged = [p for p in EXPECTED["affectedProducts"] if p["fixtureGroup"] == "NO_ACTION_BASELINE_SOY"]
+        self.assertEqual(len(unchanged), 20)
+        self.assertTrue(all(p["expectedPhase1Outcome"] is None for p in unchanged))
+
+    def test_exit_success_requires_all_seven_observed_passes(self):
+        self.assertEqual(run_demo.exit_code([]), 2)
+        self.assertEqual(run_demo.exit_code([{"step": 1, "status": "PASS"}]), 2)
+        self.assertEqual(run_demo.exit_code([{"step": n, "status": "PASS"} for n in range(1, 8)]), 0)
 
 
 if __name__ == "__main__":

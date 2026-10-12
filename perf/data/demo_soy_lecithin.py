@@ -6,7 +6,7 @@ split_baseline_seed.py): two suppliers, two manufacturers and three fixture grou
 
 Change: Supplier Beta (org-supplier-beta) releases Chocolate Base V2 = V1 components + soy lecithin.
   - NO_ACTION_BASELINE_SOY products also use Supplier Alpha's Soy Carrier, so soy is already declared:
-    Phase 1 expects NO_ACTION.
+    The required-allergen conclusion is unchanged, so Phase 1 emits no finding.
   - REVIEW_REQUIRED_BASELINE_NO_SOY products use Chocolate Base V1 without any soy: Phase 1 expects
     REVIEW_REQUIRED (POTENTIAL), and Phase 2 after adoption expects CONFIRMED + REVIEW_REQUIRED.
   - NEGATIVE_CONTROL_NO_CHOCOLATE products do not use Chocolate Base: no finding at all.
@@ -23,12 +23,12 @@ OUT = seed.ROOT / "docs/swe5001/data/demo-soy-lecithin-expected.json"
 MATERIAL = "mat_chocolate_base"
 PREVIOUS = "spec_chocolate_v1"
 EXPECTED = {
-    "NO_ACTION_BASELINE_SOY": "NO_ACTION",
+    "NO_ACTION_BASELINE_SOY": None,
     "REVIEW_REQUIRED_BASELINE_NO_SOY": "REVIEW_REQUIRED",
 }
 
 
-def main():
+def build_expected():
     sql = seed.BASELINE.read_text(encoding="utf-8")
     suppliers = seed.rows(sql, "supplier")
     materials = {m["supplier_material_id"]: m for m in seed.rows(sql, "supplier_material")}
@@ -58,7 +58,9 @@ def main():
             unaffected.append(row)
 
     def count(rows, org, outcome=None):
-        return sum(1 for r in rows if r["organisationId"] == org and (outcome is None or r["expectedPhase1Outcome"] == outcome))
+        return sum(1 for r in rows if r["organisationId"] == org
+                   and r["expectedPhase1Outcome"] is not None
+                   and (outcome is None or r["expectedPhase1Outcome"] == outcome))
 
     manufacturers = sorted({p["organisation_id"] for p in products})
     adopt = next(r for r in affected if r["organisationId"] == "org-manufacturer-north"
@@ -83,8 +85,13 @@ def main():
         "affectedProducts": affected,
         "unaffectedProducts": unaffected,
     }
+    return result
+
+
+def main():
+    result = build_expected()
     OUT.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"affected={len(affected)} unaffected={len(unaffected)} "
+    print(f"candidate-referencing={len(result['affectedProducts'])} unrelated={len(result['unaffectedProducts'])} "
           + " ".join(f"{org}={v}" for org, v in result["step3_expectedPotentialFindings"].items()))
 
 
