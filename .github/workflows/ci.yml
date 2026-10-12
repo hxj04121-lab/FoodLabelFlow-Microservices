@@ -49,6 +49,13 @@ jobs:
           cache: maven
       - name: Verify starter and service skeletons with MySQL Testcontainers
         run: mvn -B -ntp verify
+      - name: Verify the production matcher from a source archive without Git metadata
+        run: |
+          archive_dir="$(mktemp -d "$RUNNER_TEMP/compliance-source.XXXXXX")"
+          git archive --format=tar HEAD | tar -x -C "$archive_dir"
+          test ! -e "$archive_dir/.git"
+          mvn -B -ntp -f "$archive_dir/pom.xml" -pl services/compliance -am \
+            -Dtest=PerformanceDatasetContractTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Upload platform and service coverage
         uses: actions/upload-artifact@v4
         with:

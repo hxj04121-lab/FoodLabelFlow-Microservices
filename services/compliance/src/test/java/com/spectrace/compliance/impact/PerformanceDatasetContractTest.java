@@ -25,18 +25,13 @@ class PerformanceDatasetContractTest {
     @Test void allFiveThousandGeneratedRecipesHaveExactProductionPreviewExpectations() throws Exception {
         Path root = Path.of("..", "..").toAbsolutePath().normalize();
         Path directory = temporary.resolve("dataset"), log = temporary.resolve("generator.log");
-        Path commitFile = temporary.resolve("commit.txt");
-        Process revision = new ProcessBuilder("git", "rev-parse", "HEAD").directory(root.toFile())
-                .redirectErrorStream(true).redirectOutput(commitFile.toFile()).start();
-        if (!revision.waitFor(10, TimeUnit.SECONDS)) {
-            revision.destroyForcibly();
-            throw new AssertionError("Cannot resolve the tested repository commit");
-        }
-        assertThat(revision.exitValue()).isZero();
-        String sourceCommit = Files.readString(commitFile).trim();
+        // This temporary fixture is not a source-provenance claim. Call the pure generator so the
+        // production-matcher test also works in source archives without Git metadata or Git installed.
+        // The public dataset CLI still requires a real, existing source commit for deliverable artifacts.
         Process generation = new ProcessBuilder(System.getenv().getOrDefault("PYTHON_BIN", "python"),
-                root.resolve("perf/g3/experiment.py").toString(), "dataset", directory.toString(),
-                "--commit", sourceCommit)
+                "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
+                        + "from experiment import dataset; dataset(sys.argv[2], '0' * 40)",
+                root.resolve("perf/g3").toString(), directory.toString())
                 .directory(root.toFile()).redirectErrorStream(true).redirectOutput(log.toFile()).start();
         if (!generation.waitFor(60, TimeUnit.SECONDS)) {
             generation.destroyForcibly();
