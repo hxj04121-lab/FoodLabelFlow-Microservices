@@ -1,0 +1,5 @@
+organisation_id,organisation_type,display_name,baseline_supplier_id
+org-manufacturer-north,MANUFACTURER,Manufacturer North,
+org-manufacturer-south,MANUFACTURER,Manufacturer South,
+org-supplier-alpha,SUPPLIER,Supplier Alpha,sup_base_demo
+org-supplier-beta,SUPPLIER,Supplier Beta,sup_chocolate_demo
