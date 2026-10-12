@@ -24,4 +24,4 @@ consumers:
       - name: formula-published
         routingKey: formula.published.v1
       - name: impact-finding
-        routingKey: impact-finding.v1
+        routingKey: impact.finding.v1

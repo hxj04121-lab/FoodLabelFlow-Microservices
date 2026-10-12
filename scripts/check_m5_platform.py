@@ -35,6 +35,20 @@ assert {x["metadata"]["name"] for x in policies} == {
 for service, names in expected.items():
     entries = [q for q in queues if q["metadata"]["namespace"] == service]
     assert {q["spec"]["name"].split(".", 1)[1].removesuffix(".dlq") for q in entries} == names
+
+# Frozen ImpactFinding.v1 uses M1 EventEnvelope's CamelCase -> dotted routing.
+# Assert the rendered event binding, independently of the chart's input value.
+impact_contract = json.loads((ROOT / "contracts/events/impact-finding.v1.schema.json").read_text())
+assert any(profile.get("properties", {}).get("eventType", {}).get("const") == "ImpactFinding.v1"
+           for profile in impact_contract["allOf"])
+impact_bindings = [item["spec"] for item in bindings
+                   if item["metadata"]["namespace"] == "label-workflow"
+                   and item["spec"]["source"] == "spectrace.events"
+                   and item["spec"]["destination"] == "label-workflow.impact-finding"]
+assert len(impact_bindings) == 1
+assert impact_bindings[0]["routingKey"] == "impact.finding.v1", \
+    "ImpactFinding.v1 must bind to canonical impact.finding.v1, not the hyphenated queue name"
+
 user_resources = list(yaml.safe_load_all((ROOT / "deploy/operators/rabbitmq/users.yaml").read_text()))
 user_resources = [item for item in user_resources if item]
 users = [item for item in user_resources if item["kind"] == "User"]
