@@ -91,7 +91,7 @@ public class ComplianceEventProjector {
             jdbc.update("""
                     INSERT INTO specification_component_projection (specification_version_id, spec_component_id,
                         sequence_no, ingredient_id, raw_phrase, match_status) VALUES (?, ?, ?, ?, ?, ?)
-                    """, specificationId, component.specComponentId(), sequence + 1, component.ingredientId(),
+                    """, specificationId, component.specComponentId(), positive(componentNodes.get(sequence), "sequenceNo"), component.ingredientId(),
                     component.rawPhrase(), component.matchStatus().name());
         }
         if (previousId != null) {
