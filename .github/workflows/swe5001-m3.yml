@@ -66,7 +66,7 @@ jobs:
           retention-days: 14
   publish-gateway:
     if: github.event_name == 'push' && github.ref == 'refs/heads/XFY'
-    needs: [gateway, frontend]
+    needs: [gateway, frontend, real-keycloak]
     runs-on: ubuntu-latest
     permissions:
       contents: read

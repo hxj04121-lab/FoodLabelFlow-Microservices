@@ -56,6 +56,16 @@ public class IngressFilter implements WebFilter {
         exchange.getResponse().getHeaders().set(GatewayErrors.CORRELATION, id);
         exchange.getResponse().beforeCommit(() -> {
             exchange.getResponse().getHeaders().set(GatewayErrors.CORRELATION, id);
+            // Keycloak also emits CORS headers. The edge policy is authoritative:
+            // duplicate origins are rejected by browsers, and upstream credentials must not override false.
+            var headers = exchange.getResponse().getHeaders();
+            String origin = original.getRequest().getHeaders().getOrigin();
+            headers.remove("Access-Control-Allow-Credentials");
+            if (CorsUtils.isCorsRequest(original.getRequest()) && p.allowedOrigins().contains(origin)) {
+                headers.set("Access-Control-Allow-Origin", origin);
+            } else {
+                headers.remove("Access-Control-Allow-Origin");
+            }
             return Mono.empty();
         });
         long start = System.nanoTime();

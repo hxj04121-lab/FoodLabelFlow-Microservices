@@ -104,6 +104,10 @@ class GatewayHttpTests {
                     body = JSON.writeValueAsBytes(values);
                 }
                 x.getResponseHeaders().set("Content-Type", "application/json");
+                if (name.equals("keycloak") && x.getRequestHeaders().getFirst("Origin") != null) {
+                    x.getResponseHeaders().add("Access-Control-Allow-Origin", x.getRequestHeaders().getFirst("Origin"));
+                    x.getResponseHeaders().add("Access-Control-Allow-Credentials", "true");
+                }
                 x.sendResponseHeaders(status, body.length);
                 try (var out = x.getResponseBody()) { out.write(body); }
             });
@@ -167,6 +171,13 @@ class GatewayHttpTests {
         error(r, 401, "AUTHENTICATION_REQUIRED");
         assertEquals("http://localhost:5173", r.headers().firstValue("Access-Control-Allow-Origin").orElseThrow());
         assertEquals(before, HITS.get());
+    }
+
+    @Test void idpCorsCannotDuplicateOrOverrideTheGatewayPolicy() throws Exception {
+        var response = send(request("/auth/realms/test/.well-known/openid-configuration").header("Origin", "http://localhost:5173"));
+        assertEquals(200, response.statusCode());
+        assertEquals(List.of("http://localhost:5173"), response.headers().allValues("Access-Control-Allow-Origin"));
+        assertTrue(response.headers().allValues("Access-Control-Allow-Credentials").isEmpty());
     }
 
     static Stream<Arguments> invalidClaims() {
