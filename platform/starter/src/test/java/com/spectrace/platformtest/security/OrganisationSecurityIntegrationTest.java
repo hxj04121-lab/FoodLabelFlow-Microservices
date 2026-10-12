@@ -130,6 +130,16 @@ class OrganisationSecurityIntegrationTest {
     }
 
     @Test
+    @DisplayName("an actuator endpoint outside the public paths needs a token")
+    void actuatorEndpointsOutsideThePublicPathsNeedAToken() throws Exception {
+        HttpResponse<String> actuator = get("/actuator/env", null, "corr-actuator");
+        assertEquals(401, actuator.statusCode(), actuator.body());
+        JsonNode body = JSON.readTree(actuator.body());
+        assertEquals("AUTHENTICATION_REQUIRED", body.get("code").asString());
+        assertEquals("corr-actuator", body.get("traceId").asString());
+    }
+
+    @Test
     @DisplayName("method security rejects an authenticated caller without the authority as 403")
     void methodSecurityProducesTheCanonicalForbiddenEnvelope() throws Exception {
         HttpResponse<String> response = get("/api/security/platform-admin",
