@@ -1,6 +1,6 @@
 # G3 M2 runtime delivery — STCN-95/96/97
 
-This change is stacked on G2 PR #28. It supplies Phase 2, the three frozen impact endpoints and a bounded, replica-local immutable version cache. It does not establish staging acceptance or M4 ReviewTask acceptance.
+Current delivery is Ready main-targeted PR #41; historical #28/#30 commits are preserved there. It supplies Phase 2, the three frozen impact endpoints and a bounded, replica-local immutable version cache. It does not establish staging acceptance or M4 ReviewTask acceptance.
 
 ## Behaviour
 
@@ -30,7 +30,7 @@ M4 PR #38 (`1f3f0bf653a5d62cd93ef270bae7b2f3b2353a73`) now supplies the `spectra
 
 The first combined run verified signature/issuer/audience but rejected legitimate callers: the self-contained realm scope omitted `sub`. This branch proposes one production realm correction for M4 review, the native `oidc-sub-mapper` with access-token/introspection emission. It maps the immutable Keycloak user id; Compliance does not substitute a username. The static realm contract and real PKCE test both require it. The mapper is supported by [Keycloak 26.0.7's implementation](https://github.com/keycloak/keycloak/blob/26.0.7/services/src/main/java/org/keycloak/protocol/oidc/mappers/SubMapper.java) and the [official subject-mapper documentation](https://www.keycloak.org/docs/26.2.5/server_admin/index.html#_protocol-mappers).
 
-Local full execution is blocked by Docker Desktop startup; actual CI evidence must be verified before claiming this combined test passed. Staging issuer, deployment, realm-owner acceptance and token-refresh acceptance remain pending M5/M4. M1 producer code and the four aligned organisation seeds are integrated through PR #26 (`34f7661`); shared-reactor checks cover those actual API/outbox implementations alongside Compliance. This is not a complete real Label-to-ReviewTask or 5000/20 loaded-data claim.
+Full local Docker remains unavailable. Actual implementation CI38220274522 at 11f0c6c passes 144 shared-reactor /53 Compliance tests, including real Keycloak PKCE, mandatory finding-outbox Rabbit delivery and all-5000 dataset matcher regressions. Staging issuer, deployment, realm-owner acceptance and token-refresh acceptance remain pending M5/M4. M1 producer code and the four aligned organisation seeds are integrated through PR #26 (`34f7661`); shared-reactor checks cover those actual API/outbox implementations alongside Compliance. This is not a complete real Label-to-ReviewTask or 5000/20 loaded-data claim.
 
 No adapter guesses a Label version. ADR-G2-M2-002 remains PROPOSED until M4 supplies an approved, organisation-scoped exact version provider. Tests seed a clearly labelled exact provider fixture; they do not claim real M4 integration.
 
@@ -42,7 +42,7 @@ Red-team review found and repaired ambiguous private cache keys, unverified Form
 
 ## Remaining acceptance
 
-- M1's actual producer flows and approved shared starter chain must land and be exercised together.
+- M1 starter/producers are on main and exercised by shared CI; actual owner-imported v2 data/count/hash/replay evidence remains pending.
 - M4 must approve identity configuration/adapter, exact Label version provider and CONFIRMED-to-ReviewTask flow.
 - M5 must supply an approved AWS window, budget/access and deployed services. No live cloud or paid resource action was run.
 
@@ -54,4 +54,4 @@ M1 identified that #13/#24/#28/#30 were merged into retired intermediate branche
 
 Compliance now consumes `compliance.specification-published`, `compliance.formula-published` and `compliance.label-published`, matching M5 #39 at f191198. Routing keys stay `specification.published.v1`, `formula.published.v1` and `label.published.v1`; the idempotent consumer ledger IDs stay versioned. The real Rabbit fixture declares the external queue names independently of listener constants so an accidental `.v1` queue suffix cannot silently pass. Local fixture policies are supplied by the starter; production topology/policies and the M5 ImpactFinding routing correction require separate owner/staging acceptance.
 
-Current M5 #27 at 6fb4060 and main both use `dedicated=compliance:NoSchedule`. The stack retains that exact toleration, rejects the obsolete `workload` key and preserves image digest support; 19 native Helm checks pass. AWS load, failover, placement and measured bottleneck acceptance remain BLOCKED / NOT RUN.
+Current M5 #27 at dec339b and main both use `dedicated=compliance:NoSchedule`. The stack retains that exact toleration, rejects the obsolete `workload` key and preserves image digest support; 19 native Helm checks pass. AWS load, failover, placement and measured bottleneck acceptance remain BLOCKED / NOT RUN.
