@@ -15,7 +15,7 @@ java -jar platform/gateway/target/spectrace-gateway-0.1.0-SNAPSHOT.jar --spring.
 
 The `local` profile uses loopback service ports 8081–8084 and Keycloak on 8180; the gateway listens on 8080 (override `GATEWAY_PORT` if the monolith occupies it). It can start before those services: protected API calls need a valid token and a reachable JWKS, and forwarding requires the selected upstream. Public readiness/liveness describe the gateway process, not readiness of every domain service.
 
-The local realm `spectrace-local`, audience `spectrace-api-local` and write-role lists are **test/development choices**, not accepted team deployment values. Keycloak must run with `/auth` as its relative HTTP path and the externally visible gateway issuer as its hostname; this module preserves that path and Host. STCN-52's [browser login flow](../../frontend/README-G1.md) now has local protocol tests; M4's real realm import remains integration work.
+The local profile now follows [M4 PR38](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/38): realm `spectrace`, audience `spectrace-api`, issuer `http://localhost:8080/auth/realms/spectrace`. Keycloak must set both `KC_HTTP_RELATIVE_PATH=/auth` and `KC_HOSTNAME=http://localhost:8080/auth`; preserving Host alone is insufficient. JWKS is fetched privately at `http://localhost:8180/auth/realms/spectrace/protocol/openid-connect/certs`. Staging uses its actual external HTTPS origin, not the local issuer. STCN-52's [browser login flow](../../frontend/README-G1.md) has local protocol tests; real realm/service acceptance remains separate.
 
 For real deployment the default profile deliberately has no identity/upstream/origin/role fallback. Set all of:
 
@@ -29,10 +29,25 @@ For real deployment the default profile deliberately has no identity/upstream/or
 
 No secrets or real credentials are required for tests. Production role mappings and limit values require M4/M2 agreement; local values do not freeze a contract.
 
+### Explicit staging role values
+
+Per M1's [review](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/37#issuecomment-6109894759) and M4's six-role realm, set these required variables explicitly:
+
+| Variable | Value |
+|---|---|
+| `GATEWAY_SPECIFICATION_WRITE_ROLES` | `ADMIN_DATA_MAINTENANCE` |
+| `GATEWAY_FORMULATION_WRITE_ROLES` | `ADMIN_DATA_MAINTENANCE` |
+| `GATEWAY_COMPLIANCE_WRITE_ROLES` | `CHANGE_MANAGER` |
+| `GATEWAY_LABEL_WRITE_ROLES` | `LABEL_OFFICER,APPROVER,PUBLISHER` |
+
+The Gateway POST check is coarse; every service still checks its operation-specific permission and tenant ownership. No broad fallback/default is added for staging. A valid role-less identity authenticates, but a write fails403 and a read is subject to the downstream service's own permissions. Malformed role claims still fail401.
+
+Build an image with `docker build -t spectrace-gateway:local platform/gateway` (module directory is the build context, also compatible with M5's reusable workflow). The runtime is Java21 and UID10001. CI builds and boots the image with the local profile and verifies readiness200 / unauthenticated401; this is container evidence, not a deployed LB/service test. Jackson3 is pinned via BOM3.1.7, aligned with merged main's security fix.
+
 ## Implemented behavior
 
 - Routes `/api/specifications/**`, `/api/formulations/**`, `/api/compliance/**`, `/api/labels/**` to their own fixed upstreams, preserving path, query and bearer token. Only current public GET/POST methods are accepted. No automatic retries of writes.
-- RS256 signature verification uses the configured HTTP JWKS. Require expiry, valid issuer/time/audience, nonblank subject, one string `org_id`, `org_type` SUPPLIER/MANUFACTURER, and a nonempty string-array `roles`. Invalid/missing tokens return canonical 401 and `WWW-Authenticate: Bearer`. Multiple Authorization headers are rejected.
+- RS256 signature verification uses the configured HTTP JWKS. Require expiry, valid issuer/time/audience, nonblank subject, one string `org_id`, `org_type` SUPPLIER/MANUFACTURER, and a well-formed string-array `roles` when present. Missing/empty roles grant no authorities; authentication remains distinct from service authorization. Invalid/missing tokens return canonical401 and `WWW-Authenticate: Bearer`. Multiple Authorization headers are rejected.
 - GET requires authentication; POST additionally needs one role from that service's explicit allowlist. This is a **coarse edge check**. The service still checks the precise permission, organisation ownership, validation state and maker-checker. A downstream 403 is passed through, not changed to success.
 - CORS uses exact origins and allows only Authorization, Content-Type and X-Correlation-ID. Valid preflights bypass JWT; disallowed origins/methods/headers fail. Credentials are disabled. Error responses for allowed origins retain CORS and correlation headers. `Idempotency-Key` is internal to LW→Compliance until a public contract explicitly needs it.
 - One Bucket4j bucket is shared by callers of **one gateway process**. Default burst 100, refill 50/s; rejection returns canonical 429 + Retry-After. It is not a per-user entitlement or globally exact quota; N replicas have N independent buckets. Health probes and valid preflights are exempt. No unbounded map of client keys is allocated.

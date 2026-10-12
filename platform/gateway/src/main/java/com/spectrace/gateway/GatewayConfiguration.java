@@ -49,8 +49,8 @@ public class GatewayConfiguration {
                     && jwt.getAudience() != null && jwt.getAudience().contains(p.audience())
                     && org instanceof String s && s.matches("\\S{1,128}")
                     && type instanceof String t && Set.of("SUPPLIER", "MANUFACTURER").contains(t)
-                    && roles instanceof Collection<?> rs && !rs.isEmpty() && rs.size() <= 100
-                    && rs.stream().allMatch(v -> v instanceof String r && !r.isBlank() && r.length() <= 128);
+                    && (roles == null || roles instanceof Collection<?> rs && rs.size() <= 100
+                    && rs.stream().allMatch(v -> v instanceof String r && !r.isBlank() && r.length() <= 128));
             return valid ? OAuth2TokenValidatorResult.success() : OAuth2TokenValidatorResult.failure(
                     new OAuth2Error("invalid_token", "Required token claims are invalid", null));
         };

@@ -181,7 +181,6 @@ class GatewayHttpTests {
                 Arguments.of("org whitespace", Map.of("org_id", "manufacturer 1")),
                 Arguments.of("org enum", Map.of("org_type", "ADMIN")),
                 Arguments.of("roles type", Map.of("roles", "WRITER")),
-                Arguments.of("roles empty", Map.of("roles", List.of())),
                 Arguments.of("subject", Map.of("sub", "")));
     }
     @ParameterizedTest(name = "rejects {0}") @MethodSource("invalidClaims")
@@ -206,6 +205,20 @@ class GatewayHttpTests {
         var r = send(request("/api/labels/forbidden").header("Authorization", "Bearer " + token(Map.of(), KEY)));
         assertEquals(403, r.statusCode());
         assertEquals("OWNER_DENIED", body(r).get("code"));
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {true, false})
+    void rolelessTokensAuthenticateButCannotWrite(boolean missing) throws Exception {
+        var claims = new HashMap<String, Object>();
+        claims.put("roles", missing ? null : List.of());
+        String jwt = token(claims, KEY);
+        var read = send(request("/api/labels/forbidden").header("Authorization", "Bearer " + jwt));
+        assertEquals(403, read.statusCode());
+        assertEquals("OWNER_DENIED", body(read).get("code"), "Read reached the service's own permission check");
+        int before = HITS.get();
+        error(send(request("/api/labels/drafts").header("Authorization", "Bearer " + jwt)
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))), 403, "AUTHORIZATION_DENIED");
+        assertEquals(before, HITS.get(), "Role-less write never reaches the service");
     }
 
     @Test void stripsSpoofedIdentityAndProxyHeaders() throws Exception {

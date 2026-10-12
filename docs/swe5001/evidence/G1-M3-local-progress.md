@@ -90,3 +90,51 @@ Concrete alignment items before real acceptance:
 
 The draft can be reviewed while these bindings and the NetworkPolicy are
 completed; STCN-8 remains pending real integration and designated acceptance.
+
+## 12 October update — remaining G1 work
+
+XFY incorporates merged main `77b1ab8`. The 11 October sections above are a
+historical checkpoint, not the current provider-readiness assessment.
+
+Addressed M1 [PR37 feedback](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/37#issuecomment-6109894759)
+and M4 [PR38](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/38)
+at `1f3f0bf`:
+
+- Gateway Jackson3 BOM is3.1.7, matching the merged security fix.
+- Local realm/issuer/JWKS/audience now match `spectrace`,
+  `http://localhost:8080/auth/realms/spectrace`, private Keycloak8180 and
+  `spectrace-api`. Exact HTTPS staging origin is still a deployment input.
+- Specification/Formulation write allowlists use ADMIN_DATA_MAINTENANCE;
+  Compliance uses CHANGE_MANAGER; Labels use LABEL_OFFICER, APPROVER, PUBLISHER.
+  README records all four explicit deployment variables; services retain their
+  exact operation/tenant checks.
+- Missing/empty roles authenticate without authorities. Coarse Gateway writes
+  remain403; reads are subject to downstream permission checks. Browser shows
+  “No assigned roles” and keeps a denied403 distinct from an expired401.
+- Browser requests `openid` only. The provider's self-contained identity scope
+  does not define the standard `profile` scope.
+- Added a module-context Gateway Dockerfile for M5's reusable pipeline, Java21
+  runtime, UID10001. Proposed CI verifies container readiness200 and missing-token401.
+
+Local verification on12October: Gateway36 tests pass (33 HTTP +3 policy), JAR
+packaging passes; browser12 protocol tests and3 Pages tests pass. The baseline64
+regressions from11October remain historical evidence, not a new full-stack run.
+
+Remaining acceptance is explicit:
+
+1. Jira realtime read is unavailable: connector is not granted for this site,
+   and no connected browser exists. Last confirmed M3 G1 scope remains
+   STCN-51..53 under STCN-8; no current status/Done transition is inferred.
+2. Docker Desktop starts but its engine API does not respond; no real Keycloak
+   or local container build is claimed. Gateway Docker verification runs in CI.
+3. PR38's realm still lacks immutable `sub` until M4 adopts the correction
+   discussed by M2 in [this provider comment](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/38#issuecomment-6109370567).
+   Gateway/frontend keep requiring `sub`; username is not substituted.
+4. M4's runnable service caller-claims endpoint/NetworkPolicy, the LB/public
+   deployment URL and exact Pages callback entry still require integration.
+   M5 PR39 explicitly excludes live AWS/staging acceptance. No AWS or Pages
+   settings are changed by this update.
+
+STCN-51/52 implementation and tests can advance for review now. STCN-53's
+pipeline is prepared, but actual stable-origin publication and the complete
+browser→LB→Gateway→Keycloak→service claims chain are still unverified.

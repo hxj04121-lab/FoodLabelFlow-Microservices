@@ -10,8 +10,8 @@ silently reuse `/api/catalog` or `/api/v1` baseline DTOs.
 ## Local use
 
 Copy `.env.example` to `.env.local`, replace the local identity settings as
-needed, then run `npm ci` and `npm run dev`. The example uses the local gateway
-profile's issuer/audience, not an accepted deployed realm. M4 must import a
+needed, then run `npm ci` and `npm run dev`. The example follows M4 PR38's local
+`spectrace` realm and `spectrace-api` audience, not a deployed staging URL. M4 must import a
 `spectrace-web` public client with Code + PKCE S256, the exact root callback
 `http://localhost:5173/` and web origin `http://localhost:5173`.
 Do not set a client secret. VITE values are visible in static browser files.
@@ -24,6 +24,8 @@ Reloading the page requires another sign-in (the IdP session may make it quick).
 No offline_access or silent renewal is requested. Expiry and API401 end the local
 session; API403 preserves identity and explains denial. Logout clears local
 tokens before contacting the IdP.
+
+Request scope is `openid`: M4's self-contained `spectrace-identity-claims` default scope supplies identity claims without requiring an undefined standard `profile` scope. A valid identity with missing/empty roles signs in and displays “No assigned roles”; service permissions still determine access and denied calls remain403.
 
 Organisation and role display comes from the access token's `sub/org_id/org_type/roles`,
 with issuer/audience/time/shape checks. This presentation check does not verify

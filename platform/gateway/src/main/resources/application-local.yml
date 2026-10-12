@@ -1,9 +1,9 @@
-# Local fixtures only. These are not the team's accepted deployed realm or role mapping.
+# Local defaults aligned to M4 PR38; staging still requires explicit environment values.
 gateway:
-  realm: spectrace-local
-  issuer: http://localhost:8080/auth/realms/spectrace-local
-  jwk-set-uri: http://localhost:8180/auth/realms/spectrace-local/protocol/openid-connect/certs
-  audience: spectrace-api-local
+  realm: spectrace
+  issuer: http://localhost:8080/auth/realms/spectrace
+  jwk-set-uri: http://localhost:8180/auth/realms/spectrace/protocol/openid-connect/certs
+  audience: spectrace-api
   keycloak: http://localhost:8180
   specification: http://localhost:8081
   formulation: http://localhost:8082
@@ -13,7 +13,7 @@ gateway:
     - http://localhost:5173
     - http://127.0.0.1:5173
   write-roles:
-    specification: [SPEC_AUTHOR, SPEC_RELEASER]
-    formulation: [FORMULA_AUTHOR, FORMULA_RELEASER]
+    specification: [ADMIN_DATA_MAINTENANCE]
+    formulation: [ADMIN_DATA_MAINTENANCE]
     compliance: [CHANGE_MANAGER]
     label-workflow: [LABEL_OFFICER, APPROVER, PUBLISHER]

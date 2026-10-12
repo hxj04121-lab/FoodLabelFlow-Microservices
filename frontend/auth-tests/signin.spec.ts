@@ -41,7 +41,7 @@ test.beforeAll(async () => {
         response_types_supported: ['code'], subject_types_supported: ['public'], id_token_signing_alg_values_supported: ['RS256'] })
     } else if (url.pathname.endsWith('/authorize')) {
       const params = url.searchParams
-      if (params.get('client_id') !== 'spectrace-web' || params.get('response_type') !== 'code'
+      if (params.get('client_id') !== 'spectrace-web' || params.get('response_type') !== 'code' || params.get('scope') !== 'openid'
         || params.get('code_challenge_method') !== 'S256' || !params.get('nonce') || !params.get('state')) { json({ error: 'invalid_request' }, 400); return }
       const code = randomUUID()
       codes.set(code, { nonce: params.get('nonce')!, challenge: params.get('code_challenge')!, redirect: params.get('redirect_uri')! })
@@ -64,7 +64,8 @@ test.beforeAll(async () => {
         nonce: mode === 'bad-nonce' ? 'foreign-nonce' : stored.nonce })
       sentToken = jwt({ iss: issuer, aud: mode === 'bad-audience' ? 'another-api' : 'spectrace-api-test', sub: 'test-user',
         iat: now, exp: now + 120, org_id: mode === 'multi-org' ? ['org-one', 'org-two'] : 'org-one',
-        org_type: mode === 'array-org-type' ? ['MANUFACTURER'] : 'MANUFACTURER', roles: ['LABEL_OFFICER', 'APPROVER'] })
+        org_type: mode === 'array-org-type' ? ['MANUFACTURER'] : 'MANUFACTURER',
+        ...(mode === 'roleless' ? {} : { roles: ['LABEL_OFFICER', 'APPROVER'] }) })
       json({ access_token: sentToken, token_type: 'Bearer', id_token: id, expires_in: mode === 'expires' ? 2 : 120 })
     } else if (url.pathname === '/api/formulations/products') {
       observedAuthorization = req.headers.authorization || ''
@@ -123,6 +124,13 @@ test('401 ends the local session without silently retrying', async ({ page }) =>
 })
 test('403 keeps the identity and explains permission denial', async ({ page }) => {
   await login(page); await expect(page.getByRole('button', { name: 'Load products' })).toBeVisible()
+  apiStatus = 403; await page.getByRole('button', { name: 'Load products' }).click()
+  await expect(page.getByRole('status')).toContainText('do not have permission')
+  await expect(page.getByText('org-one', { exact: true })).toBeVisible()
+})
+test('a role-less caller signs in but gets the service permission denial', async ({ page }) => {
+  mode = 'roleless'; await login(page)
+  await expect(page.getByText('No assigned roles', { exact: true })).toBeVisible()
   apiStatus = 403; await page.getByRole('button', { name: 'Load products' }).click()
   await expect(page.getByRole('status')).toContainText('do not have permission')
   await expect(page.getByText('org-one', { exact: true })).toBeVisible()

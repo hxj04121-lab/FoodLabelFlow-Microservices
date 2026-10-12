@@ -36,7 +36,7 @@ function createManager() {
   const callback = new URL(import.meta.env.BASE_URL, window.location.origin).href
   manager = new UserManager({
     authority, client_id: 'spectrace-web', redirect_uri: callback, post_logout_redirect_uri: callback,
-    response_type: 'code', response_mode: 'query', scope: 'openid profile',
+    response_type: 'code', response_mode: 'query', scope: 'openid',
     automaticSilentRenew: false, monitorSession: false, loadUserInfo: false,
     fetchRequestCredentials: 'omit', requestTimeoutInSeconds: 15,
     // Tokens live only in memory. Only the temporary PKCE transaction survives the redirect.
@@ -60,12 +60,12 @@ function accept(result: User) {
     || typeof claims.sub !== 'string' || !claims.sub.trim() || claims.sub !== result.profile.sub
     || typeof claims.org_id !== 'string' || !/^\S{1,128}$/.test(claims.org_id)
     || typeof claims.org_type !== 'string' || !['SUPPLIER', 'MANUFACTURER'].includes(claims.org_type)
-    || !Array.isArray(claims.roles) || !claims.roles.length || claims.roles.length > 100
-    || claims.roles.some(r => typeof r !== 'string' || !r.trim() || r.length > 128)) throw new Error('INVALID_TOKEN')
+    || (claims.roles !== undefined && (!Array.isArray(claims.roles) || claims.roles.length > 100
+    || claims.roles.some(r => typeof r !== 'string' || !r.trim() || r.length > 128)))) throw new Error('INVALID_TOKEN')
   // These claims drive presentation; the Gateway and every service independently verify the JWT.
   user = result
   publish({ status: 'signedIn', identity: {
-    subject: claims.sub, organisationId: claims.org_id, organisationType: String(claims.org_type), roles: claims.roles,
+    subject: claims.sub, organisationId: claims.org_id, organisationType: String(claims.org_type), roles: (claims.roles ?? []) as string[],
   } })
 }
 

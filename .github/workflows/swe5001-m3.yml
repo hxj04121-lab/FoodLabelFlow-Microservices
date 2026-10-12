@@ -23,6 +23,21 @@ jobs:
           java-version: '21'
           cache: maven
       - run: mvn -B -ntp -f platform/gateway/pom.xml verify
+      - name: Verify the Java 21 gateway container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -t spectrace-gateway:check platform/gateway
+          docker run -d --name m3-gateway-check -p 127.0.0.1:18080:8080 spectrace-gateway:check --spring.profiles.active=local
+          trap 'docker logs m3-gateway-check; docker rm -f m3-gateway-check' EXIT
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18080/actuator/health/readiness; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:18080/actuator/health/readiness
+          status=$(curl -sS -o /tmp/m3-gateway-unauth.json -w '%{http_code}' http://127.0.0.1:18080/api/labels/test)
+          test "$status" = 401
+          grep -q AUTHENTICATION_REQUIRED /tmp/m3-gateway-unauth.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

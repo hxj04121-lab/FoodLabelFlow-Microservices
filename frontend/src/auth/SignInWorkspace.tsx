@@ -38,7 +38,7 @@ export function SignInWorkspace() {
         <section className="signin-identity" aria-label="Signed-in identity"><dl>
           <div><dt>Organisation</dt><dd>{session.identity?.organisationId}</dd></div>
           <div><dt>Organisation type</dt><dd>{session.identity?.organisationType}</dd></div>
-          <div><dt>Roles</dt><dd>{session.identity?.roles.join(', ')}</dd></div>
+          <div><dt>Roles</dt><dd>{session.identity?.roles.length ? session.identity.roles.join(', ') : 'No assigned roles'}</dd></div>
         </dl></section>
         {session.identity?.organisationType === 'MANUFACTURER' && <section className="signin-products" aria-labelledby="products-title">
           <div className="signin-heading"><div><h2 id="products-title">Your products</h2><p>Read products available to your signed-in organisation.</p></div><Button disabled={busy} onClick={() => void loadProducts()}>{busy ? 'Loading…' : 'Load products'}</Button></div>
