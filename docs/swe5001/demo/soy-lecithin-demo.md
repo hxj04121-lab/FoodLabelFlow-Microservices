@@ -61,7 +61,25 @@ The six standard-library tests in `perf/demo/test_run_demo.py` verify seed expec
 **Remaining owner acceptance:**
 - The v2 files reuse existing `sup_chocolate_demo` / `org-supplier-beta` and `sup_base_demo` / `org-supplier-alpha`; the earlier proposed `supplier_01` is superseded.
 - The 20 `perf_manufacturer_*` organisations need M4-approved real JWT identities and refresh; the realm does not contain them yet.
-- M1 must return actual source-owned import/reimport/count/hash and event-replay evidence. Generated inputs and passing importer unit tests do not prove a load occurred. M4 owns exact Label versions/publication and their actual import.
+- M4 owns exact Label versions and publication, and their actual import.
+
+**M1 owner-import evidence, 12 Oct, local (real MySQL 8.4 + RabbitMQ, not staging).**
+
+Run: `SPECTRACE_G3_DATASET=<dir> mvn -f services/<service>/pom.xml test -Dtest=DatasetImportTest`. Each test imports the full files, imports them again, and prints the counts and a SHA-256 of the stored snapshot (sorted IDs, versions, items/components).
+
+Input: `perf/g3/experiment.py dataset` at #41 `4128095`, `datasetFormatVersion` 2.
+
+| Input file | SHA-256 |
+|---|---|
+| `specification-owner-import.jsonl` | `8ab78121435c0e1750056510decba1d5f77ce0c2c83eae7b32cd5d0728b98ca4` |
+| `formula-owner-import.jsonl` | `d8b481993c1fcad12439d18e9ab90fbfafff8d992bfcc55817b4ad76cda53eb5` |
+
+| Service | Imported | Re-import | Stored snapshot SHA-256 |
+|---|---|---|---|
+| Specification | 16 versions → 16 SpecificationPublished.v1 | 0 appended | `0e96e27fcebf0370fc518ef1d3f7fe7d4e5ae768d7054ea7992527d443ec7e25` |
+| Formulation | 5,000 formulas, 39,458 items, 20 organisations → 5,000 FormulaPublished.v1, in 100 s after the 16 spec envelopes reached the projection through RabbitMQ | 0 appended | `b977d1ce5afb2a9678873082222a77a6c7784f33f0c99ebbb35c5330a3ad30eb` |
+
+In this local run the spec envelopes were delivered to Formulation's queue directly, standing in for the Specification relay. On staging both imports run against the deployed services, and that run (with the same hashes) is the acceptance evidence.
 - The 5,000-formula performance dataset has 750 expected changed findings. It is separate from the sixty-product baseline demo above.
 
 ## Audit trail by correlation ID (STCN-92)

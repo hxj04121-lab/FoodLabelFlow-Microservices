@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -112,6 +113,29 @@ class DatasetImportTest {
                 .hasMessageContaining("belongs to another organisation");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM material WHERE material_id = 'perf_material_foreign'", Integer.class))
                 .isZero();
+    }
+
+    /**
+     * Full M2 format-v2 dataset (16 versions), run only when SPECTRACE_G3_DATASET points at the directory
+     * written by {@code perf/g3/experiment.py dataset}. Prints counts and a snapshot hash as evidence.
+     */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "SPECTRACE_G3_DATASET", matches = ".+")
+    void importsTheFullG3DatasetOnceAndReportsItsSnapshot() throws Exception {
+        Path file = Path.of(System.getenv("SPECTRACE_G3_DATASET"), "specification-owner-import.jsonl");
+        long lines = Files.lines(file).filter(line -> !line.isBlank()).count();
+        DatasetImport importer = new DatasetImport(store, service, outbox, transactions, json, file);
+
+        assertThat(importer.importFile(file)).isEqualTo((int) lines);
+        assertThat(importer.importFile(file)).isZero();
+        String snapshot = String.join("\n", jdbc.queryForList("""
+                SELECT CONCAT_WS('|', v.specification_version_id, v.material_id, v.version_number, v.lifecycle_status,
+                                 c.spec_component_id, c.sequence_no, c.ingredient_id, c.match_status)
+                FROM specification_version v JOIN spec_component c ON c.specification_version_id = v.specification_version_id
+                WHERE v.material_id LIKE 'perf\\_%' ORDER BY v.specification_version_id, c.sequence_no""", String.class));
+        System.out.printf("G3 dataset evidence: specificationVersions=%d sha256=%s%n", lines,
+                java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(snapshot.getBytes(java.nio.charset.StandardCharsets.UTF_8))));
     }
 
     private JsonNode event(String versionId) {

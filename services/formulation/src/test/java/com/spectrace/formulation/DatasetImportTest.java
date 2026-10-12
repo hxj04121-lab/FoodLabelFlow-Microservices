@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -110,6 +111,45 @@ class DatasetImportTest {
         JsonNode item = event.get("payload").get("items").get(0);
         assertThat(item.get("specificationVersion").get("id").asString()).isEqualTo("perf_material_f1_v1");
         assertThat(item.get("quantity").decimalValue()).isEqualByComparingTo("12.5");
+    }
+
+    /**
+     * Full M2 format-v2 dataset (16 specification versions, 5,000 formulas), run only when SPECTRACE_G3_DATASET
+     * points at the generated directory. The specification envelopes go through RabbitMQ to the projection
+     * first; prints counts and a snapshot hash as evidence.
+     */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "SPECTRACE_G3_DATASET", matches = ".+")
+    void importsTheFullG3DatasetOnceAndReportsItsSnapshot() throws Exception {
+        Path dir = Path.of(System.getenv("SPECTRACE_G3_DATASET"));
+        for (String line : Files.readAllLines(dir.resolve("specification-owner-import.jsonl"))) {
+            if (!line.isBlank()) {
+                rabbit.send("spectrace.events", SpecificationPublishedConsumer.ROUTING_KEY,
+                        new Message(line.getBytes(StandardCharsets.UTF_8)));
+            }
+        }
+        Path file = dir.resolve("formula-owner-import.jsonl");
+        long lines = Files.lines(file).filter(line -> !line.isBlank()).count();
+        DatasetImport importer = new DatasetImport(store, service, outbox, transactions, json, file, Duration.ofMinutes(2));
+
+        long started = System.nanoTime();
+        assertThat(importer.importFile(file, Duration.ofMinutes(2))).isEqualTo((int) lines);
+        long seconds = (System.nanoTime() - started) / 1_000_000_000L;
+        assertThat(importer.importFile(file, Duration.ofMinutes(2))).isZero();
+        Integer items = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM formula_item i JOIN formula_version f ON f.formula_version_id = i.formula_version_id
+                JOIN product p ON p.product_id = f.product_id WHERE p.fixture_group = 'G3_LOAD_DATASET'""", Integer.class);
+        Integer organisations = jdbc.queryForObject(
+                "SELECT COUNT(DISTINCT organisation_id) FROM product WHERE fixture_group = 'G3_LOAD_DATASET'", Integer.class);
+        String snapshot = String.join("\n", jdbc.queryForList("""
+                SELECT CONCAT_WS('|', p.organisation_id, f.formula_version_id, f.version_number, f.lifecycle_status,
+                                 i.formula_item_id, i.sequence_no, i.specification_version_id)
+                FROM product p JOIN formula_version f ON f.product_id = p.product_id
+                JOIN formula_item i ON i.formula_version_id = f.formula_version_id
+                WHERE p.fixture_group = 'G3_LOAD_DATASET' ORDER BY f.formula_version_id, i.sequence_no""", String.class));
+        System.out.printf("G3 dataset evidence: formulaVersions=%d items=%d organisations=%d importSeconds=%d sha256=%s%n",
+                lines, items, organisations, seconds, java.util.HexFormat.of().formatHex(
+                        java.security.MessageDigest.getInstance("SHA-256").digest(snapshot.getBytes(StandardCharsets.UTF_8))));
     }
 
     @Test
