@@ -8,8 +8,8 @@ x-service: &service
   environment: &service-security
     # Starter security module (G1-M4.2). Tokens are issued to the browser at localhost:8180, so iss stays
     # that URL, but inside this network the keys come from the keycloak container; iss is still validated.
-    SPECTRACE_SECURITY_ISSUERURI: ${OIDC_ISSUER_URI:-http://localhost:8180/realms/spectrace}
-    SPECTRACE_SECURITY_JWKSETURI: http://keycloak:8080/realms/spectrace/protocol/openid-connect/certs
+    SPECTRACE_SECURITY_ISSUERURI: ${OIDC_ISSUER_URI:-http://localhost:8180/auth/realms/spectrace}
+    SPECTRACE_SECURITY_JWKSETURI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
   depends_on:
     mysql:
       condition: service_healthy
@@ -59,6 +59,9 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-local-only-keycloak}
       KC_HEALTH_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HTTP_MANAGEMENT_RELATIVE_PATH: /
+      KC_HOSTNAME: ${KEYCLOAK_EXTERNAL_URL:-http://localhost:8180/auth}
     ports:
       - "${KEYCLOAK_HOST_PORT:-8180}:8080"
     volumes:
