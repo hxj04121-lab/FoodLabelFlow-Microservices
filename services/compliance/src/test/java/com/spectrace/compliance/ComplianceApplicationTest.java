@@ -485,6 +485,46 @@ class ComplianceApplicationTest {
     }
 
     @Test
+    void labelPublishedV2ProjectsItsBusinessVersionAndDeduplicatesInMySql() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String specificationId = "v2_spec_" + suffix;
+        String formulaId = "v2_formula_" + suffix;
+        String labelId = "v2_label_" + suffix;
+        String productId = "product_" + suffix;
+        insertFormula(specificationId, formulaId, "ing_cocoa", "MATCHED", suffix);
+
+        ObjectNode labelNode = (ObjectNode) json.readTree(java.nio.file.Files.readString(
+                java.nio.file.Path.of("..", "..", "contracts", "events", "examples", "label-published-v2.json"),
+                StandardCharsets.UTF_8));
+        labelNode.put("eventId", UUID.randomUUID().toString());
+        labelNode.put("aggregateId", labelId);
+        labelNode.put("aggregateVersion", 9);
+        labelNode.put("organisationId", "manufacturer_01");
+        ObjectNode payload = (ObjectNode) labelNode.get("payload");
+        payload.put("productId", productId);
+        payload.put("labelVersionId", labelId);
+        payload.put("versionNumber", 4);
+        payload.put("formulaVersionId", formulaId);
+        EventEnvelope event = EventEnvelope.parse(json.writeValueAsBytes(labelNode), json);
+
+        assertThat(idempotentConsumer.consume("compliance.label-projection.v1", event,
+                eventProjector::projectLabel)).isEqualTo(IdempotentConsumer.Outcome.APPLIED);
+        assertThat(idempotentConsumer.consume("compliance.label-projection.v1", event,
+                eventProjector::projectLabel)).isEqualTo(IdempotentConsumer.Outcome.DUPLICATE);
+
+        assertThat(jdbc.queryForObject("SELECT version_number FROM label_version_projection WHERE label_version_id = ?",
+                Integer.class, labelId)).isEqualTo(4);
+        assertThat(jdbc.queryForObject("SELECT version_number FROM label_version_projection WHERE label_version_id = ?",
+                Integer.class, labelId)).isNotEqualTo((int) event.aggregateVersion());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM label_declaration_projection WHERE label_version_id = ?",
+                Integer.class, labelId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM processed_event WHERE consumer = ? AND event_id = ?",
+                Integer.class, "compliance.label-projection.v1", event.eventId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT aggregate_version FROM consumed_aggregate_version WHERE consumer = ? AND aggregate_id = ?",
+                Long.class, "compliance.label-projection.v1", labelId)).isEqualTo(9L);
+    }
+
+    @Test
     void aMatchedButUnknownIngredientPersistsFailedRatherThanPassingSilently() {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         String formulaId = "unknown_formula_" + suffix;

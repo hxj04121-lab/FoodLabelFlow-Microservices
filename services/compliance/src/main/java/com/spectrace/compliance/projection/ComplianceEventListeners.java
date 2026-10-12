@@ -29,6 +29,7 @@ public class ComplianceEventListeners {
 
     @RabbitListener(queues = ComplianceMessagingConfiguration.LABEL_QUEUE)
     public void labelPublished(Message message) {
+        // Keep the consumer identity stable across payload v1/v2 so an in-place upgrade preserves deduplication.
         consumer.consume("compliance.label-projection.v1", message, projector::projectLabel);
     }
 }

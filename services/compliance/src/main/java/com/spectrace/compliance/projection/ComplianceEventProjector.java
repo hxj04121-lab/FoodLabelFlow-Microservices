@@ -6,6 +6,7 @@ import com.spectrace.compliance.impact.PhaseOneImpactMatcher.SpecificationCompon
 import com.spectrace.compliance.impact.PhaseOneImpactMatcher.SpecificationVersion;
 import com.spectrace.platform.starter.messaging.EventEnvelope;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -174,15 +175,25 @@ public class ComplianceEventProjector {
     }
 
     public void projectLabel(EventEnvelope event) {
-        requireType(event, "LabelPublished.v1");
+        boolean hasPublishedBusinessVersion = "LabelPublished.v2".equals(event.eventType());
+        if (!hasPublishedBusinessVersion) requireType(event, "LabelPublished.v1");
         JsonNode payload = object(event.payload(), "payload");
-        fields(payload, "productId", "labelVersionId", "formulaVersionId", "ruleSetVersionId", "jurisdictionCode", "declarations");
+        if (hasPublishedBusinessVersion) {
+            fields(payload, "productId", "labelVersionId", "versionNumber", "formulaVersionId",
+                    "ruleSetVersionId", "jurisdictionCode", "declarations");
+        } else {
+            fields(payload, "productId", "labelVersionId", "formulaVersionId", "ruleSetVersionId",
+                    "jurisdictionCode", "declarations");
+        }
         JsonNode declarations = payload.get("declarations");
         if (declarations == null || !declarations.isArray()) throw invalid("declarations must be an array");
         String labelId = text(payload, "labelVersionId");
+        requireSame(event.aggregateId(), labelId, "aggregateId");
         String formulaId = text(payload, "formulaVersionId");
         String ruleSetId = text(payload, "ruleSetVersionId");
-        int labelVersionNumber = labelVersionNumbers.resolve(event.organisationId(), labelId);
+        int labelVersionNumber = hasPublishedBusinessVersion
+                ? positive(payload, "versionNumber")
+                : labelVersionNumbers.resolve(event.organisationId(), labelId);
         if (labelVersionNumber < 1) {
             throw new IllegalStateException("CN label provider returned a non-positive business versionNumber for "
                     + labelId + " in organisation " + event.organisationId());
@@ -242,8 +253,12 @@ public class ComplianceEventProjector {
 
     private static int positive(JsonNode node, String field) {
         JsonNode value = node == null ? null : node.get(field);
-        if (value == null || !value.isIntegralNumber() || value.asInt() < 1) throw invalid(field + " must be positive");
-        return value.asInt();
+        if (value == null || !value.isIntegralNumber()) throw invalid(field + " must be a positive 32-bit integer");
+        BigInteger integer = value.bigIntegerValue();
+        if (integer.compareTo(BigInteger.ONE) < 0 || integer.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) > 0) {
+            throw invalid(field + " must be a positive 32-bit integer");
+        }
+        return integer.intValueExact();
     }
 
     private static void requireSame(String expected, String actual, String field) {
