@@ -21,7 +21,7 @@
 
 | 路由 | 方法与 suffix（相对于上表 prefix） | 备注 |
 |---|---|---|
-| specification | GET `caller-claims` | G1-M4 PR47 `751ed77`：`/api/specifications/caller-claims` 返回 `{subject,org_id,org_type,roles}`；现有路由原样转发，无 rewrite；前端核对服务实际解析的身份。非空 sub 已修复，待合并和部署验收 |
+| specification | GET `caller-claims` | G1-M4 PR47 `0882375`：`/api/specifications/caller-claims` 返回 `{subject,org_id,org_type,roles}`；现有路由原样转发，无 rewrite；前端核对服务实际解析的身份。空白 sub 与未知 org_type 均拒绝为401，[最新真实 Specification 联调证据](evidence/G1-M3-readiness-20261013.md)已通过；合并与部署验收仍待 owner |
 | specification | GET `suppliers`、`suppliers/{supplierId}`、`materials`、`materials/{materialId}`、`ingredients`、`versions`、`versions/{specificationVersionId}`；POST `materials`、`versions`、`versions/{specificationVersionId}/release` | 候选写角色 SPEC_AUTHOR / SPEC_RELEASER；尚需 M4 realm 对齐 |
 | formulation | GET `products`、`products/{productId}`、`products/{productId}/formula-versions`、`released-specifications`、`formula-versions/{formulaVersionId}`、`formula-versions/{formulaVersionId}/trace`；POST `formula-versions`、`formula-versions/{formulaVersionId}/release` | 候选写角色 FORMULA_AUTHOR / FORMULA_RELEASER；release body 用 expectedCurrentFormulaVersionId，无 If-Match 要求 |
 

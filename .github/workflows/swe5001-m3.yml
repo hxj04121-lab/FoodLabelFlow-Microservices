@@ -112,6 +112,8 @@ jobs:
         working-directory: frontend
       - run: npm run test:pages
         working-directory: frontend
+      - run: npm run test:deployed-config
+        working-directory: frontend
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -94,10 +94,25 @@ on18084 backed by real MySQL/RabbitMQ. CI starts these processes and Keycloak
 26.0.7, then performs browser Code+PKCE login and confirms the service's
 caller subject/organisation/roles match the token-derived UI identity.
 
-The Specification source is pinned to repaired PR47 `751ed77`; the realm comes from the
+The Specification source is pinned to independently reviewed PR47 `0882375`; the realm comes from the
 accepted #34 source now in XFY. The actual path is `/api/specifications/caller-claims`;
 the test-only whoami service has been removed. The provider now rejects blank
 native sub and supports both the shared starter and service-owned JWT principal.
 Real browser traces are redacted before uploading
 the `m3-real-keycloak-evidence` artifact. This evidence is distinct from the
 protocol-fixture suite and from AWS LB/staging acceptance.
+
+The [13 October release/readiness record](../docs/swe5001/evidence/G1-M3-readiness-20261013.md)
+links the current real Specification evidence and actual published digest. The
+older whoami/starter-only evidence is historical.
+
+## Deployed verification readiness
+
+`npm run test:deployed-config` checks the deployed profile offline without browser
+execution or network calls. Once owners supply the real site/identity/service
+inputs, `npm run test:deployed` reuses the real login suite against that existing
+site, with no local server or live-secret trace. Follow the
+[deployment acceptance runbook](../docs/swe5001/G1-M3-staging-acceptance.md) for the
+required public values, approved test account, expected identity and remaining
+cross-organisation/security/Pages acceptance rows. No deployed success is claimed
+by adding this profile or by passing its offline configuration tests.
