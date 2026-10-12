@@ -1,0 +1,491 @@
+{
+  "scenario": "soy-lecithin V1 -> V2 (STCN-90)",
+  "source": "baseline seed as loaded by Specification/Formulation V2 migrations; regenerate with perf/data/demo_soy_lecithin.py",
+  "step1_specificationChange": {
+    "supplierOrganisationId": "org-supplier-beta",
+    "supplierId": "sup_chocolate_demo",
+    "materialId": "mat_chocolate_base",
+    "previousSpecificationVersionId": "spec_chocolate_v1",
+    "candidateComponents": [
+      {
+        "ingredientId": "ing_cocoa",
+        "rawPhrase": "Cocoa"
+      },
+      {
+        "ingredientId": "ing_sugar",
+        "rawPhrase": "Sugar"
+      },
+      {
+        "ingredientId": "ing_soy_lecithin",
+        "rawPhrase": "Soy lecithin (emulsifier)"
+      }
+    ]
+  },
+  "step3_expectedPotentialFindings": {
+    "org-manufacturer-north": {
+      "total": 20,
+      "REVIEW_REQUIRED": 10,
+      "NO_ACTION": 10
+    },
+    "org-manufacturer-south": {
+      "total": 20,
+      "REVIEW_REQUIRED": 10,
+      "NO_ACTION": 10
+    }
+  },
+  "step4_adoption": {
+    "organisationId": "org-manufacturer-north",
+    "productId": "prod_usda_1118468",
+    "expectedCurrentFormulaVersionId": "formula_1118468_v1",
+    "replace": {
+      "materialId": "mat_chocolate_base",
+      "from": "spec_chocolate_v1",
+      "to": "<candidate from step 1>"
+    },
+    "expectedPhase2": "CONFIRMED + REVIEW_REQUIRED -> ReviewTask (BR-04)"
+  },
+  "affectedProducts": [
+    {
+      "productId": "prod_usda_1106285",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1106285_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1106963",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1106963_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1107123",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1107123_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1109412",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1109412_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1110930",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1110930_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1111174",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1111174_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1114509",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1114509_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1117669",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1117669_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1118468",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_1118468_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_1119637",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1119637_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1121486",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1121486_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1123666",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_1123666_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_1124414",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1124414_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1124504",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1124504_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1126130",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1126130_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1129904",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1129904_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1132049",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1132049_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1132711",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1132711_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1135103",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1135103_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1135585",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1135585_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1136800",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1136800_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1137129",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_1137129_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_1137149",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NO_ACTION_BASELINE_SOY",
+      "currentFormulaVersionId": "formula_1137149_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "NO_ACTION"
+    },
+    {
+      "productId": "prod_usda_1137641",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_1137641_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_348560",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_348560_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_348784",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_348784_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_349473",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_349473_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_358610",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_358610_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_366384",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_366384_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_368616",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_368616_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_375302",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_375302_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_375679",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_375679_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_386914",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_386914_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_407551",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_407551_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_421784",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_421784_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_424416",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_424416_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_428015",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_428015_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_431247",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_431247_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_445783",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_445783_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    },
+    {
+      "productId": "prod_usda_453237",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "REVIEW_REQUIRED_BASELINE_NO_SOY",
+      "currentFormulaVersionId": "formula_453237_v1",
+      "pinnedSpecificationVersionId": "spec_chocolate_v1",
+      "expectedPhase1Outcome": "REVIEW_REQUIRED"
+    }
+  ],
+  "unaffectedProducts": [
+    {
+      "productId": "prod_usda_1106980",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1106980_v1"
+    },
+    {
+      "productId": "prod_usda_1108162",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1108162_v1"
+    },
+    {
+      "productId": "prod_usda_1110829",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1110829_v1"
+    },
+    {
+      "productId": "prod_usda_1112406",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1112406_v1"
+    },
+    {
+      "productId": "prod_usda_1113358",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1113358_v1"
+    },
+    {
+      "productId": "prod_usda_1116239",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1116239_v1"
+    },
+    {
+      "productId": "prod_usda_1118257",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1118257_v1"
+    },
+    {
+      "productId": "prod_usda_1120177",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1120177_v1"
+    },
+    {
+      "productId": "prod_usda_1124398",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1124398_v1"
+    },
+    {
+      "productId": "prod_usda_1127173",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1127173_v1"
+    },
+    {
+      "productId": "prod_usda_1128343",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1128343_v1"
+    },
+    {
+      "productId": "prod_usda_1128561",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1128561_v1"
+    },
+    {
+      "productId": "prod_usda_1129893",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1129893_v1"
+    },
+    {
+      "productId": "prod_usda_1132065",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1132065_v1"
+    },
+    {
+      "productId": "prod_usda_1132201",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1132201_v1"
+    },
+    {
+      "productId": "prod_usda_1134824",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1134824_v1"
+    },
+    {
+      "productId": "prod_usda_1134826",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1134826_v1"
+    },
+    {
+      "productId": "prod_usda_1136009",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1136009_v1"
+    },
+    {
+      "productId": "prod_usda_1136920",
+      "organisationId": "org-manufacturer-north",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1136920_v1"
+    },
+    {
+      "productId": "prod_usda_1137219",
+      "organisationId": "org-manufacturer-south",
+      "fixtureGroup": "NEGATIVE_CONTROL_NO_CHOCOLATE",
+      "currentFormulaVersionId": "formula_1137219_v1"
+    }
+  ]
+}

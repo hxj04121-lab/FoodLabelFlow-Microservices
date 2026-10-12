@@ -48,6 +48,16 @@ public class FormulationStore {
                 FormulationStore::product, productId).stream().findFirst();
     }
 
+    /** Products are seeded, not created through the API; the dataset import (STCN-89) adds its own. */
+    public void insertProduct(String productId, String organisationId, String brandOwner, String description,
+                              String normalizedCategory, String fixtureGroup, String provenanceId) {
+        jdbc.update("""
+                INSERT INTO product (product_id, organisation_id, brand_owner, product_description, normalized_category,
+                                     source_ingredients_text, source_type, fixture_group, provenance_id)
+                VALUES (?, ?, ?, ?, ?, '', 'SYSTEM_GENERATED', ?, ?)""",
+                productId, organisationId, brandOwner, description, normalizedCategory, fixtureGroup, provenanceId);
+    }
+
     private static ProductRow product(ResultSet rs, int i) throws SQLException {
         return new ProductRow(rs.getString("product_id"), rs.getString("organisation_id"), rs.getString("product_description"),
                 rs.getString("brand_owner"), rs.getString("normalized_category"), rs.getString("current_formula_version_id"));

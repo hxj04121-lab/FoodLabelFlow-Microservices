@@ -53,6 +53,13 @@ public class SpecificationStore {
                 .stream().findFirst();
     }
 
+    /** Suppliers are seeded, not created through the API; the dataset import (STCN-89) adds its own. */
+    public void insertSupplier(String supplierId, String organisationId, String code, String name, String provenanceId) {
+        jdbc.update("""
+                INSERT INTO supplier (supplier_id, organisation_id, supplier_code, supplier_name, provenance_id)
+                VALUES (?, ?, ?, ?, ?)""", supplierId, organisationId, code, name, provenanceId);
+    }
+
     private static SupplierRow supplier(ResultSet rs, int i) throws SQLException {
         return new SupplierRow(rs.getString("supplier_id"), rs.getString("organisation_id"), rs.getString("supplier_code"),
                 rs.getString("supplier_name"));
