@@ -49,13 +49,20 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.3
-    command: ["start-dev", "--http-port=8080"]
+    command: ["start-dev", "--http-port=8080", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-local-only-keycloak}
       KC_HEALTH_ENABLED: "true"
     ports:
       - "${KEYCLOAK_HOST_PORT:-8180}:8080"
+    volumes:
+      # Realm as code (G1-M4.1): the local stack gets the spectrace realm, its clients and the demo
+      # users from the committed file instead of console clicking, exactly like the standalone
+      # deploy/keycloak compose. `start-dev --import-realm` imports every *.json in that directory,
+      # so only the realm file is mounted; the container has no named volume, so a rebuilt container
+      # imports again.
+      - ../keycloak/realm/spectrace-realm.json:/opt/keycloak/data/import/spectrace-realm.json:ro
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
       interval: 10s
@@ -70,6 +77,10 @@ services:
     environment:
       SPECTRACE_SEED_REPLAY_ENABLED: ${SEED_REPLAY:-false}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/specification?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      # Tokens are issued to the browser at localhost:8180, so iss stays that URL, but inside this network the
+      # keys must be fetched from the keycloak container. With a JWK set URI, Spring still validates iss.
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://localhost:8180/realms/spectrace}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/spectrace/protocol/openid-connect/certs
       RABBITMQ_HOST: rabbitmq
       SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:
@@ -82,6 +93,10 @@ services:
       dockerfile: services/formulation/Dockerfile
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/formulation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      # Tokens are issued to the browser at localhost:8180, so iss stays that URL, but inside this network the
+      # keys must be fetched from the keycloak container. With a JWK set URI, Spring still validates iss.
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://localhost:8180/realms/spectrace}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/spectrace/protocol/openid-connect/certs
       RABBITMQ_HOST: rabbitmq
       SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:

@@ -609,12 +609,18 @@ def main(argv):
         )
         access_claims = decode_claims(tokens["access_token"])
         claims_by_user[user["username"]] = access_claims
-        if access_claims.get("sub") != user["expected_sub"]:
+        subject = access_claims.get("sub")
+        if not isinstance(subject, str) or not subject.strip():
             problems.append(
-                "%s: access token sub %r is not the pinned realm user id %r; a "
-                "re-import must not renumber subjects that services stored in "
-                "created_by_subject"
-                % (user["username"], access_claims.get("sub"), user["expected_sub"])
+                "%s: the access token carries no sub claim; the spectrace-identity-claims scope "
+                "must contain the oidc-sub-mapper, otherwise every service rejects the token with "
+                "401 no matter which roles the user holds" % user["username"]
+            )
+        elif subject != user["expected_sub"]:
+            problems.append(
+                "%s: access token sub %r is not the pinned realm user id %r; a re-import must not "
+                "renumber subjects that services stored in created_by_subject"
+                % (user["username"], subject, user["expected_sub"])
             )
         sample = samples_by_user[user["username"]]
         problems.extend(check_claims(sample, access_claims, args.strict_extras, audience, expected_issuer))

@@ -327,7 +327,7 @@ that the user without a business role inherits none.
 | `docker compose ... up -d keycloak` + realm import | PASS - `Realm 'spectrace' imported`, `Import finished successfully`, no warnings |
 | `verify-token-claims.py` (real PKCE login, all 10 demo users) | PASS - `All Access Token claim checks passed.` |
 | RS256 signature of access and ID token against the realm JWKS | PASS (verified with `cryptography`; the committed script does not verify signatures) |
-| `KeycloakRealmContractTest` (18 tests) | PASS |
+| `KeycloakRealmContractTest` (19 tests) | PASS |
 | `verify-token-claims.py --self-check` | PASS |
 | Access token `aud` (all 10 demo users, real PKCE login) | PASS - `spectrace-api` in every access token |
 | Access token `iss` equals the externally visible issuer | PASS - asserted by the script, not assumed |
