@@ -22,7 +22,8 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 /** The service starts against its own MySQL database, migrates the starter tables and reports readiness. */
 @Import(MySqlTestcontainers.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spectrace.test.database=formulation")
+        properties = {"spectrace.test.database=formulation", "spectrace.messaging.relay.enabled=false",
+                "spring.rabbitmq.listener.simple.auto-startup=false"})
 class FormulationApplicationTest {
 
     /** The starter is a JWT resource server, so callers must present a token. */
@@ -58,6 +59,12 @@ class FormulationApplicationTest {
         assertThat(readiness.statusCode()).isEqualTo(200);
         assertThat(readiness.body()).contains("\"status\":\"UP\"");
         assertThat(readiness.headers().firstValue("X-Correlation-ID")).isPresent();
+
+        HttpResponse<String> anonymous = client.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/formulations/products")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(anonymous.statusCode()).isEqualTo(401);
+        assertThat(anonymous.body()).contains("\"code\":\"AUTHENTICATION_REQUIRED\"");
 
         HttpResponse<String> unknown = client.send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/formulation/unknown"))

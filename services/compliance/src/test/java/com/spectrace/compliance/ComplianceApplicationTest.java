@@ -1,7 +1,10 @@
 package com.spectrace.compliance;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
+import com.spectrace.platform.starter.correlation.CorrelationId;
 import com.spectrace.platform.test.MySqlTestcontainers;
 import com.spectrace.platform.test.security.TestTokens;
 import com.spectrace.platform.test.security.TestTokens.Caller;
@@ -9,21 +12,45 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.sql.SQLException;
+import java.time.Duration;
+import java.util.Map;
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.FlywayException;
+import org.flywaydb.core.api.exception.FlywayValidateException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.testcontainers.mysql.MySQLContainer;
+import tools.jackson.databind.json.JsonMapper;
 
-/** The service starts against its own MySQL database, migrates the starter tables and reports readiness. */
+/**
+ * Real HTTP and MySQL checks of the generated G1 skeleton. The starter security module is a JWT
+ * resource server, so the test signs its own Keycloak-shaped tokens instead of disabling security.
+ */
 @Import(MySqlTestcontainers.class)
+@AutoConfigureMetrics
+@ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spectrace.test.database=compliance")
+        properties = {"spectrace.test.database=compliance", "spring.datasource.hikari.connection-timeout=2000",
+                "spring.datasource.hikari.validation-timeout=1000",
+                "spring.datasource.hikari.data-source-properties.socketTimeout=2000",
+                "spring.datasource.hikari.data-source-properties.connectTimeout=2000"})
 class ComplianceApplicationTest {
+    @Autowired
+    MySQLContainer mysql;
 
     /** The starter is a JWT resource server, so callers must present a token. */
     @TestConfiguration
@@ -49,31 +76,149 @@ class ComplianceApplicationTest {
     @Autowired
     TestTokens tokens;
 
-    @Test
-    void startsAndReportsReadinessIncludingTheDatabase() throws Exception {
-        HttpClient client = HttpClient.newHttpClient();
-        HttpResponse<String> readiness = client.send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/actuator/health/readiness")).build(),
-                HttpResponse.BodyHandlers.ofString());
-        assertThat(readiness.statusCode()).isEqualTo(200);
-        assertThat(readiness.body()).contains("\"status\":\"UP\"");
-        assertThat(readiness.headers().firstValue("X-Correlation-ID")).isPresent();
+    @Autowired
+    Flyway flyway;
 
-        HttpResponse<String> unknown = client.send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/compliance/unknown"))
-                        .header("Authorization", "Bearer " + tokens.token(
-                                Caller.of("compliance-test", "org-test", "MANUFACTURER", "LABEL_OFFICER")))
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
-        assertThat(unknown.statusCode()).isEqualTo(404);
-        assertThat(unknown.body()).contains("\"code\":\"RESOURCE_NOT_FOUND\"");
+    @Autowired
+    JsonMapper json;
+
+    private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+
+    private HttpResponse<String> get(String path, String correlation) throws Exception {
+        return get(path, correlation, null);
+    }
+
+    private HttpResponse<String> get(String path, String correlation, String token) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header(CorrelationId.HEADER, correlation).timeout(Duration.ofSeconds(30));
+        if (token != null) {
+            request.header("Authorization", "Bearer " + token);
+        }
+        return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> body(HttpResponse<String> response) {
+        return json.readValue(response.body(), Map.class);
     }
 
     @Test
-    void starterTablesAreMigratedIntoTheServiceDatabase() {
+    void startsWithTheRealStarterAndReportsReadinessAndLiveness() throws Exception {
+        for (String probe : new String[] {"readiness", "liveness"}) {
+            String correlation = "stcn49-" + probe;
+            HttpResponse<String> response = get("/actuator/health/" + probe, correlation);
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(body(response)).containsOnlyKeys("status").containsEntry("status", "UP");
+            assertThat(response.headers().firstValue(CorrelationId.HEADER)).hasValue(correlation);
+        }
+    }
+
+    @Test
+    void unknownPathsAndUnexposedActuatorsUseTheCanonicalErrorAndCorrelation() throws Exception {
+        // The resource server decides before routing, so an anonymous call is 401 rather than 404;
+        // the canonical 404 envelope is asserted with a token. Both halves must hold: no path is
+        // reachable without one.
+        HttpResponse<String> anonymous = get("/api/compliance/unknown", "stcn49-anonymous");
+        assertThat(anonymous.statusCode()).isEqualTo(401);
+        assertThat(body(anonymous)).containsEntry("code", "AUTHENTICATION_REQUIRED");
+
+        for (String path : new String[] {"/api/compliance/unknown", "/actuator/env", "/actuator/beans"}) {
+            HttpResponse<String> response = get(path, "stcn49-error", tokens.token(
+                    Caller.of("compliance-test", "org-test", "MANUFACTURER", "LABEL_OFFICER")));
+            assertThat(response.statusCode()).isEqualTo(404);
+            assertThat(body(response)).containsOnlyKeys("code", "message", "traceId", "evidenceId")
+                    .containsEntry("code", "RESOURCE_NOT_FOUND").containsEntry("traceId", "stcn49-error")
+                    .containsEntry("evidenceId", null);
+            assertThat((String) body(response).get("message")).isNotBlank();
+            assertThat(response.headers().firstValue(CorrelationId.HEADER)).hasValue("stcn49-error");
+        }
+    }
+
+    @Test
+    void prometheusUsesTheComplianceApplicationTag() throws Exception {
+        get("/actuator/health/readiness", "stcn49-metrics");
+        HttpResponse<String> response = get("/actuator/prometheus", "stcn49-metrics");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("application=\"compliance\"").contains("http_server_requests");
+    }
+
+    @Test
+    void flywayOwnsTheComplianceRootAndReapplyingDoesNotDuplicateHistory() {
+        assertThat(jdbc.queryForObject("SELECT DATABASE()", String.class)).isEqualTo("compliance");
+        assertThat(flyway.info().current().getVersion().toString()).isEqualTo("1");
+        assertThat(jdbc.queryForList("SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank",
+                String.class)).containsExactly("0.1", "1");
         assertThat(jdbc.queryForList("""
                 SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()
                 AND table_name IN ('outbox', 'local_audit', 'processed_event', 'consumed_aggregate_version')""", String.class))
-                .hasSize(4);
+                .containsExactlyInAnyOrder("outbox", "local_audit", "processed_event", "consumed_aggregate_version");
+        assertThat(flyway.getConfiguration().isBaselineOnMigrate()).isFalse();
+        assertThat(flyway.getConfiguration().isValidateOnMigrate()).isTrue();
+        assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
+        assertThat(flyway.migrate().migrationsExecuted).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success = TRUE",
+                Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void changedMigrationChecksumIsRejectedAndRestoredForOtherTests() {
+        Integer checksum = jdbc.queryForObject("SELECT checksum FROM flyway_schema_history WHERE version = '1'", Integer.class);
+        assertThat(checksum).isNotNull();
+        jdbc.update("UPDATE flyway_schema_history SET checksum = ? WHERE version = '1'", checksum ^ 1);
+        try {
+            assertThatThrownBy(flyway::migrate).isInstanceOf(FlywayValidateException.class).hasMessageContaining("checksum");
+        } finally {
+            jdbc.update("UPDATE flyway_schema_history SET checksum = ? WHERE version = '1'", checksum);
+        }
+        assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
+    }
+
+    @Test
+    void flywayCleanCannotDeleteTheServiceDatabase() {
+        assertThatThrownBy(flyway::clean).isInstanceOf(FlywayException.class).hasMessageContaining("cleanDisabled");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE", Integer.class)).isEqualTo(2);
+    }
+
+    @Test
+    void serviceDatabaseUserCannotReadAnotherSchema() throws Exception {
+        var setup = mysql.execInContainer("sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysql -uroot -e "
+                + "'CREATE DATABASE compliance_peer_fixture; CREATE TABLE compliance_peer_fixture.marker (id INT PRIMARY KEY); "
+                + "INSERT INTO compliance_peer_fixture.marker VALUES (1);'");
+        assertThat(setup.getExitCode()).as(setup.getStderr()).isZero();
+        assertThatThrownBy(() -> jdbc.queryForList("SELECT * FROM compliance_peer_fixture.marker"))
+                .isInstanceOf(DataAccessException.class).satisfies(error -> {
+                    Throwable cause = ((DataAccessException) error).getMostSpecificCause();
+                    assertThat(cause).isInstanceOf(SQLException.class);
+                    assertThat(((SQLException) cause).getErrorCode()).isIn(1044, 1142);
+                });
+    }
+
+    @Test
+    void actualDatabaseOutageDropsReadinessButNotLivenessAndRecovers() throws Exception {
+        mysql.getDockerClient().pauseContainerCmd(mysql.getContainerId()).exec();
+        try {
+            HttpResponse<String> readiness = get("/actuator/health/readiness", "stcn49-db-outage");
+            assertThat(readiness.statusCode()).isEqualTo(503);
+            assertThat(body(readiness)).containsOnlyKeys("status").containsEntry("status", "DOWN");
+            assertThat(get("/actuator/health/liveness", "stcn49-db-outage").statusCode()).isEqualTo(200);
+        } finally {
+            mysql.getDockerClient().unpauseContainerCmd(mysql.getContainerId()).exec();
+        }
+        await().atMost(Duration.ofSeconds(25)).untilAsserted(() ->
+                assertThat(get("/actuator/health/readiness", "stcn49-db-recovered").statusCode()).isEqualTo(200));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void serviceUsesTheStartersJsonLoggingAndCorrelationBinding(CapturedOutput output) {
+        try (CorrelationId.Scope ignored = CorrelationId.bind("stcn49-log")) {
+            LoggerFactory.getLogger(ComplianceApplicationTest.class).info("G1 Compliance logging smoke");
+        }
+        String line = output.getOut().lines().filter(value -> value.startsWith("{")
+                && value.contains("G1 Compliance logging smoke")).findFirst().orElseThrow();
+        Map<String, Object> record = json.readValue(line, Map.class);
+        assertThat(record).containsEntry("correlationId", "stcn49-log");
+        assertThat((Map<String, Object>) record.get("service")).containsEntry("name", "compliance");
+        assertThat(record).containsKey("ecs");
     }
 }

@@ -68,8 +68,14 @@ services:
       context: ../..
       dockerfile: services/specification/Dockerfile
     environment:
+      SPECTRACE_SEED_REPLAY_ENABLED: ${SEED_REPLAY:-false}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/specification?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      # Tokens are issued to the browser at localhost:8180, so iss stays that URL, but inside this network the
+      # keys must be fetched from the keycloak container. With a JWK set URI, Spring still validates iss.
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://localhost:8180/realms/spectrace}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/spectrace/protocol/openid-connect/certs
       RABBITMQ_HOST: rabbitmq
+      SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:
       - "${SPECIFICATION_HOST_PORT:-8081}:8080"
 
@@ -80,7 +86,12 @@ services:
       dockerfile: services/formulation/Dockerfile
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/formulation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      # Tokens are issued to the browser at localhost:8180, so iss stays that URL, but inside this network the
+      # keys must be fetched from the keycloak container. With a JWK set URI, Spring still validates iss.
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://localhost:8180/realms/spectrace}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/spectrace/protocol/openid-connect/certs
       RABBITMQ_HOST: rabbitmq
+      SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:
       - "${FORMULATION_HOST_PORT:-8082}:8080"
 
@@ -92,6 +103,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/compliance?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       RABBITMQ_HOST: rabbitmq
+      SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:
       - "${COMPLIANCE_HOST_PORT:-8083}:8080"
 
@@ -103,6 +115,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/label_workflow?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       RABBITMQ_HOST: rabbitmq
+      SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:
       - "${LABEL_WORKFLOW_HOST_PORT:-8084}:8080"
 
