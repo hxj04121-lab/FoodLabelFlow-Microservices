@@ -15,13 +15,6 @@ resource "aws_security_group" "nodes" {
   name        = "${var.name}-eks-nodes"
   description = "EKS managed node security group"
   vpc_id      = var.vpc_id
-  ingress {
-    description = "Node-to-node traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    self        = true
-  }
   egress {
     description = "Cluster, RDS, and other in-VPC services"
     from_port   = 0
@@ -37,9 +30,16 @@ resource "aws_security_group" "nodes" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   tags = merge(var.tags, { Name = "${var.name}-eks-nodes" })
+}
 
-  # shortcut: ignores all ingress drift, split rules into standalone resources if drift detection is needed.
-  lifecycle { ignore_changes = [ingress] }
+resource "aws_security_group_rule" "nodes_self" {
+  type              = "ingress"
+  description       = "Node-to-node traffic"
+  security_group_id = aws_security_group.nodes.id
+  self              = true
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
 }
 
 resource "aws_security_group_rule" "cluster_api_from_nodes" {
