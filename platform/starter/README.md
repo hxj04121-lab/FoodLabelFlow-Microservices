@@ -56,9 +56,26 @@ try (CorrelationId.Scope ignored = CorrelationId.bind(envelope.correlationId()))
 
 ## Security module (M4)
 
-**Until G1-M4.2 (STCN-55, PR #36) is merged, the starter ships no security auto-configuration: every endpoint is unauthenticated. Do not assume authentication is on.**
+The starter is a JWT resource server (G1-M4.2): every request must carry a bearer token that is
+validated against the configured issuer and JWKS, and the validated token becomes the
+`OrganisationContext` (`subject`, `org_id`, `org_type`, roles) a controller receives as a parameter
+and guards with `OrganisationGuard`. Probes (`/actuator/health/**`), the metrics scrape
+(`/actuator/prometheus`, which Alloy fetches without a token) and `/error` stay open — the
+NetworkPolicy limits who can reach them; every other endpoint needs a token. A service that needs a
+different policy defines its own `SecurityFilterChain` and the starter's chain backs off.
 
-`com.spectrace.platform.starter.security` is reserved for G1-M4.2 (JWT resource server, organisation context, role and organisation guards). The correlation filter runs before the security filter chain, so 401/403 responses already carry `X-Correlation-ID`, and anything the security chain rejects with `sendError` is rendered as an `ApiError` by the starter's `/error` controller. Use `ApiException.unauthenticated()` / `forbidden()` or `ApiErrors.response(...)` for the codes `AUTHENTICATION_REQUIRED` and `AUTHORIZATION_DENIED`.
+| Setting | Rule |
+|---|---|
+| `spectrace.security.issuer-uri` | Issuer every accepted token must carry. The decoder is built from the JWKS URL, never from discovery, so a service still starts while Keycloak is unavailable. |
+| `spectrace.security.jwk-set-uri` | Optional override; derived from the issuer when empty. |
+| `spectrace.security.audience` | Empty by default. Set it as soon as the realm mints an `aud` claim, otherwise a token for another resource is accepted. |
+| subject | The immutable `sub`. A token without it is 401 — `preferred_username` is never used as a substitute, because renaming an account must not create a new identity. |
+| `spectrace.security.legacy-header-auth.enabled` | Bridges the pre-Keycloak `X-Auth-*` headers for local development. Every active profile must be `local` or `test`; the start-up fails otherwise, including a mixed set such as `local,staging`. |
+
+The correlation filter runs before the security filter chain, so 401/403 responses already carry
+`X-Correlation-ID`, and anything the security chain rejects with `sendError` is rendered as an
+`ApiError` by the starter's `/error` controller. Use `ApiException.unauthenticated()` / `forbidden()`
+or `ApiErrors.response(...)` for the codes `AUTHENTICATION_REQUIRED` and `AUTHORIZATION_DENIED`.
 
 ## Local platform
 
