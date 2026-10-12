@@ -126,7 +126,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           # Real Specification caller endpoint from the M4-owned PR47; not a test echo service.
-          ref: 751ed773eb1605465140a9828f9852dc03803802
+          ref: 088237586be335e85c91b368e1e5373854ace00b
           path: platform/gateway/target/m4-provider
           persist-credentials: false
       - uses: actions/setup-java@v4

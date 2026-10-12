@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.spectrace.platform.starter.security.SecurityProperties;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 /** {@code spectrace.security.*} binds as documented, and the defaults stay safe. */
 @DisplayName("Security properties binding")
@@ -72,6 +76,28 @@ class SecurityPropertiesBindingTest {
                     assertThat(properties.getLegacyHeaderAuth().getOrganisationIdHeader()).isEqualTo("X-Legacy-Org");
                     assertThat(properties.getLegacyHeaderAuth().getOrganisationTypeHeader()).isEqualTo("X-Legacy-Type");
                     assertThat(properties.getLegacyHeaderAuth().getRolesHeader()).isEqualTo("X-Legacy-Roles");
+                });
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "SPECTRACE_SECURITY_ISSUER_URI,SPECTRACE_SECURITY_JWK_SET_URI",
+            "SPECTRACE_SECURITY_ISSUERURI,SPECTRACE_SECURITY_JWKSETURI"
+    })
+    @DisplayName("Compose environment variables bind the issuer, private JWKS and audience")
+    void composeEnvironmentBinds(String issuerVariable, String jwksVariable) {
+        String issuer = "http://localhost:9080/auth/realms/spectrace";
+        String jwks = "http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs";
+        runner.withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(
+                new SystemEnvironmentPropertySource("systemEnvironment", Map.of(
+                        issuerVariable, issuer,
+                        jwksVariable, jwks,
+                        "SPECTRACE_SECURITY_AUDIENCE", "spectrace-api"))))
+                .run(context -> {
+                    SecurityProperties properties = context.getBean(SecurityProperties.class);
+                    assertThat(properties.getIssuerUri()).isEqualTo(issuer);
+                    assertThat(properties.getJwkSetUri()).isEqualTo(jwks);
+                    assertThat(properties.getAudience()).containsExactly("spectrace-api");
                 });
     }
 
