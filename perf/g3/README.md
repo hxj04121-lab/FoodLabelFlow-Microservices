@@ -4,6 +4,8 @@
 
 ## Dataset and owner boundary
 
+The four-organisation demo realm does not contain the generated20 manufacturers. M4 must approve a separate test-only identity overlay, including the inherited supplier scope, before M1's owned perf-seed/outbox replay can load the dataset. Exact identifiers and required owner evidence are in [the12October identity/import handoff](../../docs/swe5001/M2-PERF-IDENTITY-OWNER-HANDOFF-20261012.md). The predeclared20-manufacturer target is unchanged.
+
 `python perf/g3/experiment.py dataset <empty-directory> --commit <full-existing-SHA>` generates seed 5001, 20 manufacturer identities, 250 released Formula versions per manufacturer (5,000 total), 40 Specification snapshots/events, explicit synthetic Label import plans and 20 preview cases with 250 expected findings each. Java's name-based UUID compatibility is checked against an independently executed Java fixture. Repeated generation produces identical file hashes.
 
 M1 must create the synthetic organisations and released Specification/Formula snapshots through its owned importer/APIs. M4 must create the exact current published Labels, supply their real business numbers and approve the expected findings. The Label plan is deliberately not a fabricated LabelPublished event. Do not directly insert into peer service databases or infer Label business versions from aggregate sequencing. The generated dataset is not loaded until owners provide actual count/version/hash evidence. `validate-dataset.mjs` validates all generated Specification/Formula envelopes and tenant requests against the frozen schemas; CI retains the generated files as an artifact.
@@ -16,7 +18,7 @@ After explicit approval, fill a private copy of `window.example.json` with the a
 
 `python perf/g3/experiment.py run <private-window.json> <new-evidence-directory>` scales only the specified Deployment and checks actual Pod ownership, fixed resources, digest, c6i.large placement, Compliance node-group/taint, two-AZ spread at three replicas and absence of an HPA. It runs the native open arrival-rate driver and saves every raw sample/log/placement/exit status. Two consecutive valid SLO misses end that ladder; an invalid generator run stops the experiment and retains its evidence.
 
-The current taint contract is `dedicated=compliance:NoSchedule`, matching main and M5 #27 at 6fb4060. Placement preflight rejects the obsolete `workload` key, and the offline test covers both observed node configurations. This offline fixture does not establish live scheduling.
+The current taint contract is `dedicated=compliance:NoSchedule`, matching main and M5 #27. Placement preflight rejects the obsolete `workload` key and requires both Pod and fetched Node Ready=True. Offline tests reject Node Ready=False, Unknown or missing even when Pod Ready remains stale. These fixtures do not establish live scheduling.
 
 `aggregate <evidence-directory>` recomputes each hold from raw request/latency samples. p95 uses nearest-rank quantiles, error fraction is strictly below 1%, and any dropped arrival invalidates the trial. The median of the three maximum passing discrete rates is reported for each replica count. Missing/reordered trials, changed targets/environments, incomplete telemetry non-monotonic results, or a ladder with no observed upper miss cannot produce an accepted capacity claim. The required ratio remains R3/R1 ≥2; efficiency is `(R3/R1)/3`.
 
