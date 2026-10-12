@@ -112,3 +112,49 @@ service checks.
   contract; no flow is assumed in this design.
 - G1 must prove missing, multiple and invalid organisation claims are rejected
   with token-claim tests before enabling the realm.
+
+## G1-M4.1 status (realm as code)
+
+Implemented in `deploy/keycloak/`; this section records how the open items were
+decided. The design above is unchanged.
+
+- Realm slug: `spectrace`; local issuer
+  `http://localhost:8180/realms/spectrace`.
+- Organisation claims: single-valued `org_id` / `org_type` user attributes
+  declared in the declarative user profile (`multivalued: false`, `org_type`
+  enum, admin-only edit, `unmanagedAttributePolicy: DISABLED`). Groups were
+  rejected because group membership is multi-valued and cannot express BR-11's
+  exactly-one-organisation rule.
+- Realm roles reuse the `V3__baseline_seed.sql` vocabulary; no
+  `SUPPLIER`/`MANUFACTURER` role is created.
+- Partner client: confidential, client credentials only, `fullScopeAllowed`
+  false and no roles or organisation binding, so it fails closed. Its final
+  flow, role scope mappings and organisation binding stay open for the reviewed
+  partner onboarding (Should, G3-M3).
+- Claim enforcement evidence: a static realm/claims contract test runs in
+  `mvn verify`, and `deploy/keycloak/scripts/verify-token-claims.py` performs a
+  real authorisation code + PKCE login to prove the issued claims. The design
+  requirement to reject missing/multiple/invalid organisation claims is
+  implemented by the profile cardinality/enum rules at provisioning time and
+  must additionally be enforced fail-closed by the G1-M4.2 starter.
+- Redirect URIs: the exact GitHub Pages project root
+  `https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/` is registered
+  for sign-in (`spectrace-web.redirectUris`) and sign-out
+  (`post.logout.redirect.uris`). It is exact, not a wildcard, so the design rule
+  that production redirects must be exact entries holds; if the static site uses
+  a sub-path callback, that exact path is added separately.
+- Demo user role assignments: the design declares the role vocabulary, and the
+  realm assigns it so the demo steps can run. All four makers
+  (`supplier.alpha.maker`, `supplier.beta.maker`, `manufacturer.north.maker`,
+  `manufacturer.south.maker`) hold `ADMIN_DATA_MAINTENANCE`, because creating and
+  releasing a specification version checks `DATA.MAINTAIN`, which the seed grants
+  to that role only. Each manufacturer also has a `LABEL_OFFICER` (draft,
+  validate, submit) and a *different* identity holding `APPROVER` + `PUBLISHER`,
+  because a label belongs to a manufacturer product and BR-06 keeps the maker and
+  the checker separate. `KeycloakRealmContractTest` asserts both.
+- Immutable subjects: every demo user declares a fixed uuid5 `id`, so Keycloak
+  emits the same `sub` claim on every realm import. Services compare the token
+  subject with stored `created_by_subject` values (BR-06), and a staging
+  re-import must not invalidate an identity that already exists in a database.
+  `KeycloakRealmContractTest` rejects a demo user without a pinned, unique,
+  UUID-shaped id.

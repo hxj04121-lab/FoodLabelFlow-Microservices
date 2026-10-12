@@ -88,7 +88,7 @@ docker compose -f deploy/local/compose.yaml up -d mysql rabbitmq keycloak # infr
 |---|---|---|
 | MySQL 8.4.11 | 3316 | databases `specification`, `formulation`, `compliance`, `label_workflow`; one user per service with grants on its own database only (password `local-only-<database>`) |
 | RabbitMQ 4.1 | 5672, 15672 (UI) | user `spectrace` / `local-only-rabbitmq`; topology arrives with the outbox (STCN-45) and M5's topology-as-code |
-| Keycloak 26.3 | 8180 | admin `admin` / `local-only-keycloak`; M4's realm import is added with G1-M4.1 |
+| Keycloak 26.3 | 8180 | admin `admin` / `local-only-keycloak`; imports `deploy/keycloak/realm/spectrace-realm.json` (realm, clients, demo users) on start |
 | specification / formulation / compliance / label-workflow | 8081 / 8082 / 8083 / 8084 | each container healthy only when its readiness probe (including its database) is UP |
 
 Ports can be changed with the variables in [compose.yaml](../../deploy/local/compose.yaml). Remove everything, including data, with `docker compose -f deploy/local/compose.yaml down -v`.
