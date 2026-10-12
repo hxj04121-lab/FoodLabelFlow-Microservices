@@ -1,2 +1,3 @@
 com.spectrace.platform.starter.autoconfigure.StarterWebAutoConfiguration
 com.spectrace.platform.starter.autoconfigure.StarterMessagingAutoConfiguration
+com.spectrace.platform.starter.autoconfigure.StarterSecurityAutoConfiguration

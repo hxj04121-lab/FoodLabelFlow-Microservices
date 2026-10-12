@@ -56,9 +56,26 @@ try (CorrelationId.Scope ignored = CorrelationId.bind(envelope.correlationId()))
 
 ## Security module (M4)
 
-**Until G1-M4.2 (STCN-55, PR #36) is merged, the starter ships no security auto-configuration: every endpoint is unauthenticated. Do not assume authentication is on.**
+The starter is a JWT resource server (G1-M4.2): every request must carry a bearer token that is
+validated against the configured issuer and JWKS, and the validated token becomes the
+`OrganisationContext` (`subject`, `org_id`, `org_type`, roles) a controller receives as a parameter
+and guards with `OrganisationGuard`. Probes (`/actuator/health/**`), the metrics scrape
+(`/actuator/prometheus`, which Alloy fetches without a token) and `/error` stay open — the
+NetworkPolicy limits who can reach them; every other endpoint needs a token. A service that needs a
+different policy defines its own `SecurityFilterChain` and the starter's chain backs off.
 
-`com.spectrace.platform.starter.security` is reserved for G1-M4.2 (JWT resource server, organisation context, role and organisation guards). The correlation filter runs before the security filter chain, so 401/403 responses already carry `X-Correlation-ID`, and anything the security chain rejects with `sendError` is rendered as an `ApiError` by the starter's `/error` controller. Use `ApiException.unauthenticated()` / `forbidden()` or `ApiErrors.response(...)` for the codes `AUTHENTICATION_REQUIRED` and `AUTHORIZATION_DENIED`.
+| Setting | Rule |
+|---|---|
+| `spectrace.security.issuer-uri` | Issuer every accepted token must carry. The decoder is built from the JWKS URL, never from discovery, so a service still starts while Keycloak is unavailable. |
+| `spectrace.security.jwk-set-uri` | Optional override; derived from the issuer when empty. |
+| `spectrace.security.audience` | Empty by default. Set it as soon as the realm mints an `aud` claim, otherwise a token for another resource is accepted. |
+| subject | The immutable `sub`. A token without it is 401 — `preferred_username` is never used as a substitute, because renaming an account must not create a new identity. |
+| `spectrace.security.legacy-header-auth.enabled` | Bridges the pre-Keycloak `X-Auth-*` headers for local development. Every active profile must be `local` or `test`; the start-up fails otherwise, including a mixed set such as `local,staging`. |
+
+The correlation filter runs before the security filter chain, so 401/403 responses already carry
+`X-Correlation-ID`, and anything the security chain rejects with `sendError` is rendered as an
+`ApiError` by the starter's `/error` controller. Use `ApiException.unauthenticated()` / `forbidden()`
+or `ApiErrors.response(...)` for the codes `AUTHENTICATION_REQUIRED` and `AUTHORIZATION_DENIED`.
 
 ## Local platform
 
@@ -71,7 +88,7 @@ docker compose -f deploy/local/compose.yaml up -d mysql rabbitmq keycloak # infr
 |---|---|---|
 | MySQL 8.4.11 | 3316 | databases `specification`, `formulation`, `compliance`, `label_workflow`; one user per service with grants on its own database only (password `local-only-<database>`) |
 | RabbitMQ 4.1 | 5672, 15672 (UI) | user `spectrace` / `local-only-rabbitmq`; topology arrives with the outbox (STCN-45) and M5's topology-as-code |
-| Keycloak 26.3 | 8180 | admin `admin` / `local-only-keycloak`; M4's realm import is added with G1-M4.1 |
+| Keycloak 26.3 | 8180 | admin `admin` / `local-only-keycloak`; imports `deploy/keycloak/realm/spectrace-realm.json` (realm, clients, demo users) on start |
 | specification / formulation / compliance / label-workflow | 8081 / 8082 / 8083 / 8084 | each container healthy only when its readiness probe (including its database) is UP |
 
 Ports can be changed with the variables in [compose.yaml](../../deploy/local/compose.yaml). Remove everything, including data, with `docker compose -f deploy/local/compose.yaml down -v`.
