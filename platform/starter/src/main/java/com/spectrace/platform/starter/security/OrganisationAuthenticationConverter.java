@@ -15,6 +15,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
  * <p>Only the configured roles claim is read. Keycloak's {@code realm_access.roles} also carries the
  * built-in {@code default-roles-*} entries, which are not SpecTrace permissions, so they are never
  * granted as authorities.</p>
+ *
+ * <p>A token without a non-blank {@code sub} is an authentication failure (401). The subject is the
+ * immutable identity every service persists as {@code *_by_subject} and BR-06 compares, so it is
+ * never guessed from the mutable {@code preferred_username}: a rename, or a token minted without
+ * {@code sub}, would otherwise silently become a different identity.</p>
  */
 public class OrganisationAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
@@ -27,9 +32,7 @@ public class OrganisationAuthenticationConverter implements Converter<Jwt, Abstr
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
         try {
-            String subject = jwt.getSubject() != null ? jwt.getSubject()
-                    : jwt.getClaimAsString("preferred_username");
-            OrganisationContext context = new OrganisationContext(subject,
+            OrganisationContext context = new OrganisationContext(jwt.getSubject(),
                     jwt.getClaimAsString(properties.getOrganisationIdClaim()),
                     OrganisationType.ofClaim(jwt.getClaimAsString(properties.getOrganisationTypeClaim())),
                     roles(jwt));

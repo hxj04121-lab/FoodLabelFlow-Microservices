@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.spectrace.platform.starter.autoconfigure.StarterSecurityAutoConfiguration;
 import com.spectrace.platform.starter.error.ApiException;
+import com.spectrace.platform.starter.security.OrganisationAuthenticationConverter;
 import com.spectrace.platform.starter.security.OrganisationAuthenticationToken;
 import com.spectrace.platform.starter.security.OrganisationContext;
 import com.spectrace.platform.starter.security.OrganisationContexts;
@@ -19,10 +20,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 /** The parts of the security module that are behaviour, not wiring. */
 @DisplayName("Security module units")
@@ -83,6 +86,36 @@ class SecurityModuleUnitTest {
         assertUnauthenticated(() -> new OrganisationContext("maker", null, OrganisationType.SUPPLIER, Set.of()));
         assertUnauthenticated(() -> new OrganisationContext("maker", "org-a", null, Set.of()));
         assertThat(new OrganisationContext("maker", "org-a", OrganisationType.SUPPLIER, null).roles()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the subject is the immutable sub; a token without it is 401 and preferred_username is ignored")
+    void subjectNeverFallsBackToPreferredUsername() {
+        OrganisationAuthenticationConverter converter =
+                new OrganisationAuthenticationConverter(new SecurityProperties());
+
+        Jwt usable = Jwt.withTokenValue("token")
+                .header("alg", "RS256")
+                .subject("20b1c82b-dcf5-547c-9b32-44a7bbdbaac5")
+                .claim("org_id", "org-supplier-alpha")
+                .claim("org_type", "SUPPLIER")
+                .claim("roles", List.of("LABEL_OFFICER"))
+                .claim("preferred_username", "supplier.alpha.maker")
+                .build();
+        OrganisationAuthenticationToken authenticated = (OrganisationAuthenticationToken) converter.convert(usable);
+        assertThat(authenticated.organisation().subject())
+                .isEqualTo("20b1c82b-dcf5-547c-9b32-44a7bbdbaac5")
+                .isNotEqualTo("supplier.alpha.maker");
+
+        Jwt withoutSubject = Jwt.withTokenValue("token")
+                .header("alg", "RS256")
+                .claim("org_id", "org-supplier-alpha")
+                .claim("org_type", "SUPPLIER")
+                .claim("roles", List.of("LABEL_OFFICER"))
+                .claim("preferred_username", "supplier.alpha.maker")
+                .build();
+        assertThatThrownBy(() -> converter.convert(withoutSubject))
+                .isInstanceOf(BadCredentialsException.class);
     }
 
     @Test

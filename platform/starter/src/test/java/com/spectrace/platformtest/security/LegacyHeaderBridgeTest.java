@@ -64,6 +64,19 @@ class LegacyHeaderBridgeTest {
     }
 
     @Test
+    @DisplayName("a profile set that mixes local with a real environment fails the start-up too")
+    void mixedProfilesFailTheStartUp() {
+        MockEnvironment mixed = new MockEnvironment();
+        mixed.setActiveProfiles("local", "staging");
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> LegacyHeaderAuthenticationFilter.assertLocalProfile(mixed));
+
+        assertTrue(failure.getMessage().contains("staging"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("local/test only"), failure.getMessage());
+    }
+
+    @Test
     @DisplayName("the bridge is off unless a deployment switches it on")
     void bridgeIsOffByDefault() {
         assertFalse(new SecurityProperties().getLegacyHeaderAuth().isEnabled());
