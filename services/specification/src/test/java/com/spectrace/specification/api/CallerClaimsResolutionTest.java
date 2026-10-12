@@ -7,7 +7,9 @@ import com.spectrace.platform.starter.error.ApiException;
 import com.spectrace.platform.starter.security.OrganisationAuthenticationToken;
 import com.spectrace.platform.starter.security.OrganisationContext;
 import com.spectrace.platform.starter.security.OrganisationType;
+import com.spectrace.specification.contract.CallerClaimsSchema;
 import com.spectrace.specification.security.CallerResolver;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -18,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The caller-claims identity resolution under both chains the endpoint can run with: the starter's
@@ -27,6 +30,9 @@ import org.springframework.security.oauth2.jwt.Jwt;
  */
 @DisplayName("Caller claims identity resolution")
 class CallerClaimsResolutionTest {
+
+    private static final Path CONTRACTS = Path.of("../../contracts").toAbsolutePath().normalize();
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final CallerResolver resolver = new CallerResolver();
     private final CallerClaimsController controller = new CallerClaimsController(resolver);
@@ -81,6 +87,20 @@ class CallerClaimsResolutionTest {
     @DisplayName("without an identity the endpoint is 401")
     void withoutIdentityItIsUnauthenticated() {
         assertUnauthenticated(() -> controller.callerClaims());
+    }
+
+    @Test
+    @DisplayName("the produced body conforms to the published CallerClaims schema")
+    void theBodyConformsToThePublishedSchema() throws Exception {
+        SecurityContextHolder.getContext().setAuthentication(new OrganisationAuthenticationToken(
+                new OrganisationContext("subject-1", "perf_manufacturer_07", OrganisationType.MANUFACTURER,
+                        Set.of("LABEL_OFFICER")), null));
+
+        Map<String, Object> body = controller.callerClaims();
+
+        // perf_manufacturer_07 carries underscores: the shared Id schema accepts it, a hand-written
+        // pattern must not reject the frozen G3 fixtures (M2 contract-owner request).
+        assertThat(CallerClaimsSchema.problems(CONTRACTS, JSON.writeValueAsString(body))).isEmpty();
     }
 
     private static void assertUnauthenticated(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {

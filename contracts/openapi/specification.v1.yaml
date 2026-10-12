@@ -544,10 +544,7 @@ components:
           minLength: 1
           description: The immutable OIDC sub claim (the Keycloak user id), never a username or a request field.
         org_id:
-          type: string
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9-]{2,63}$
-          description: The caller's single organisation (BR-11), from the org_id token claim.
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
         org_type:
           type: string
           enum: [SUPPLIER, MANUFACTURER]

@@ -7,10 +7,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.spectrace.platform.test.MySqlTestcontainers;
 import com.spectrace.platform.test.security.TestTokens.Caller;
 import com.spectrace.specification.api.CallerClaimsController;
+import com.spectrace.specification.contract.CallerClaimsSchema;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -31,6 +33,8 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spectrace.test.database=specification", "spectrace.messaging.relay.enabled=false"})
 class CallerClaimsApiTest {
+
+    private static final Path CONTRACTS = Path.of("../../contracts").toAbsolutePath().normalize();
 
     @LocalServerPort int port;
     @Autowired JsonMapper json;
@@ -106,5 +110,8 @@ class CallerClaimsApiTest {
         List<String> roles = new ArrayList<>();
         body.path("roles").forEach(role -> roles.add(role.asText()));
         assertThat(roles).isEqualTo(BASE_AUTHOR.roles());
+        assertThat(CallerClaimsSchema.problems(CONTRACTS, response.body()))
+                .as("the successful response must match the published CallerClaims schema")
+                .isEmpty();
     }
 }
