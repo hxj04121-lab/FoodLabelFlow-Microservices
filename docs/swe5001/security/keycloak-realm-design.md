@@ -152,3 +152,9 @@ decided. The design above is unchanged.
   validate, submit) and a *different* identity holding `APPROVER` + `PUBLISHER`,
   because a label belongs to a manufacturer product and BR-06 keeps the maker and
   the checker separate. `KeycloakRealmContractTest` asserts both.
+- Immutable subjects: every demo user declares a fixed uuid5 `id`, so Keycloak
+  emits the same `sub` claim on every realm import. Services compare the token
+  subject with stored `created_by_subject` values (BR-06), and a staging
+  re-import must not invalidate an identity that already exists in a database.
+  `KeycloakRealmContractTest` rejects a demo user without a pinned, unique,
+  UUID-shaped id.

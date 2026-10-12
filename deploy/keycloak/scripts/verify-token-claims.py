@@ -15,6 +15,8 @@ decoded Access Token carries:
   * ``org_type`` - SUPPLIER or MANUFACTURER only;
   * ``roles``    - the effective realm roles, including the assigned business
                    role codes.
+  * ``sub``      - the pinned realm user id, so a re-import reproduces the same
+                   subject instead of renumbering it;
 
 It also asserts the cross-organisation isolation properties: the two supplier
 organisations and the two manufacturer organisations do not share claims, and a
@@ -292,9 +294,15 @@ def expected_users(realm):
                 "realm user %s must have exactly one org_id and one org_type"
                 % user["username"]
             )
+        if not user.get("id"):
+            raise VerificationError(
+                "realm user %s must declare a fixed id, otherwise its sub claim "
+                "changes on the next import" % user["username"]
+            )
         users.append(
             {
                 "username": user["username"],
+                "expected_sub": user["id"],
                 "org_id": org_ids[0],
                 "org_type": org_types[0],
                 "business_roles": sorted(user.get("realmRoles", [])),
@@ -601,6 +609,13 @@ def main(argv):
         )
         access_claims = decode_claims(tokens["access_token"])
         claims_by_user[user["username"]] = access_claims
+        if access_claims.get("sub") != user["expected_sub"]:
+            problems.append(
+                "%s: access token sub %r is not the pinned realm user id %r; a "
+                "re-import must not renumber subjects that services stored in "
+                "created_by_subject"
+                % (user["username"], access_claims.get("sub"), user["expected_sub"])
+            )
         sample = samples_by_user[user["username"]]
         problems.extend(check_claims(sample, access_claims, args.strict_extras, audience, expected_issuer))
         captured.append(redacted_sample(sample, access_claims))

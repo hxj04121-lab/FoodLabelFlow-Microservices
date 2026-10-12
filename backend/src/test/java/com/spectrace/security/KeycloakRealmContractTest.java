@@ -466,6 +466,23 @@ class KeycloakRealmContractTest {
     }
 
     @Test
+    @DisplayName("demo user ids are pinned so the sub claim survives a realm re-import")
+    void demoUserIdsArePinnedSoSubjectClaimsStayImmutable() {
+        Set<String> ids = new TreeSet<>();
+        for (JsonNode user : realm.path("users")) {
+            String username = user.path("username").asText();
+            String id = user.path("id").asText();
+            assertTrue(id.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),
+                    username + " must declare a fixed uuid id: Keycloak uses the id as the "
+                            + "permanent sub claim, so re-importing the realm must not change the "
+                            + "subject a service stored in created_by_subject");
+            assertTrue(ids.add(id), "duplicate demo user id " + id);
+        }
+        assertEquals(realmUserNames().size(), ids.size(),
+                "every demo user needs its own pinned id");
+    }
+
+    @Test
     @DisplayName("maker and checker are distinct identities in every organisation (BR-06)")
     void makerAndCheckerAreDistinctIdentities() {
         List<String> organisations = new ArrayList<>();

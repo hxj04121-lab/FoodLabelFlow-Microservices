@@ -2,7 +2,7 @@
   "$comment": [
     "Redacted Access Token claim samples for the local demo realm (deploy/keycloak/realm/spectrace-realm.json).",
     "Local test data only. JWT signature, subject/session identifiers, nonce, timestamps and scope string are redacted; no real credential, token or key is stored here.",
-    "Keycloak issues an unpredictable `sub` per imported user, so it cannot be pinned in a committed file and is shown as a placeholder.",
+    "The committed realm pins every demo user's `id` to a deterministic uuid5 (see deploy/keycloak/README.md), so `sub` is identical after a re-import; it is still redacted here like the other token identifiers.",
     "Captured from real authorisation code + PKCE logins against Keycloak 26.0.7 (see deploy/keycloak/README.md, verification status).",
     "deploy/keycloak/scripts/verify-token-claims.py asserts these values against a running Keycloak and can refresh this file with --write-sample.",
     "When a user has no realm role, Keycloak omits the `roles`/`realm_access` claims entirely; the empty lists below document 'no business roles' rather than an empty array in the token."
