@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: __SERVICE__
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/__DATABASE__?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME:__DATABASE__}
+    password: ${SPRING_DATASOURCE_PASSWORD:local-only-__DATABASE__}
+  flyway:
+    # Starter tables (outbox, local_audit, processed_event, consumed_aggregate_version) are V0_x;
+    # this service's own migrations in db/migration start at V1.
+    locations: classpath:db/spectrace-platform,classpath:db/migration
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:spectrace}
+    password: ${RABBITMQ_PASSWORD:local-only-rabbitmq}
+  jdbc:
+    template:
+      query-timeout: 5s
+server:
+  port: ${SERVER_PORT:8080}
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          # The broker is not a readiness dependency: committed events wait in the outbox.
+          include: readinessState,db
