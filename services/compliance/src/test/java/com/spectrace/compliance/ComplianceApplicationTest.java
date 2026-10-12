@@ -335,6 +335,46 @@ class ComplianceApplicationTest {
     }
 
     @Test
+    void specificationProjectionRetainsPublishedSequenceAndPayloadAcrossRedeliveryInMySql() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String materialId = "sequence_material_" + suffix;
+        String specificationId = "sequence_spec_" + suffix;
+        ObjectNode event = (ObjectNode) json.readTree(contractExample(
+                "specification/specification-published-soy-lecithin-v2.json"));
+        event.put("eventId", UUID.randomUUID().toString());
+        event.put("aggregateId", materialId);
+        event.put("aggregateVersion", 1);
+        ObjectNode payload = (ObjectNode) event.get("payload");
+        ((ObjectNode) payload.get("material")).put("materialId", materialId);
+        ((ObjectNode) payload.get("specificationVersion")).put("id", specificationId).put("versionNumber", 1);
+        payload.putNull("previousVersion");
+        int[] declaredSequence = {30, 10, 20};
+        for (int index = 0; index < declaredSequence.length; index++) {
+            ((ObjectNode) payload.get("components").get(index)).put("sequenceNo", declaredSequence[index]);
+        }
+        EventEnvelope envelope = EventEnvelope.parse(json.writeValueAsBytes(event), json);
+        assertThat(idempotentConsumer.consume("compliance.specification-projection.v1", envelope,
+                eventProjector::projectSpecification)).isEqualTo(IdempotentConsumer.Outcome.APPLIED);
+        assertThat(idempotentConsumer.consume("compliance.specification-projection.v1", envelope,
+                eventProjector::projectSpecification)).isEqualTo(IdempotentConsumer.Outcome.DUPLICATE);
+
+        assertThat(jdbc.queryForList("""
+                SELECT spec_component_id FROM specification_component_projection
+                WHERE specification_version_id = ? ORDER BY sequence_no
+                """, String.class, specificationId)).containsExactly(
+                payload.at("/components/1/specComponentId").asString(),
+                payload.at("/components/2/specComponentId").asString(),
+                payload.at("/components/0/specComponentId").asString());
+        assertThat(jdbc.queryForList("""
+                SELECT sequence_no FROM specification_component_projection
+                WHERE specification_version_id = ? ORDER BY sequence_no
+                """, Integer.class, specificationId)).containsExactly(10, 20, 30);
+        assertThat(json.readTree(jdbc.queryForObject("""
+                SELECT payload_json FROM specification_version_projection WHERE specification_version_id = ?
+                """, String.class, specificationId))).isEqualTo(payload);
+    }
+
+    @Test
     void formulaProjectionDeduplicatesAndDiscardsStaleEventsInMySql() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         String productId = "g2_product_" + suffix;
