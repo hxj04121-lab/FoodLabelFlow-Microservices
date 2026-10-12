@@ -16,8 +16,9 @@ import org.springframework.stereotype.Component;
  * used.
  *
  * <p>Fails closed: a missing or blank native {@code sub}, a missing or blank {@code org_id} or
- * {@code org_type} is an authentication failure (401); an organisation type other than SUPPLIER or
- * MANUFACTURER is denied (403). The subject is the immutable {@code sub}, never
+ * {@code org_type}, or an organisation type outside SUPPLIER and MANUFACTURER is an authentication
+ * failure (401) — the same verdict the starter security module reaches, so the endpoint returns one
+ * status whichever chain runs. The subject is the immutable {@code sub}, never
  * {@code preferred_username} (Keycloak realm design, G0-M4; G1-M4.2).</p>
  */
 @Component
@@ -52,7 +53,9 @@ public class CallerResolver {
             throw ApiException.unauthenticated();
         }
         if (!Caller.SUPPLIER.equals(organisationType) && !Caller.MANUFACTURER.equals(organisationType)) {
-            throw ApiException.forbidden();
+            // The starter refuses the same token as an unusable identity (401), before a controller
+            // runs; matching it here keeps the endpoint's public contract independent of the chain.
+            throw ApiException.unauthenticated();
         }
         List<String> roles = jwt.hasClaim("roles") ? jwt.getClaimAsStringList("roles") : List.of();
         return new Caller(subject, organisationId, organisationType,

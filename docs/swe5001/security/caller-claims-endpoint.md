@@ -34,7 +34,7 @@ gateway only routes public API prefixes.
 |---|---|
 | no token, malformed token, expired token, untrusted signature, wrong issuer | `401 AUTHENTICATION_REQUIRED` |
 | valid token without `sub`, `org_id` or `org_type` | `401 AUTHENTICATION_REQUIRED` |
-| `org_type` outside `SUPPLIER` / `MANUFACTURER` (BR-11) | `403 AUTHORIZATION_DENIED` |
+| `org_type` outside `SUPPLIER` / `MANUFACTURER` (BR-11) | `401 AUTHENTICATION_REQUIRED` — an unusable identity, the same verdict the starter reaches before a controller runs |
 | valid supplier or manufacturer token | `200` with the body above |
 
 Every rejection is the canonical `ApiError` envelope and carries the request's
@@ -65,6 +65,6 @@ realm, the claim samples, the docs and the services, start the service with
 
 `services/specification/src/test/java/com/spectrace/specification/CallerClaimsApiTest.java`
 runs over real HTTP with the negative-test-kit tokens: 401 without a token, 401
-for a token without an organisation, 403 for an organisation type outside BR-11,
+for a token without an organisation, 401 for an organisation type outside BR-11,
 and the 200 echo with its exact four fields. CI runs it in the
 `platform-services` job (`mvn -B -ntp verify`).

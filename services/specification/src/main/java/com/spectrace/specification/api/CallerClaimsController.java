@@ -28,9 +28,10 @@ import org.springframework.web.bind.annotation.RestController;
  * client rejects internal/admin/actuator paths, and the gateway only routes public API prefixes.</p>
  *
  * <p>Rejections reuse {@link CallerResolver}, so they follow the same fail-closed rules as every
- * business endpoint: a token without an immutable {@code sub} or without a usable organisation is
- * 401, an organisation type outside BR-11 is 403, both through the canonical {@code ApiError}
- * envelope.</p>
+ * business endpoint: a token without an immutable {@code sub}, without a usable organisation or with
+ * an organisation type outside BR-11 is 401, through the canonical {@code ApiError} envelope. The
+ * 403 remains the edge's answer for a route-level role check, not this endpoint's identity
+ * verdict.</p>
  *
  * <p>The identity itself is read from whichever chain authenticated the request — the starter's
  * {@link OrganisationContext} (principal and credentials split) or the service's own resource server

@@ -470,7 +470,7 @@ paths:
         operation; the starter security module (G1-M4.2) is its permanent home, and the path stays provisional
         until the gateway route table and the contract steward confirm it. A token without an immutable sub,
         without a single organisation or with an organisation type outside BR-11 is rejected before any body
-        is produced.
+        is produced. The shared 403 response stays the edge's answer for a route-level role check.
       parameters:
       - $ref: '#/components/parameters/CorrelationId'
       responses:

@@ -88,12 +88,12 @@ class CallerClaimsApiTest {
     }
 
     @Test
-    @DisplayName("an organisation type outside BR-11 is 403")
-    void withAnUnknownOrganisationTypeItIs403() throws Exception {
+    @DisplayName("an organisation type outside BR-11 is 401, the same verdict the starter reaches")
+    void withAnUnknownOrganisationTypeItIs401() throws Exception {
         HttpResponse<String> response = callerClaims(TOKENS.token(Caller.of("partner", "org-partner", "PARTNER", "SPEC_AUTHOR")));
 
-        assertThat(response.statusCode()).isEqualTo(403);
-        assertThat(json.readTree(response.body()).path("code").asText()).isEqualTo("AUTHORIZATION_DENIED");
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(json.readTree(response.body()).path("code").asText()).isEqualTo("AUTHENTICATION_REQUIRED");
     }
 
     @Test

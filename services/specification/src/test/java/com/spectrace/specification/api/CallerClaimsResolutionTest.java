@@ -90,6 +90,21 @@ class CallerClaimsResolutionTest {
     }
 
     @Test
+    @DisplayName("an unsupported organisation type is 401 on both chains, matching the starter")
+    void unsupportedOrganisationTypeIsUnauthenticatedOnBothChains() {
+        // Service chain: the resolver refuses the token before any identity is claimed.
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                jwt("subject-1", "org-partner", "PARTNER", List.of("SPEC_AUTHOR")), "token"));
+        assertUnauthenticated(() -> resolver.current());
+        assertUnauthenticated(() -> controller.callerClaims());
+
+        // Starter chain: the starter refuses the same value before a controller runs — its type guard
+        // fails closed (401), so no OrganisationContext can exist for such a request.
+        SecurityContextHolder.clearContext();
+        assertUnauthenticated(() -> OrganisationType.ofClaim("PARTNER"));
+    }
+
+    @Test
     @DisplayName("the produced body conforms to the published CallerClaims schema")
     void theBodyConformsToThePublishedSchema() throws Exception {
         SecurityContextHolder.getContext().setAuthentication(new OrganisationAuthenticationToken(
