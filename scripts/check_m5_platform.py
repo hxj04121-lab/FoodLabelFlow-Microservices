@@ -79,4 +79,26 @@ alloy_policy = yaml.safe_load((ROOT / "deploy/observability/alloy/networkpolicy.
 assert alloy_policy["spec"]["egress"][-1]["ports"] == [{"protocol": "TCP", "port": 443}]
 dashboard = json.loads((ROOT / "deploy/observability/dashboards/staging-overview.json").read_text())
 assert len(dashboard["panels"]) >= 4
+
+# Keep the reusable service workflow able to build and render services whose
+# module directory is not their Docker build context and whose Helm values are
+# supplied by the service or an approved environment overlay.
+service_workflow = yaml.load(
+    (ROOT / ".github/workflows/service-cicd-reusable.yml").read_text(),
+    Loader=yaml.BaseLoader,
+)
+workflow_inputs = service_workflow["on"]["workflow_call"]["inputs"]
+assert {"build_context", "maven_reactor_project", "values_file", "environment_values_file"} <= set(workflow_inputs)
+steps = {
+    job: {step.get("name", step.get("uses", "")): step.get("run", "") for step in config.get("steps", [])}
+    for job, config in service_workflow["jobs"].items()
+}
+assert 'mvn -B -ntp verify -pl "$MAVEN_REACTOR_PROJECT" -am' in steps["checks"]["Build and unit/integration test JVM service"]
+assert 'mvn -B -ntp verify -pl "$MAVEN_REACTOR_PROJECT" -am' in steps["security"]["OWASP Dependency-Check gate"]
+for job, step_name in (("kind", "Build and load service image"), ("publish", "Build commit-pinned image locally")):
+    assert '"$BUILD_CONTEXT"' in steps[job][step_name]
+for job, step_name in (("kind", "Deploy service chart to kind"), ("deploy", "Configure EKS context and deploy commit-pinned image")):
+    helm_run = steps[job][step_name]
+    assert 'values_args+=(--values "$VALUES_FILE")' in helm_run
+    assert 'values_args+=(--values "$ENVIRONMENT_VALUES_FILE")' in helm_run
 print("M5 offline declarations: PASS (six consumer queues/DLQs, permissions, network flows, Alloy and dashboard)")

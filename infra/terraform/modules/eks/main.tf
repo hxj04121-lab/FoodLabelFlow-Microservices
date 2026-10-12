@@ -149,7 +149,7 @@ resource "aws_eks_node_group" "compliance" {
 
   labels = { workload = "compliance" }
   taint {
-    key    = "workload"
+    key    = "dedicated"
     value  = "compliance"
     effect = "NO_SCHEDULE"
   }

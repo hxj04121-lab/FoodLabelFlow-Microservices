@@ -6,7 +6,11 @@ on:
       service_name: {type: string, required: true}
       service_path: {type: string, required: true}
       dockerfile: {type: string, required: false, default: Dockerfile}
+      build_context: {type: string, required: false, default: ''}
+      maven_reactor_project: {type: string, required: false, default: ''}
       helm_chart: {type: string, required: true}
+      values_file: {type: string, required: false, default: ''}
+      environment_values_file: {type: string, required: false, default: ''}
       namespace: {type: string, required: true}
     secrets:
       SONAR_TOKEN: {required: true}
@@ -27,10 +31,27 @@ jobs:
         env:
           SERVICE_NAME: ${{ inputs.service_name }}
           SERVICE_PATH: ${{ inputs.service_path }}
+          BUILD_CONTEXT: ${{ inputs.build_context }}
+          MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
+          VALUES_FILE: ${{ inputs.values_file }}
+          ENVIRONMENT_VALUES_FILE: ${{ inputs.environment_values_file }}
         run: |
           [[ "$SERVICE_NAME" =~ ^[a-z0-9-]+$ ]]
           [[ "$SERVICE_PATH" != /* && "$SERVICE_PATH" != *..* ]]
           test -d "$SERVICE_PATH"
+          BUILD_CONTEXT="${BUILD_CONTEXT:-$SERVICE_PATH}"
+          [[ "$BUILD_CONTEXT" != /* && "$BUILD_CONTEXT" != *..* ]]
+          test -d "$BUILD_CONTEXT"
+          if [[ -n "$MAVEN_REACTOR_PROJECT" ]]; then
+            [[ "$MAVEN_REACTOR_PROJECT" != /* && "$MAVEN_REACTOR_PROJECT" != *..* ]]
+            test -f pom.xml && test -d "$MAVEN_REACTOR_PROJECT"
+          fi
+          for values_file in "$VALUES_FILE" "$ENVIRONMENT_VALUES_FILE"; do
+            if [[ -n "$values_file" ]]; then
+              [[ "$values_file" != /* && "$values_file" != *..* ]]
+              test -f "$values_file"
+            fi
+          done
       - uses: actions/setup-java@v4
         if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
         with:
@@ -47,7 +68,13 @@ jobs:
         if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
         env:
           SERVICE_PATH: ${{ inputs.service_path }}
-        run: mvn -B -ntp -f "$SERVICE_PATH/pom.xml" verify
+          MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
+        run: |
+          if [[ -n "$MAVEN_REACTOR_PROJECT" ]]; then
+            mvn -B -ntp verify -pl "$MAVEN_REACTOR_PROJECT" -am
+          else
+            mvn -B -ntp -f "$SERVICE_PATH/pom.xml" verify
+          fi
       - name: Build and test Node service
         if: ${{ hashFiles(format('{0}/package.json', inputs.service_path)) != '' }}
         env:
@@ -82,8 +109,15 @@ jobs:
           java-version: '21'
       - name: OWASP Dependency-Check gate
         if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
-        working-directory: ${{ inputs.service_path }}
-        run: mvn -B -ntp org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false
+        env:
+          SERVICE_PATH: ${{ inputs.service_path }}
+          MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
+        run: |
+          if [[ -n "$MAVEN_REACTOR_PROJECT" ]]; then
+            mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false
+          else
+            mvn -B -ntp -f "$SERVICE_PATH/pom.xml" org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false
+          fi
 
   kind:
     if: ${{ github.event_name == 'pull_request' }}
@@ -99,9 +133,11 @@ jobs:
           SERVICE_NAME: ${{ inputs.service_name }}
           SERVICE_PATH: ${{ inputs.service_path }}
           DOCKERFILE: ${{ inputs.dockerfile }}
+          BUILD_CONTEXT: ${{ inputs.build_context }}
         run: |
+          BUILD_CONTEXT="${BUILD_CONTEXT:-$SERVICE_PATH}"
           image="local/${SERVICE_NAME}:${GITHUB_SHA}"
-          docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "$image" "$SERVICE_PATH"
+          docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "$image" "$BUILD_CONTEXT"
           kind load docker-image "$image"
           echo "image=$image" >> "$GITHUB_ENV"
       - name: Trivy container image gate
@@ -116,8 +152,14 @@ jobs:
           RELEASE: ${{ inputs.service_name }}
           NAMESPACE: ${{ inputs.namespace }}
           CHART: ${{ inputs.helm_chart }}
+          VALUES_FILE: ${{ inputs.values_file }}
+          ENVIRONMENT_VALUES_FILE: ${{ inputs.environment_values_file }}
         run: |
+          values_args=()
+          [[ -z "$VALUES_FILE" ]] || values_args+=(--values "$VALUES_FILE")
+          [[ -z "$ENVIRONMENT_VALUES_FILE" ]] || values_args+=(--values "$ENVIRONMENT_VALUES_FILE")
           helm upgrade --install "$RELEASE" "$CHART" --namespace "$NAMESPACE" --create-namespace \
+            "${values_args[@]}" \
             --set image.repository="${image%:*}" --set image.tag="${image##*:}" --wait --timeout 5m
           kubectl -n "$NAMESPACE" rollout status "deployment/$RELEASE" --timeout=180s
 
@@ -137,7 +179,10 @@ jobs:
           SERVICE_NAME: ${{ inputs.service_name }}
           SERVICE_PATH: ${{ inputs.service_path }}
           DOCKERFILE: ${{ inputs.dockerfile }}
-        run: docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}" "$SERVICE_PATH"
+          BUILD_CONTEXT: ${{ inputs.build_context }}
+        run: |
+          BUILD_CONTEXT="${BUILD_CONTEXT:-$SERVICE_PATH}"
+          docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}" "$BUILD_CONTEXT"
       - name: Trivy container image gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -194,10 +239,16 @@ jobs:
           RELEASE: ${{ inputs.service_name }}
           CHART: ${{ inputs.helm_chart }}
           IMAGE: ${{ needs.publish.outputs.image }}
+          VALUES_FILE: ${{ inputs.values_file }}
+          ENVIRONMENT_VALUES_FILE: ${{ inputs.environment_values_file }}
         run: |
           test -n "$CLUSTER_NAME" && test -n "$IMAGE"
           aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+          values_args=()
+          [[ -z "$VALUES_FILE" ]] || values_args+=(--values "$VALUES_FILE")
+          [[ -z "$ENVIRONMENT_VALUES_FILE" ]] || values_args+=(--values "$ENVIRONMENT_VALUES_FILE")
           helm upgrade --install "$RELEASE" "$CHART" --namespace "$NAMESPACE" \
+            "${values_args[@]}" \
             --set image.repository="${IMAGE%:*}" --set image.tag="${IMAGE##*:}" --wait --timeout 10m
       - name: Gateway smoke test and organisation claim check
         env:

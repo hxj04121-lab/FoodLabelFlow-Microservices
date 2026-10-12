@@ -1,6 +1,6 @@
 # AWS staging Terraform
 
-This root creates the two-AZ network, one NAT Gateway, EKS, the private MySQL Multi-AZ instance and the public ALB. `general_desired_size=1` is the spike setting; the normal staging default is three. Compliance scales from one to four `c6i.large` nodes and carries the `workload=compliance:NoSchedule` taint. Autoscaler IAM role and ASG discovery tags are included; install Cluster Autoscaler as a staging add-on and bind its ServiceAccount to the output role ARN.
+This root creates the two-AZ network, one NAT Gateway, EKS, the private MySQL Multi-AZ instance and the public ALB. `general_desired_size=1` is the spike setting; the normal staging default is three. Compliance scales from one to four `c6i.large` nodes and carries the `dedicated=compliance:NoSchedule` taint. Autoscaler IAM role and ASG discovery tags are included; install Cluster Autoscaler as a staging add-on and bind its ServiceAccount to the output role ARN.
 
 ## Persistent state
 
