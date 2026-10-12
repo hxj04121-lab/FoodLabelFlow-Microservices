@@ -63,6 +63,14 @@ class KeycloakRealmContractTest {
     /** Roles that decide on a pending version (BR-06 checker side). */
     private static final Set<String> CHECKER_ROLES = Set.of("APPROVER");
 
+    /**
+     * The GitHub Pages project root the gateway/UI owner (G1-M3) deploys the
+     * static site to. It is registered as an exact redirect and post-logout
+     * URI; a non-local wildcard would be an open redirect and stays forbidden.
+     */
+    private static final String GITHUB_PAGES_ORIGIN =
+            "https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/";
+
     private static final Set<String> FORBIDDEN_FIELD_NAMES = Set.of(
             "secret", "clientSecret", "clientKey", "privateKey", "keyPassword",
             "apiKey", "api_key", "token", "accessToken", "refreshToken",
@@ -219,21 +227,34 @@ class KeycloakRealmContractTest {
         assertTrue(redirectUris.isArray() && redirectUris.size() > 0,
                 "at least the local development redirect URIs are required");
         boolean localDevelopmentEntry = false;
+        boolean gitHubPagesEntry = false;
         for (JsonNode uri : redirectUris) {
             String value = uri.asText();
             assertSafeRedirectUri(value, "spectrace-web redirect URI");
             if (value.startsWith("http://localhost:") || value.startsWith("http://127.0.0.1:")) {
                 localDevelopmentEntry = true;
             }
+            if (GITHUB_PAGES_ORIGIN.equals(value)) {
+                gitHubPagesEntry = true;
+            }
         }
         assertTrue(localDevelopmentEntry,
                 "the local profile needs at least one localhost redirect URI");
+        assertTrue(gitHubPagesEntry,
+                "the GitHub Pages project root " + GITHUB_PAGES_ORIGIN + " must stay a registered "
+                        + "redirect URI: the static site signs in from that exact origin and path");
 
         String logoutUris = web.path("attributes").path("post.logout.redirect.uris").asText();
         assertFalse(logoutUris.isEmpty(), "logout must return the browser to an allowlisted URI");
+        boolean gitHubPagesLogout = false;
         for (String value : logoutUris.split("##")) {
             assertSafeRedirectUri(value, "spectrace-web post-logout redirect URI");
+            if (GITHUB_PAGES_ORIGIN.equals(value)) {
+                gitHubPagesLogout = true;
+            }
         }
+        assertTrue(gitHubPagesLogout,
+                "logout from the GitHub Pages origin must return to " + GITHUB_PAGES_ORIGIN);
     }
 
     @Test
@@ -298,8 +319,12 @@ class KeycloakRealmContractTest {
     void accessTokensCarryAnImmutableSubject() {
         JsonNode subjectMapper = findMapper(identityClaimScope, "subject");
         assertEquals("oidc-sub-mapper", subjectMapper.path("protocolMapper").asText(),
-                "sub must come from Keycloak's user id, never a username or request parameter");
-        assertEquals("true", subjectMapper.path("config").path("access.token.claim").asText());
+                "sub must come from Keycloak's user id, never a username or a request parameter");
+        assertEquals("true", subjectMapper.path("config").path("access.token.claim").asText(),
+                "services read the subject from the access token, so a missing sub mapper makes "
+                        + "every authenticated call fail with 401 at the service");
+        assertEquals("true", subjectMapper.path("config").path("id.token.claim").asText(),
+                "the UI compares the access token's sub with the ID token's profile.sub");
         assertEquals("true", subjectMapper.path("config").path("introspection.token.claim").asText());
     }
 
@@ -455,6 +480,23 @@ class KeycloakRealmContractTest {
     }
 
     @Test
+    @DisplayName("demo user ids are pinned so the sub claim survives a realm re-import")
+    void demoUserIdsArePinnedSoSubjectClaimsStayImmutable() {
+        Set<String> ids = new TreeSet<>();
+        for (JsonNode user : realm.path("users")) {
+            String username = user.path("username").asText();
+            String id = user.path("id").asText();
+            assertTrue(id.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),
+                    username + " must declare a fixed uuid id: Keycloak uses the id as the "
+                            + "permanent sub claim, so re-importing the realm must not change the "
+                            + "subject a service stored in created_by_subject");
+            assertTrue(ids.add(id), "duplicate demo user id " + id);
+        }
+        assertEquals(realmUserNames().size(), ids.size(),
+                "every demo user needs its own pinned id");
+    }
+
+    @Test
     @DisplayName("maker and checker are distinct identities in every organisation (BR-06)")
     void makerAndCheckerAreDistinctIdentities() {
         List<String> organisations = new ArrayList<>();
@@ -500,6 +542,50 @@ class KeycloakRealmContractTest {
         assertEquals(new TreeSet<>(List.of("APPROVER", "PUBLISHER")),
                 userRoles("supplier.alpha.checker"),
                 "the checker of the same organisation stays a separate identity with its own roles");
+    }
+
+    @Test
+    @DisplayName("demo roles cover the specification and label demo steps on both sides")
+    void demoRolesCoverSpecificationAndLabelSteps() {
+        // Demo step 1 (a supplier releases a specification version): creating and
+        // releasing a specification needs DATA.MAINTAIN, which V3__baseline_seed.sql
+        // grants to ADMIN_DATA_MAINTENANCE only, so every maker must hold it or the
+        // specification endpoints answer 403 and the first demo step cannot run.
+        for (String maker : List.of(
+                "supplier.alpha.maker", "supplier.beta.maker",
+                "manufacturer.north.maker", "manufacturer.south.maker")) {
+            assertTrue(userRoles(maker).contains("ADMIN_DATA_MAINTENANCE"),
+                    maker + " must hold ADMIN_DATA_MAINTENANCE (DATA.MAINTAIN) to create and "
+                            + "release a specification version");
+        }
+
+        // Demo step 6 (a manufacturer labels its own product): a label belongs to a
+        // manufacturer product, so each manufacturer needs a LABEL_OFFICER to draft,
+        // validate and submit, plus a different identity holding APPROVER + PUBLISHER
+        // to decide and publish (BR-06 maker-checker).
+        for (String organisation : List.of("org-manufacturer-north", "org-manufacturer-south")) {
+            Set<String> labelOfficers = new TreeSet<>();
+            Set<String> approverPublishers = new TreeSet<>();
+            for (JsonNode user : realm.path("users")) {
+                if (!organisation.equals(user.path("attributes").path("org_id").get(0).asText())) {
+                    continue;
+                }
+                String username = user.path("username").asText();
+                Set<String> roles = userRoles(username);
+                if (roles.contains("LABEL_OFFICER")) {
+                    labelOfficers.add(username);
+                }
+                if (roles.containsAll(Set.of("APPROVER", "PUBLISHER"))) {
+                    approverPublishers.add(username);
+                }
+            }
+            assertFalse(labelOfficers.isEmpty(),
+                    organisation + " needs a LABEL_OFFICER to draft, validate and submit a label");
+            assertFalse(approverPublishers.isEmpty(),
+                    organisation + " needs an APPROVER + PUBLISHER to approve and publish a label");
+            assertTrue(labelOfficers.stream().noneMatch(approverPublishers::contains),
+                    organisation + " must not reuse one account to create and to approve/publish a label");
+        }
     }
 
     @Test

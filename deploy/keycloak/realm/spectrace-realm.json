@@ -71,6 +71,7 @@
           "consentRequired": false,
           "config": {
             "access.token.claim": "true",
+            "id.token.claim": "true",
             "introspection.token.claim": "true"
           }
         },
@@ -170,7 +171,7 @@
     {
       "clientId": "spectrace-web",
       "name": "SpecTrace web reference client",
-      "description": "Public browser client: authorisation code flow with PKCE S256 only; implicit flow, direct access grants and service accounts disabled; no client secret. Local development redirect URIs only. See deploy/keycloak/README.md.",
+      "description": "Public browser client: authorisation code flow with PKCE S256 only; implicit flow, direct access grants and service accounts disabled; no client secret. Redirect URIs: local development and the GitHub Pages origin. See deploy/keycloak/README.md.",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": true,
@@ -184,14 +185,15 @@
       "frontchannelLogout": true,
       "redirectUris": [
         "http://localhost:5173/*",
-        "http://127.0.0.1:5173/*"
+        "http://127.0.0.1:5173/*",
+        "https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/"
       ],
       "webOrigins": [
         "+"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:5173/*##http://127.0.0.1:5173/*",
+        "post.logout.redirect.uris": "http://localhost:5173/*##http://127.0.0.1:5173/*##https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/",
         "backchannel.logout.session.required": "true",
         "oauth2.device.authorization.grant.enabled": "false",
         "oidc.ciba.grant.enabled": "false",
@@ -230,6 +232,7 @@
   ],
   "users": [
     {
+      "id": "20b1c82b-dcf5-547c-9b32-44a7bbdbaac5",
       "username": "supplier.alpha.maker",
       "enabled": true,
       "emailVerified": true,
@@ -253,10 +256,12 @@
       ],
       "requiredActions": [],
       "realmRoles": [
-        "LABEL_OFFICER"
+        "LABEL_OFFICER",
+        "ADMIN_DATA_MAINTENANCE"
       ]
     },
     {
+      "id": "b5dd19f9-1b3d-52d9-b6ed-9b59a1ca4e77",
       "username": "supplier.alpha.checker",
       "enabled": true,
       "emailVerified": true,
@@ -285,6 +290,7 @@
       ]
     },
     {
+      "id": "c01c543a-8772-5a93-a36f-44f1df59e453",
       "username": "supplier.beta.maker",
       "enabled": true,
       "emailVerified": true,
@@ -308,10 +314,12 @@
       ],
       "requiredActions": [],
       "realmRoles": [
-        "LABEL_OFFICER"
+        "LABEL_OFFICER",
+        "ADMIN_DATA_MAINTENANCE"
       ]
     },
     {
+      "id": "e1f4bdac-1d0f-5242-b8ff-75cc743e87ef",
       "username": "supplier.beta.checker",
       "enabled": true,
       "emailVerified": true,
@@ -340,6 +348,7 @@
       ]
     },
     {
+      "id": "d5fd8eab-b2b4-5419-9a99-4596cefb7f18",
       "username": "manufacturer.north.maker",
       "enabled": true,
       "emailVerified": true,
@@ -364,10 +373,12 @@
       "requiredActions": [],
       "realmRoles": [
         "ADMIN_DATA_MAINTENANCE",
-        "CHANGE_MANAGER"
+        "CHANGE_MANAGER",
+        "LABEL_OFFICER"
       ]
     },
     {
+      "id": "8e478ac7-2fe7-5567-8dec-2644b024b731",
       "username": "manufacturer.north.checker",
       "enabled": true,
       "emailVerified": true,
@@ -391,10 +402,12 @@
       ],
       "requiredActions": [],
       "realmRoles": [
-        "APPROVER"
+        "APPROVER",
+        "PUBLISHER"
       ]
     },
     {
+      "id": "dd2da9c6-5092-5c55-8e34-d8d4ea426e0c",
       "username": "manufacturer.south.maker",
       "enabled": true,
       "emailVerified": true,
@@ -419,10 +432,12 @@
       "requiredActions": [],
       "realmRoles": [
         "ADMIN_DATA_MAINTENANCE",
-        "CHANGE_MANAGER"
+        "CHANGE_MANAGER",
+        "LABEL_OFFICER"
       ]
     },
     {
+      "id": "15f57794-c7f5-59b1-b5fd-ac294f21ba1f",
       "username": "manufacturer.south.checker",
       "enabled": true,
       "emailVerified": true,
@@ -446,10 +461,12 @@
       ],
       "requiredActions": [],
       "realmRoles": [
-        "APPROVER"
+        "APPROVER",
+        "PUBLISHER"
       ]
     },
     {
+      "id": "61d65944-a525-57dd-afa3-47af2b7201ae",
       "username": "spectrace.auditor",
       "enabled": true,
       "emailVerified": true,
@@ -477,6 +494,7 @@
       ]
     },
     {
+      "id": "f6cbfc7f-3daf-5e01-a4fc-e8ce7e4a92c5",
       "username": "spectrace.no-role",
       "enabled": true,
       "emailVerified": true,

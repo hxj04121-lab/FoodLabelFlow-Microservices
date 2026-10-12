@@ -2,7 +2,7 @@
   "$comment": [
     "Redacted Access Token claim samples for the local demo realm (deploy/keycloak/realm/spectrace-realm.json).",
     "Local test data only. JWT signature, subject/session identifiers, nonce, timestamps and scope string are redacted; no real credential, token or key is stored here.",
-    "Keycloak issues an unpredictable `sub` per imported user, so it cannot be pinned in a committed file and is shown as a placeholder.",
+    "The committed realm pins every demo user's `id` to a deterministic uuid5 (see deploy/keycloak/README.md), so `sub` is identical after a re-import; it is still redacted here like the other token identifiers.",
     "Captured from real authorisation code + PKCE logins against Keycloak 26.0.7 (see deploy/keycloak/README.md, verification status).",
     "deploy/keycloak/scripts/verify-token-claims.py asserts these values against a running Keycloak and can refresh this file with --write-sample.",
     "When a user has no realm role, Keycloak omits the `roles`/`realm_access` claims entirely; the empty lists below document 'no business roles' rather than an empty array in the token."
@@ -40,6 +40,7 @@
       "org_id": "org-supplier-alpha",
       "org_type": "SUPPLIER",
       "business_roles": [
+        "ADMIN_DATA_MAINTENANCE",
         "LABEL_OFFICER"
       ],
       "access_token": {
@@ -52,10 +53,12 @@
         "org_id": "org-supplier-alpha",
         "org_type": "SUPPLIER",
         "roles": [
+          "ADMIN_DATA_MAINTENANCE",
           "LABEL_OFFICER"
         ],
         "realm_access": {
           "roles": [
+            "ADMIN_DATA_MAINTENANCE",
             "LABEL_OFFICER"
           ]
         }
@@ -95,6 +98,7 @@
       "org_id": "org-supplier-beta",
       "org_type": "SUPPLIER",
       "business_roles": [
+        "ADMIN_DATA_MAINTENANCE",
         "LABEL_OFFICER"
       ],
       "access_token": {
@@ -107,10 +111,12 @@
         "org_id": "org-supplier-beta",
         "org_type": "SUPPLIER",
         "roles": [
+          "ADMIN_DATA_MAINTENANCE",
           "LABEL_OFFICER"
         ],
         "realm_access": {
           "roles": [
+            "ADMIN_DATA_MAINTENANCE",
             "LABEL_OFFICER"
           ]
         }
@@ -151,7 +157,8 @@
       "org_type": "MANUFACTURER",
       "business_roles": [
         "ADMIN_DATA_MAINTENANCE",
-        "CHANGE_MANAGER"
+        "CHANGE_MANAGER",
+        "LABEL_OFFICER"
       ],
       "access_token": {
         "iss": "http://localhost:8180/auth/realms/spectrace",
@@ -164,12 +171,14 @@
         "org_type": "MANUFACTURER",
         "roles": [
           "ADMIN_DATA_MAINTENANCE",
-          "CHANGE_MANAGER"
+          "CHANGE_MANAGER",
+          "LABEL_OFFICER"
         ],
         "realm_access": {
           "roles": [
             "ADMIN_DATA_MAINTENANCE",
-            "CHANGE_MANAGER"
+            "CHANGE_MANAGER",
+            "LABEL_OFFICER"
           ]
         }
       }
@@ -179,7 +188,8 @@
       "org_id": "org-manufacturer-north",
       "org_type": "MANUFACTURER",
       "business_roles": [
-        "APPROVER"
+        "APPROVER",
+        "PUBLISHER"
       ],
       "access_token": {
         "iss": "http://localhost:8180/auth/realms/spectrace",
@@ -191,11 +201,13 @@
         "org_id": "org-manufacturer-north",
         "org_type": "MANUFACTURER",
         "roles": [
-          "APPROVER"
+          "APPROVER",
+          "PUBLISHER"
         ],
         "realm_access": {
           "roles": [
-            "APPROVER"
+            "APPROVER",
+            "PUBLISHER"
           ]
         }
       }
@@ -206,7 +218,8 @@
       "org_type": "MANUFACTURER",
       "business_roles": [
         "ADMIN_DATA_MAINTENANCE",
-        "CHANGE_MANAGER"
+        "CHANGE_MANAGER",
+        "LABEL_OFFICER"
       ],
       "access_token": {
         "iss": "http://localhost:8180/auth/realms/spectrace",
@@ -219,12 +232,14 @@
         "org_type": "MANUFACTURER",
         "roles": [
           "ADMIN_DATA_MAINTENANCE",
-          "CHANGE_MANAGER"
+          "CHANGE_MANAGER",
+          "LABEL_OFFICER"
         ],
         "realm_access": {
           "roles": [
             "ADMIN_DATA_MAINTENANCE",
-            "CHANGE_MANAGER"
+            "CHANGE_MANAGER",
+            "LABEL_OFFICER"
           ]
         }
       }
@@ -234,7 +249,8 @@
       "org_id": "org-manufacturer-south",
       "org_type": "MANUFACTURER",
       "business_roles": [
-        "APPROVER"
+        "APPROVER",
+        "PUBLISHER"
       ],
       "access_token": {
         "iss": "http://localhost:8180/auth/realms/spectrace",
@@ -246,11 +262,13 @@
         "org_id": "org-manufacturer-south",
         "org_type": "MANUFACTURER",
         "roles": [
-          "APPROVER"
+          "APPROVER",
+          "PUBLISHER"
         ],
         "realm_access": {
           "roles": [
-            "APPROVER"
+            "APPROVER",
+            "PUBLISHER"
           ]
         }
       }
