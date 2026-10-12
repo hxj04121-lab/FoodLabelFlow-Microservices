@@ -1,11 +1,15 @@
 package com.spectrace.specification.api;
 
 import com.spectrace.specification.security.CallerResolver;
+import com.spectrace.platform.starter.error.ApiException;
+import com.spectrace.platform.starter.security.OrganisationContext;
+import com.spectrace.platform.starter.security.OrganisationContexts;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,8 +28,13 @@ import org.springframework.web.bind.annotation.RestController;
  * client rejects internal/admin/actuator paths, and the gateway only routes public API prefixes.</p>
  *
  * <p>Rejections reuse {@link CallerResolver}, so they follow the same fail-closed rules as every
- * business endpoint: a token without a usable organisation is 401, an organisation type outside
- * BR-11 is 403, both through the canonical {@code ApiError} envelope.</p>
+ * business endpoint: a token without an immutable {@code sub} or without a usable organisation is
+ * 401, an organisation type outside BR-11 is 403, both through the canonical {@code ApiError}
+ * envelope.</p>
+ *
+ * <p>The identity itself is read from whichever chain authenticated the request — the starter's
+ * {@link OrganisationContext} (principal and credentials split) or the service's own resource server
+ * — so the endpoint keeps working whichever of the security-migration pull requests lands first.</p>
  */
 @RestController
 public class CallerClaimsController {
@@ -40,15 +49,29 @@ public class CallerClaimsController {
     }
 
     @GetMapping(PATH)
-    Map<String, Object> callerClaims(@AuthenticationPrincipal Jwt jwt) {
+    Map<String, Object> callerClaims() {
         callers.current();
+        OrganisationContext starterContext = OrganisationContexts.currentOrNull();
+        if (starterContext != null) {
+            return claims(starterContext.subject(), starterContext.organisationId(),
+                    starterContext.organisationType().name(), starterContext.sortedRoles());
+        }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            throw ApiException.unauthenticated();
+        }
+        List<String> roles = jwt.hasClaim("roles") ? jwt.getClaimAsStringList("roles") : null;
+        return claims(jwt.getSubject(), jwt.getClaimAsString("org_id"), jwt.getClaimAsString("org_type"),
+                roles == null ? List.of() : roles);
+    }
+
+    private static Map<String, Object> claims(String subject, String organisationId, String organisationType,
+                                              List<String> roles) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("subject", jwt.getSubject());
-        body.put("org_id", jwt.getClaimAsString("org_id"));
-        body.put("org_type", jwt.getClaimAsString("org_type"));
-        body.put("roles", jwt.hasClaim("roles")
-                ? List.copyOf(new TreeSet<>(jwt.getClaimAsStringList("roles")))
-                : List.of());
+        body.put("subject", subject);
+        body.put("org_id", organisationId);
+        body.put("org_type", organisationType);
+        body.put("roles", List.copyOf(new TreeSet<>(roles)));
         return body;
     }
 }

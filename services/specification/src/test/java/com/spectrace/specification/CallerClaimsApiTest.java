@@ -38,12 +38,31 @@ class CallerClaimsApiTest {
     private final HttpClient client = HttpClient.newHttpClient();
 
     private HttpResponse<String> callerClaims(String token) throws Exception {
+        return callerClaims(token, null);
+    }
+
+    private HttpResponse<String> callerClaims(String token, String correlationId) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port
                 + CallerClaimsController.PATH));
         if (token != null) {
             request.header("Authorization", "Bearer " + token);
         }
+        if (correlationId != null) {
+            request.header("X-Correlation-ID", correlationId);
+        }
         return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    @DisplayName("a whitespace-only native subject is 401 with the canonical envelope and the correlation id")
+    void whitespaceSubjectIsRejected() throws Exception {
+        HttpResponse<String> response = callerClaims(
+                TOKENS.token(Caller.of("   ", "org-supplier-alpha", "SUPPLIER", "SPEC_AUTHOR")), "corr-blank-sub");
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        JsonNode body = json.readTree(response.body());
+        assertThat(body.path("code").asText()).isEqualTo("AUTHENTICATION_REQUIRED");
+        assertThat(body.path("traceId").asText()).isEqualTo("corr-blank-sub");
     }
 
     @Test
