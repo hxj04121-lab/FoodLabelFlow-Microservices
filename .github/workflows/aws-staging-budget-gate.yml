@@ -1,0 +1,40 @@
+name: AWS staging pre-apply budget gate
+
+on:
+  workflow_call:
+    inputs:
+      window_hours:
+        type: string
+        required: true
+      experiment_hours:
+        type: string
+        required: true
+      k6_hours:
+        type: string
+        required: true
+      available_credit_usd:
+        description: Explicit verified balance; omission must fail the gate
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  budget-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Enforce credit and pricing gate
+        env:
+          WINDOW_HOURS: ${{ inputs.window_hours }}
+          EXPERIMENT_HOURS: ${{ inputs.experiment_hours }}
+          K6_HOURS: ${{ inputs.k6_hours }}
+          AVAILABLE_CREDIT_USD: ${{ inputs.available_credit_usd }}
+        run: |
+          python scripts/aws_staging_budget.py --require-gate \
+            --hours "$WINDOW_HOURS" --experiment-hours "$EXPERIMENT_HOURS" --k6-hours "$K6_HOURS"
