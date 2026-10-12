@@ -4,7 +4,7 @@ COPY pom.xml .
 COPY src ./src
 RUN mvn -B -ntp -DskipTests package
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre-noble
 LABEL org.opencontainers.image.source="https://github.com/hxj04121-lab/FoodLabelFlow-Microservices"
 WORKDIR /app
 COPY --from=build /build/target/spectrace-gateway-0.1.0-SNAPSHOT.jar /app/gateway.jar
