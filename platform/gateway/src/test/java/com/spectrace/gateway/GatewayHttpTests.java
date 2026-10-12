@@ -180,6 +180,21 @@ class GatewayHttpTests {
         assertTrue(response.headers().allValues("Access-Control-Allow-Credentials").isEmpty());
     }
 
+    @Test void opaqueOriginIsLimitedToSameOriginIdpFormNavigation() throws Exception {
+        String action = "/auth/realms/test/login-actions/authenticate";
+        var form = send(request(action).header("Origin", "null").header("Sec-Fetch-Site", "same-origin")
+                .header("Sec-Fetch-Mode", "navigate").header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("session_code=test")));
+        assertEquals(200, form.statusCode());
+        assertTrue(form.headers().allValues("Access-Control-Allow-Origin").isEmpty());
+        error(send(request(action).header("Origin", "null").header("Sec-Fetch-Site", "same-origin")
+                .header("Sec-Fetch-Mode", "cors").header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("session_code=test"))), 403, "CORS_REJECTED");
+        error(send(request("/api/labels/drafts").header("Origin", "null").header("Sec-Fetch-Site", "same-origin")
+                .header("Sec-Fetch-Mode", "navigate").header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("session_code=test"))), 403, "CORS_REJECTED");
+    }
+
     static Stream<Arguments> invalidClaims() {
         return Stream.of(
                 Arguments.of("issuer", Map.of("iss", "https://wrong.example")),

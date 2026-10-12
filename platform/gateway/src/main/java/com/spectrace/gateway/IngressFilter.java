@@ -82,8 +82,19 @@ public class IngressFilter implements WebFilter {
     }
 
     private Mono<Void> process(ServerWebExchange x, WebFilterChain chain) {
-        if (!corsProcessor.process(cors, x)) return GatewayErrors.write(x, 403, "CORS_REJECTED", "The origin, method or headers are not allowed");
         String path = x.getRequest().getURI().getRawPath();
+        // Keycloak's no-referrer login page yields an opaque Origin on browser form navigation.
+        // This is not a credentialed API CORS grant: only same-origin navigation to its session-bound
+        // authenticate action is delegated to Keycloak. Scripts, business APIs and other paths remain checked.
+        String authenticate = "/auth/realms/" + p.realm() + "/login-actions/authenticate";
+        boolean idpForm = x.getRequest().getMethod() == HttpMethod.POST
+                && (path.equals(authenticate) || path.equals(authenticate + "/"))
+                && "null".equals(x.getRequest().getHeaders().getOrigin())
+                && "same-origin".equals(x.getRequest().getHeaders().getFirst("Sec-Fetch-Site"))
+                && "navigate".equals(x.getRequest().getHeaders().getFirst("Sec-Fetch-Mode"))
+                && org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED.isCompatibleWith(
+                        x.getRequest().getHeaders().getContentType());
+        if (!idpForm && !corsProcessor.process(cors, x)) return GatewayErrors.write(x, 403, "CORS_REJECTED", "The origin, method or headers are not allowed");
         if (path.matches("(?i).*%(2f|5c|2e|25|3b).*" ) || path.contains(";") || path.contains("\\")
                 || path.contains("//") || path.matches(".*(?:^|/)\\.\\.?(?:/|$).*")) {
             return GatewayErrors.write(x, 400, "INVALID_REQUEST", "Ambiguous path encoding is not allowed");
