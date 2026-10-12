@@ -23,14 +23,14 @@
   },
   "step3_expectedPotentialFindings": {
     "org-manufacturer-north": {
-      "total": 20,
+      "total": 10,
       "REVIEW_REQUIRED": 10,
-      "NO_ACTION": 10
+      "NO_ACTION": 0
     },
     "org-manufacturer-south": {
-      "total": 20,
+      "total": 10,
       "REVIEW_REQUIRED": 10,
-      "NO_ACTION": 10
+      "NO_ACTION": 0
     }
   },
   "step4_adoption": {
@@ -51,7 +51,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1106285_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1106963",
@@ -59,7 +59,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1106963_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1107123",
@@ -67,7 +67,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1107123_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1109412",
@@ -75,7 +75,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1109412_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1110930",
@@ -83,7 +83,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1110930_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1111174",
@@ -91,7 +91,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1111174_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1114509",
@@ -99,7 +99,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1114509_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1117669",
@@ -107,7 +107,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1117669_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1118468",
@@ -123,7 +123,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1119637_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1121486",
@@ -131,7 +131,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1121486_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1123666",
@@ -147,7 +147,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1124414_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1124504",
@@ -155,7 +155,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1124504_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1126130",
@@ -163,7 +163,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1126130_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1129904",
@@ -171,7 +171,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1129904_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1132049",
@@ -179,7 +179,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1132049_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1132711",
@@ -187,7 +187,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1132711_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1135103",
@@ -195,7 +195,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1135103_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1135585",
@@ -203,7 +203,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1135585_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1136800",
@@ -211,7 +211,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1136800_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1137129",
@@ -227,7 +227,7 @@
       "fixtureGroup": "NO_ACTION_BASELINE_SOY",
       "currentFormulaVersionId": "formula_1137149_v1",
       "pinnedSpecificationVersionId": "spec_chocolate_v1",
-      "expectedPhase1Outcome": "NO_ACTION"
+      "expectedPhase1Outcome": null
     },
     {
       "productId": "prod_usda_1137641",

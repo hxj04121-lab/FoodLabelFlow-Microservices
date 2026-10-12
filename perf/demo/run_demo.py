@@ -11,8 +11,8 @@ The label.* entries default to the manufacturer.north.* tokens when absent.
 
 Expected results come from docs/swe5001/data/demo-soy-lecithin-expected.json (perf/data/demo_soy_lecithin.py).
 Each step ends PASS, FAIL or BLOCKED (a dependency answered 404/501/503 or a contract is not yet public).
-The evidence file holds statuses, IDs, error codes and X-Correlation-ID values, never tokens. Exit code is 1
-when any step FAILs. Only standard-library Python is used.
+The evidence file holds statuses, IDs, error codes and X-Correlation-ID values, never tokens. Exit codes:
+0 = all seven steps PASS; 1 = any FAIL; 2 = BLOCKED or incomplete. Only standard-library Python is used.
 """
 import argparse
 import datetime as dt
@@ -86,6 +86,13 @@ def items(payload):
     return payload.get("items", []) if isinstance(payload, dict) else []
 
 
+def exit_code(steps):
+    if any(step["status"] == "FAIL" for step in steps):
+        return 1
+    return 0 if len(steps) == 7 and {s["step"] for s in steps} == set(range(1, 8)) \
+        and all(s["status"] == "PASS" for s in steps) else 2
+
+
 def run(demo, expected):
     change = expected["step1_specificationChange"]
     adopt = expected["step4_adoption"]
@@ -119,7 +126,7 @@ def run(demo, expected):
         status, page, _ = demo.call(maker, "GET", "/api/compliance/impact-findings?kind=POTENTIAL&limit=100")
         if status in UNAVAILABLE:
             return True, ("BLOCKED", status)
-        mine = [f for f in items(page) if candidate in json.dumps(f)]
+        mine = [f for f in items(page) if f.get("specificationChange", {}).get("candidate", {}).get("id") == candidate]
         return len(mine) >= north["total"], ("FOUND", status, len(mine), mine)
     ok, last = demo.poll(potential, "POTENTIAL findings")
     if ok and last[0] == "BLOCKED":
@@ -130,7 +137,8 @@ def run(demo, expected):
         for finding in found:
             outcome = finding.get("outcome") or finding.get("payload", {}).get("outcome")
             outcomes[outcome] = outcomes.get(outcome, 0) + 1
-        good = ok and outcomes.get("REVIEW_REQUIRED", 0) == north["REVIEW_REQUIRED"] \
+        good = ok and len(found) == north["total"] \
+            and outcomes.get("REVIEW_REQUIRED", 0) == north["REVIEW_REQUIRED"] \
             and outcomes.get("NO_ACTION", 0) == north["NO_ACTION"]
         demo.record(3, "POTENTIAL findings in the impact inbox", "PASS" if good else "FAIL",
                     expected=north, observed=outcomes, reason=None if good else (last if not ok else "outcome counts differ"))
@@ -160,16 +168,20 @@ def run(demo, expected):
         status, page, _ = demo.call(maker, "GET", "/api/compliance/impact-findings?kind=CONFIRMED&limit=100")
         if status in UNAVAILABLE:
             return True, ("BLOCKED", status)
-        mine = [f for f in items(page) if adopted in json.dumps(f)]
+        mine = [f for f in items(page) if f.get("formulaVersion", {}).get("id") == adopted
+                and f.get("specificationChange", {}).get("candidate", {}).get("id") == candidate]
         return bool(mine), ("FOUND", status, mine)
     ok, last = demo.poll(confirmed, "a CONFIRMED finding")
     if ok and last[0] == "BLOCKED":
         demo.record(5, "CONFIRMED finding and review task", "BLOCKED", http=last[1], reason="Compliance API not deployed")
     else:
         outcome = (last[2][0].get("outcome") if ok else None)
-        demo.record(5, "CONFIRMED finding and review task", "PASS" if outcome == "REVIEW_REQUIRED" else "FAIL",
-                    observedOutcome=outcome, reviewTask="not checked: no public ReviewTask read contract yet (G0 C-05)",
-                    reason=None if ok else last)
+        finding_ok = outcome == "REVIEW_REQUIRED"
+        demo.record(5, "CONFIRMED finding and review task", "BLOCKED" if finding_ok else "FAIL",
+                    observedOutcome=outcome, findingStatus="PASS" if finding_ok else "FAIL",
+                    findingId=last[2][0].get("findingId") if ok else None, reviewTaskStatus="NOT_OBSERVED",
+                    reason="CONFIRMED finding observed, but no public unique ReviewTask read contract yet (G0 C-05)"
+                    if finding_ok else (last if not ok else "expected REVIEW_REQUIRED"))
 
     # 6. Label draft, validation, submit, maker-checker decision and publication.
     lm, lc, lp = (u if u in demo.tokens else d for u, d in
@@ -188,8 +200,11 @@ def run(demo, expected):
                 correlationId=correlation, reason=None if status in (200, 201) else f"stopped at {trail[-1][0]}")
 
     # 7. LabelPublished flows back to Compliance; history is kept, re-evaluation is observed separately.
-    demo.record(7, "LabelPublished updates the Compliance projection", "BLOCKED" if trail[-1][1] not in (200, 201) else "PASS",
-                note="observe in Loki with docs/swe5001/demo/audit-trail.md using the correlation IDs above")
+    demo.record(7, "LabelPublished updates the Compliance projection", "BLOCKED",
+                publicationHttpStatus=trail[-1][1], projectionStatus="NOT_OBSERVED",
+                reason="Label publication HTTP success does not prove event delivery or projection application; "
+                       "a correlated, version-exact observer is required",
+                correlationId=correlation)
     return True
 
 
@@ -210,7 +225,7 @@ def main():
     args.out.write_text(json.dumps({"scenario": "soy-lecithin V1 -> V2", "base": args.base, "startedAt": started,
                                     "steps": demo.steps}, indent=2) + "\n")
     print(f"evidence written to {args.out}")
-    return 1 if any(step["status"] == "FAIL" for step in demo.steps) else 0
+    return exit_code(demo.steps)
 
 
 if __name__ == "__main__":
