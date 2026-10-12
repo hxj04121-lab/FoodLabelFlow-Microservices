@@ -3,6 +3,7 @@ replicaCount: 1
 image:
   repository: example.invalid/spectrace/service
   tag: replace-with-commit-sha
+  digest: ""
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 containerPort: 8080
