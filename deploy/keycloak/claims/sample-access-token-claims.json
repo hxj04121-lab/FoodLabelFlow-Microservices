@@ -1,0 +1,323 @@
+{
+  "$comment": [
+    "Redacted Access Token claim samples for the local demo realm (deploy/keycloak/realm/spectrace-realm.json).",
+    "Local test data only. JWT signature, subject/session identifiers, nonce, timestamps and scope string are redacted; no real credential, token or key is stored here.",
+    "The committed realm pins every demo user's `id` to a deterministic uuid5 (see deploy/keycloak/README.md), so `sub` is identical after a re-import; it is still redacted here like the other token identifiers.",
+    "Captured from real authorisation code + PKCE logins against Keycloak 26.0.7 (see deploy/keycloak/README.md, verification status).",
+    "deploy/keycloak/scripts/verify-token-claims.py asserts these values against a running Keycloak and can refresh this file with --write-sample.",
+    "When a user has no realm role, Keycloak omits the `roles`/`realm_access` claims entirely; the empty lists below document 'no business roles' rather than an empty array in the token."
+  ],
+  "issuer_example": "http://localhost:8180/auth/realms/spectrace",
+  "client_id": "spectrace-web",
+  "claim_locations": {
+    "aud": "Access token top-level claim; the shared resource audience (spectrace-api) added by the spectrace-api-audience mapper. The gateway and every service validate it, so a token without it is rejected at the edge.",
+    "org_id": "Access token top-level claim; source is the single-valued user attribute org_id.",
+    "org_type": "Access token top-level claim; source is the single-valued user attribute org_type (SUPPLIER or MANUFACTURER only).",
+    "roles": "Access token top-level claim; the assigned realm roles only (measured: Keycloak's built-in default roles are not emitted when the mapper comes from a client scope).",
+    "realm_access.roles": "Keycloak-native mirror of the same realm roles, from the realm_access.roles mapper in the spectrace-identity-claims scope.",
+    "preferred_username": "Access token top-level claim; the username, mapped for the reference consumer's UI."
+  },
+  "keycloak_default_realm_roles": [
+    "default-roles-spectrace",
+    "offline_access",
+    "uma_authorization"
+  ],
+  "keycloak_default_realm_roles_note": "Keycloak assigns these built-in realm roles to every user, but the measured tokens do NOT contain them: the realm-role mapper of a client scope emits only the explicitly assigned business roles. They still carry no SpecTrace permission, and the service starter must ignore unknown role codes.",
+  "redacted_claims": [
+    "sub",
+    "sid",
+    "jti",
+    "exp",
+    "iat",
+    "auth_time",
+    "nonce",
+    "scope",
+    "signature"
+  ],
+  "samples": [
+    {
+      "username": "supplier.alpha.maker",
+      "org_id": "org-supplier-alpha",
+      "org_type": "SUPPLIER",
+      "business_roles": [
+        "ADMIN_DATA_MAINTENANCE",
+        "LABEL_OFFICER"
+      ],
+      "access_token": {
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
+        "typ": "Bearer",
+        "azp": "spectrace-web",
+        "org_id": "org-supplier-alpha",
+        "org_type": "SUPPLIER",
+        "roles": [
+          "ADMIN_DATA_MAINTENANCE",
+          "LABEL_OFFICER"
+        ],
+        "realm_access": {
+          "roles": [
+            "ADMIN_DATA_MAINTENANCE",
+            "LABEL_OFFICER"
+          ]
+        }
+      }
+    },
+    {
+      "username": "supplier.alpha.checker",
+      "org_id": "org-supplier-alpha",
+      "org_type": "SUPPLIER",
+      "business_roles": [
+        "APPROVER",
+        "PUBLISHER"
+      ],
+      "access_token": {
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
+        "typ": "Bearer",
+        "azp": "spectrace-web",
+        "org_id": "org-supplier-alpha",
+        "org_type": "SUPPLIER",
+        "roles": [
+          "APPROVER",
+          "PUBLISHER"
+        ],
+        "realm_access": {
+          "roles": [
+            "APPROVER",
+            "PUBLISHER"
+          ]
+        }
+      }
+    },
+    {
+      "username": "supplier.beta.maker",
+      "org_id": "org-supplier-beta",
+      "org_type": "SUPPLIER",
+      "business_roles": [
+        "ADMIN_DATA_MAINTENANCE",
+        "LABEL_OFFICER"
+      ],
+      "access_token": {
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
+        "typ": "Bearer",
+        "azp": "spectrace-web",
+        "org_id": "org-supplier-beta",
+        "org_type": "SUPPLIER",
+        "roles": [
+          "ADMIN_DATA_MAINTENANCE",
+          "LABEL_OFFICER"
+        ],
+        "realm_access": {
+          "roles": [
+            "ADMIN_DATA_MAINTENANCE",
+            "LABEL_OFFICER"
+          ]
+        }
+      }
+    },
+    {
+      "username": "supplier.beta.checker",
+      "org_id": "org-supplier-beta",
+      "org_type": "SUPPLIER",
+      "business_roles": [
+        "APPROVER",
+        "PUBLISHER"
+      ],
+      "access_token": {
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
+        "typ": "Bearer",
+        "azp": "spectrace-web",
+        "org_id": "org-supplier-beta",
+        "org_type": "SUPPLIER",
+        "roles": [
+          "APPROVER",
+          "PUBLISHER"
+        ],
+        "realm_access": {
+          "roles": [
+            "APPROVER",
+            "PUBLISHER"
+          ]
+        }
+      }
+    },
+    {
+      "username": "manufacturer.north.maker",
+      "org_id": "org-manufacturer-north",
+      "org_type": "MANUFACTURER",
+      "business_roles": [
+        "ADMIN_DATA_MAINTENANCE",
+        "CHANGE_MANAGER",
+        "LABEL_OFFICER"
+      ],
+      "access_token": {
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
+        "typ": "Bearer",
+        "azp": "spectrace-web",
+        "org_id": "org-manufacturer-north",
+        "org_type": "MANUFACTURER",
+        "roles": [
+          "ADMIN_DATA_MAINTENANCE",
+          "CHANGE_MANAGER",
+          "LABEL_OFFICER"
+        ],
+        "realm_access": {
+          "roles": [
+            "ADMIN_DATA_MAINTENANCE",
+            "CHANGE_MANAGER",
+            "LABEL_OFFICER"
+          ]
+        }
+      }
+    },
+    {
+      "username": "manufacturer.north.checker",
+      "org_id": "org-manufacturer-north",
+      "org_type": "MANUFACTURER",
+      "business_roles": [
+        "APPROVER",
+        "PUBLISHER"
+      ],
+      "access_token": {
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
+        "typ": "Bearer",
+        "azp": "spectrace-web",
+        "org_id": "org-manufacturer-north",
+        "org_type": "MANUFACTURER",
+        "roles": [
+          "APPROVER",
+          "PUBLISHER"
+        ],
+        "realm_access": {
+          "roles": [
+            "APPROVER",
+            "PUBLISHER"
+          ]
+        }
+      }
+    },
+    {
+      "username": "manufacturer.south.maker",
+      "org_id": "org-manufacturer-south",
+      "org_type": "MANUFACTURER",
+      "business_roles": [
+        "ADMIN_DATA_MAINTENANCE",
+        "CHANGE_MANAGER",
+        "LABEL_OFFICER"
+      ],
+      "access_token": {
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
+        "typ": "Bearer",
+        "azp": "spectrace-web",
+        "org_id": "org-manufacturer-south",
+        "org_type": "MANUFACTURER",
+        "roles": [
+          "ADMIN_DATA_MAINTENANCE",
+          "CHANGE_MANAGER",
+          "LABEL_OFFICER"
+        ],
+        "realm_access": {
+          "roles": [
+            "ADMIN_DATA_MAINTENANCE",
+            "CHANGE_MANAGER",
+            "LABEL_OFFICER"
+          ]
+        }
+      }
+    },
+    {
+      "username": "manufacturer.south.checker",
+      "org_id": "org-manufacturer-south",
+      "org_type": "MANUFACTURER",
+      "business_roles": [
+        "APPROVER",
+        "PUBLISHER"
+      ],
+      "access_token": {
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
+        "typ": "Bearer",
+        "azp": "spectrace-web",
+        "org_id": "org-manufacturer-south",
+        "org_type": "MANUFACTURER",
+        "roles": [
+          "APPROVER",
+          "PUBLISHER"
+        ],
+        "realm_access": {
+          "roles": [
+            "APPROVER",
+            "PUBLISHER"
+          ]
+        }
+      }
+    },
+    {
+      "username": "spectrace.auditor",
+      "org_id": "org-manufacturer-north",
+      "org_type": "MANUFACTURER",
+      "business_roles": [
+        "AUDITOR"
+      ],
+      "access_token": {
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
+        "typ": "Bearer",
+        "azp": "spectrace-web",
+        "org_id": "org-manufacturer-north",
+        "org_type": "MANUFACTURER",
+        "roles": [
+          "AUDITOR"
+        ],
+        "realm_access": {
+          "roles": [
+            "AUDITOR"
+          ]
+        }
+      }
+    },
+    {
+      "username": "spectrace.no-role",
+      "org_id": "org-manufacturer-south",
+      "org_type": "MANUFACTURER",
+      "business_roles": [],
+      "access_token": {
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
+        "typ": "Bearer",
+        "azp": "spectrace-web",
+        "org_id": "org-manufacturer-south",
+        "org_type": "MANUFACTURER",
+        "roles": [],
+        "realm_access": {
+          "roles": []
+        }
+      }
+    }
+  ]
+}
