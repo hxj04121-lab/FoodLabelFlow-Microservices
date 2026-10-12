@@ -7,9 +7,10 @@
     "deploy/keycloak/scripts/verify-token-claims.py asserts these values against a running Keycloak and can refresh this file with --write-sample.",
     "When a user has no realm role, Keycloak omits the `roles`/`realm_access` claims entirely; the empty lists below document 'no business roles' rather than an empty array in the token."
   ],
-  "issuer_example": "http://localhost:8180/realms/spectrace",
+  "issuer_example": "http://localhost:8180/auth/realms/spectrace",
   "client_id": "spectrace-web",
   "claim_locations": {
+    "aud": "Access token top-level claim; the shared resource audience (spectrace-api) added by the spectrace-api-audience mapper. The gateway and every service validate it, so a token without it is rejected at the edge.",
     "org_id": "Access token top-level claim; source is the single-valued user attribute org_id.",
     "org_type": "Access token top-level claim; source is the single-valued user attribute org_type (SUPPLIER or MANUFACTURER only).",
     "roles": "Access token top-level claim; the assigned realm roles only (measured: Keycloak's built-in default roles are not emitted when the mapper comes from a client scope).",
@@ -42,7 +43,10 @@
         "LABEL_OFFICER"
       ],
       "access_token": {
-        "iss": "http://localhost:8180/realms/spectrace",
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
         "typ": "Bearer",
         "azp": "spectrace-web",
         "org_id": "org-supplier-alpha",
@@ -66,7 +70,10 @@
         "PUBLISHER"
       ],
       "access_token": {
-        "iss": "http://localhost:8180/realms/spectrace",
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
         "typ": "Bearer",
         "azp": "spectrace-web",
         "org_id": "org-supplier-alpha",
@@ -91,7 +98,10 @@
         "LABEL_OFFICER"
       ],
       "access_token": {
-        "iss": "http://localhost:8180/realms/spectrace",
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
         "typ": "Bearer",
         "azp": "spectrace-web",
         "org_id": "org-supplier-beta",
@@ -115,7 +125,10 @@
         "PUBLISHER"
       ],
       "access_token": {
-        "iss": "http://localhost:8180/realms/spectrace",
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
         "typ": "Bearer",
         "azp": "spectrace-web",
         "org_id": "org-supplier-beta",
@@ -141,7 +154,10 @@
         "CHANGE_MANAGER"
       ],
       "access_token": {
-        "iss": "http://localhost:8180/realms/spectrace",
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
         "typ": "Bearer",
         "azp": "spectrace-web",
         "org_id": "org-manufacturer-north",
@@ -166,7 +182,10 @@
         "APPROVER"
       ],
       "access_token": {
-        "iss": "http://localhost:8180/realms/spectrace",
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
         "typ": "Bearer",
         "azp": "spectrace-web",
         "org_id": "org-manufacturer-north",
@@ -190,7 +209,10 @@
         "CHANGE_MANAGER"
       ],
       "access_token": {
-        "iss": "http://localhost:8180/realms/spectrace",
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
         "typ": "Bearer",
         "azp": "spectrace-web",
         "org_id": "org-manufacturer-south",
@@ -215,7 +237,10 @@
         "APPROVER"
       ],
       "access_token": {
-        "iss": "http://localhost:8180/realms/spectrace",
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
         "typ": "Bearer",
         "azp": "spectrace-web",
         "org_id": "org-manufacturer-south",
@@ -238,7 +263,10 @@
         "AUDITOR"
       ],
       "access_token": {
-        "iss": "http://localhost:8180/realms/spectrace",
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
         "typ": "Bearer",
         "azp": "spectrace-web",
         "org_id": "org-manufacturer-north",
@@ -259,7 +287,10 @@
       "org_type": "MANUFACTURER",
       "business_roles": [],
       "access_token": {
-        "iss": "http://localhost:8180/realms/spectrace",
+        "iss": "http://localhost:8180/auth/realms/spectrace",
+        "aud": [
+          "spectrace-api"
+        ],
         "typ": "Bearer",
         "azp": "spectrace-web",
         "org_id": "org-manufacturer-south",

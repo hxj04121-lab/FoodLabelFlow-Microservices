@@ -7,6 +7,11 @@
 # Import / start:
 #   docker compose -f deploy/keycloak/docker-compose.keycloak.yml up -d keycloak
 #
+# The gateway fronts the IdP on /auth, so Keycloak serves that relative path and
+# mints its issuer from the externally visible URL (KC_HOSTNAME). Locally the
+# issuer is http://localhost:8080/auth/realms/spectrace even though the container
+# is published on 8180: the browser reaches Keycloak through the gateway.
+#
 # Use it together with the application stack (shared Docker network, so the
 # backend and the future gateway can reach http://keycloak:8080):
 #   docker compose -f docker-compose.yml -f deploy/keycloak/docker-compose.keycloak.yml up -d
@@ -30,6 +35,9 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-local-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-stage0-local-only}
       KC_LOG_LEVEL: ${KEYCLOAK_LOG_LEVEL:-info}
+      # Relative path and hostname are what the issuer in every token is built from.
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME: ${KEYCLOAK_EXTERNAL_URL:-http://localhost:8080/auth}
     ports:
       - "${KEYCLOAK_HOST_PORT:-8180}:8080"
     volumes:

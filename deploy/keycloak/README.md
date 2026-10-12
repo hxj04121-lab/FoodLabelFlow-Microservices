@@ -122,10 +122,31 @@ claim (architecture §11.2) and ignore unknown codes. Measured on Keycloak
 assigned to every user but are not emitted), and a user without a role gets no
 `roles` claim at all - the service must treat a missing set as "no permission".
 
-Open item for the starter (G1-M4.2): the measured access token has **no `aud`
-claim**, so services must validate `iss` and `azp` (or the realm needs an
-audience mapper). Adding an audience is a token-contract change for the gateway
-and is deliberately not made here.
+## Audience and issuer
+
+The realm adds one shared resource audience, `spectrace-api`, through the
+`spectrace-api-audience` mapper on the `spectrace-identity-claims` scope. The
+gateway and every service validate it, so a token minted by another client or
+another realm cannot be replayed against a SpecTrace API. The audience
+identifies the API, not the user: authorisation stays in the `roles` claim, and
+the realm records the value once in `attributes["spectrace.identity.audience"]`
+so the gateway, the services and `verify-token-claims.py` cannot drift apart.
+
+Measured on Keycloak 26.0.7: when a token has exactly one audience, Keycloak
+emits `aud` as a **string**, not an array. Validators must accept both shapes.
+
+The issuer is the **externally visible** Keycloak address, because that is what
+`iss` carries and what the gateway and the services validate. The deployment
+fronts Keycloak on `/auth`, so the issuer is
+`<external-origin>/auth/realms/spectrace`; the local value is
+`http://localhost:8080/auth/realms/spectrace`. The path comes from
+`KC_HOSTNAME`, which must include `/auth` - `KC_HTTP_RELATIVE_PATH` alone only
+moves the served endpoints and leaves the issuer without the path
+(observed on Keycloak 26.0.7). Staging sets `KC_HOSTNAME` to the ALB origin.
+
+The gateway and the services therefore share one contract: `iss` = the external
+issuer, `aud` contains `spectrace-api`, `azp` = the client that obtained the
+token.
 
 ## Demo users
 
@@ -260,8 +281,11 @@ that the user without a business role inherits none.
 | `docker compose ... up -d keycloak` + realm import | PASS - `Realm 'spectrace' imported`, `Import finished successfully`, no warnings |
 | `verify-token-claims.py` (real PKCE login, all 10 demo users) | PASS - `All Access Token claim checks passed.` |
 | RS256 signature of access and ID token against the realm JWKS | PASS (verified with `cryptography`; the committed script does not verify signatures) |
-| `KeycloakRealmContractTest` (14 tests) | PASS |
+| `KeycloakRealmContractTest` (16 tests) | PASS |
 | `verify-token-claims.py --self-check` | PASS |
+| Access token `aud` (all 10 demo users, real PKCE login) | PASS - `spectrace-api` in every access token |
+| Access token `iss` equals the externally visible issuer | PASS - asserted by the script, not assumed |
+| Realm import with an unknown protocol-mapper field | FAILS the import (`Unrecognized field "description"`), now guarded by a contract test |
 | Provisioning without `org_id`/`org_type` via Admin REST | 400 `error-user-attribute-required` for both fields |
 | Provisioning with two `org_id` values | 400 `error-invalid-multivalued-size` |
 | Provisioning with `org_type=PARTNER` | 400 `error-invalid-value` |
