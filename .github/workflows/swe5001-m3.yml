@@ -2,7 +2,7 @@ name: SWE5001 M3 gateway and sign-in
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, XFY]
     paths: ['platform/gateway/**', 'frontend/**', '.github/workflows/swe5001-m3.yml']
   push:
     branches: [main, XFY]
