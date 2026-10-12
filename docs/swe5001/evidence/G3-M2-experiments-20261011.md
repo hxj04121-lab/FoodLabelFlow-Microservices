@@ -1,5 +1,7 @@
 # G3 experiment preparation evidence — 2026-10-11
 
+**Superseded dataset evidence:** the original one-item / 100% candidate / 40-Specification inputs below are historical and must not be loaded. Format v2 restores the frozen 4–12 item / 20% reuse / four-group workload, unique owner keys and existing supplier mapping. See [the correction](../M2-HANDOFF-20261012-1545.md). No old dataset was loaded or measured.
+
 AWS capacity/failover: **BLOCKED / NOT RUN**. No measured R1, R3, p95, error rate, recovery time or replacement time exists. Owner approval, M5 staging window/budget/access, M1/M4 loaded dataset/version evidence, real tokens and Grafana/clock review remain required.
 
 Actual local runs:

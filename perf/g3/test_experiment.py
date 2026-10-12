@@ -33,8 +33,8 @@ class ProtocolTest(unittest.TestCase):
         self.assertEqual(a["releasedFormulaVersions"], 5000)
         cases = e.read(first / "requests.json")["cases"]
         self.assertEqual(len(cases), 20)
-        self.assertTrue(all(len(case["expected"]["findings"]) == 250 for case in cases))
-        self.assertEqual(len({x["findingId"] for c in cases for x in c["expected"]["findings"]}), 5000)
+        self.assertEqual([len(case["expected"]["findings"]) for case in cases], [38, 37] * 10)
+        self.assertEqual(len({x["findingId"] for c in cases for x in c["expected"]["findings"]}), 750)
         self.assertEqual(e.finding_id("org", "spec", "formula", "label"), "19bd4dc0-1fe7-3a8f-bfb8-7083f923a8c1")
         with self.assertRaises(ValueError): e.dataset(first, "a" * 40)
     def test_interleaved_full_ladder_and_fixed_durations(self):
@@ -42,6 +42,44 @@ class ProtocolTest(unittest.TestCase):
         self.assertEqual([x["replicas"] for x in plan], [1, 3, 3, 1, 1, 3])
         self.assertEqual([x["trial"] for x in plan], [1, 1, 2, 2, 3, 3])
         self.assertTrue(all(x["rates"] == [1, 2, 4, 8, 16, 32, 64, 128, 256] and x["secondsPerRate"] == 540 for x in plan))
+    def test_dataset_respects_frozen_multi_item_fanout_and_source_owner_keys(self):
+        directory = self.root / "dataset"
+        before = e.sha(e.TARGET)
+        e.dataset(directory, "a" * 40)
+        formulas = [json.loads(line) for line in (directory / "formula-owner-import.jsonl").read_text().splitlines()]
+        specs = [json.loads(line) for line in (directory / "specification-owner-import.jsonl").read_text().splitlines()]
+        self.assertTrue(all(4 <= len(f["payload"]["items"]) <= 12 for f in formulas), "Frozen recipe size is 4–12, not one item")
+        self.assertEqual({len(f["payload"]["items"]) for f in formulas}, set(range(4, 13)))
+        components = [c["specComponentId"] for s in specs for c in s["payload"]["components"]]
+        self.assertEqual(len(components), len(set(components)), "M1 spec_component IDs are globally unique")
+        items = [i["formulaItemId"] for f in formulas for i in f["payload"]["items"]]
+        self.assertEqual(len(items), len(set(items)))
+        released = {s["payload"]["specificationVersion"]["id"]: s for s in specs}
+        self.assertEqual(len(released), len(specs))
+        candidate = {c["request"]["specificationChange"]["candidate"]["id"] for c in e.read(directory / "requests.json")["cases"]}
+        self.assertEqual(len(candidate), 1, "One candidate supplier material is shared across manufacturers")
+        previous = {c["request"]["specificationChange"]["previous"]["id"] for c in e.read(directory / "requests.json")["cases"]}
+        counts = {}
+        for formula in formulas:
+            org = formula["organisationId"]
+            counts.setdefault(org, [0, 0])
+            counts[org][0] += 1
+            counts[org][1] += any(i["specificationVersion"]["id"] in previous for i in formula["payload"]["items"])
+            for item in formula["payload"]["items"]:
+                source = released[item["specificationVersion"]["id"]]["payload"]
+                self.assertEqual(item["materialId"], source["material"]["materialId"])
+                self.assertEqual(item["specificationVersion"], source["specificationVersion"])
+        self.assertEqual(len(counts), 20)
+        self.assertTrue(all(value == [250, 50] for value in counts.values()), "Frozen candidate reuse is exactly 20%")
+        self.assertEqual({s["organisationId"] for s in specs}, {"org-supplier-alpha", "org-supplier-beta"})
+        labels = [json.loads(line) for line in (directory / "label-owner-import.jsonl").read_text().splitlines()]
+        from collections import Counter
+        self.assertEqual(set(Counter(l["fixtureGroup"] for l in labels).values()), {1250})
+        legacy = directory / "legacy-requests.json"
+        e.write(legacy, {"cases": e.read(directory / "requests.json")["cases"]})
+        with self.assertRaisesRegex(ValueError, "Regenerate superseded performance dataset"):
+            e.transient_tokens({"tokenFile": "must-not-be-read"}, legacy, 540)
+        self.assertEqual(before, e.sha(e.TARGET))
     def test_unconfirmed_window_never_runs(self):
         with self.assertRaisesRegex(ValueError, "approval"): e.authorize({})
     def placement_fixture(self):
@@ -81,7 +119,7 @@ class ProtocolTest(unittest.TestCase):
                         e.placement(config, 1)
     def test_expired_token_file_stops_before_load_and_freshness_does_not_authorize_identity(self):
         request = self.root / "request.json"; token_file = self.root / "private.json"
-        e.write(request, {"cases": [{"request": {"organisationId": "org"}}]})
+        e.write(request, {"datasetFormatVersion": 2, "cases": [{"request": {"organisationId": "org"}}]})
         payload = base64.urlsafe_b64encode(json.dumps({"exp": 0}).encode()).decode().rstrip("=")
         e.write(token_file, {"org": "synthetic." + payload + ".unsigned-test-only"})
         with self.assertRaisesRegex(ValueError, "fresh real JWTs"):

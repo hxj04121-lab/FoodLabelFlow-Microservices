@@ -1,6 +1,7 @@
 """SWE5001 M2 fixed-protocol tooling. Offline by default; no provisioning or credentials in evidence."""
 from __future__ import annotations
 import argparse
+import copy
 import base64
 import datetime as dt
 import hashlib
@@ -48,46 +49,95 @@ def dataset(destination, source_commit):
     destination.mkdir(parents=True, exist_ok=True)
     rng = random.Random(targets["dataset"]["seed"])
     specifications, formulas, labels, cases = [], [], [], []
+    spec_template = read(ROOT / "contracts/examples/specification/specification-published-soy-lecithin-v2.json")
+    formula_template = read(ROOT / "contracts/examples/formulation/formula-published-adopts-v2.json")
+    suppliers = {
+        "candidate": ("org-supplier-beta", "sup_chocolate_demo", "CHOCO_SUP", "Demo Chocolate Supplier"),
+        "background": ("org-supplier-alpha", "sup_base_demo", "BASE_SUP", "Demo Base Ingredients Supplier"),
+    }
+    cocoa = ("ing_cocoa", "Cocoa", "cocoa mass", "MATCHED")
+    wheat = ("ing_wheat_flour", "Wheat Flour", "wheat flour", "MATCHED")
+    soy = ("ing_soy_lecithin", "Soy Lecithin", "emulsifier (soy lecithin)", "MATCHED")
+    unknown = ("ing_neutral_base", "Neutral Base", "natural flavouring (carrier undisclosed)", "UNMAPPED")
+
+    def specification(material, version, components, supplier_kind):
+        source = copy.deepcopy(spec_template)
+        org, supplier_id, code, name = suppliers[supplier_kind]
+        version_id = f"{material}_v{version}"
+        released = f"2026-10-01T0{5 + version}:55:00Z"
+        source.update(eventId=str(uuid.uuid5(uuid.NAMESPACE_URL, f"5001:spec:{version_id}")),
+                      organisationId=org, aggregateId=material, aggregateVersion=version, occurredAt=released,
+                      correlationId=f"dataset-{version_id}")
+        source["payload"].update(organisationId=org,
+            supplier={"supplierId": supplier_id, "supplierCode": code, "supplierName": name},
+            material={"materialId": material, "materialCode": material.upper(), "materialName": material.replace("_", " ")},
+            specificationVersion={"id": version_id, "versionNumber": version},
+            previousVersion=None if version == 1 else {"id": f"{material}_v1", "versionNumber": 1}, releasedAt=released,
+            components=[{"specComponentId": f"{version_id}_c{index:02}", "sequenceNo": index,
+                         "ingredientId": ingredient, "ingredientName": ingredient_name, "rawPhrase": phrase, "matchStatus": status}
+                        for index, (ingredient, ingredient_name, phrase, status) in enumerate(components, 1)])
+        specifications.append(source)
+        return version_id
+
+    material = "perf_material_candidate"
+    previous = specification(material, 1, [cocoa, wheat], "candidate")
+    candidate = specification(material, 2, [cocoa, wheat, soy], "candidate")
+    backgrounds = {}
+    for name, component in (("wheat", wheat), ("soy", soy), ("unresolved", unknown)):
+        item_material = f"perf_background_{name}"
+        backgrounds[name] = (item_material, specification(item_material, 1, [component], "background"))
+    safe = []
+    for index in range(1, 12):
+        item_material = f"perf_background_safe_{index:02}"
+        safe.append((item_material, specification(item_material, 1, [cocoa], "background")))
+
     for tenant in range(1, 21):
-        org, material = f"perf_manufacturer_{tenant:02}", f"perf_material_{tenant:02}"
-        previous, candidate = material + "_v1", material + "_v2"
-        for version in (1, 2):
-            source = read(ROOT / "contracts/examples/specification/specification-published-soy-lecithin-v2.json")
-            source.update(eventId=str(uuid.uuid5(uuid.NAMESPACE_URL, f"5001:spec:{tenant}:{version}")), aggregateId=material, aggregateVersion=version)
-            payload = source["payload"]
-            payload["material"]["materialId"] = material
-            payload["specificationVersion"] = {"id": previous if version == 1 else candidate, "versionNumber": version}
-            payload["previousVersion"] = None if version == 1 else {"id": previous, "versionNumber": 1}
-            if version == 1:
-                payload["components"] = payload["components"][:2]  # cocoa + wheat; candidate adds soy
-            specifications.append(source)
+        org = f"perf_manufacturer_{tenant:02}"
         expected = []
         for index in range(250):
             product = f"perf_product_{tenant:02}_{index:03}"
             formula, label = product + "_formula_v1", product + "_label_v1"
-            source = read(ROOT / "contracts/examples/formulation/formula-published-adopts-v2.json")
+            source = copy.deepcopy(formula_template)
             source.update(eventId=str(uuid.uuid5(uuid.NAMESPACE_URL, f"5001:formula:{tenant}:{index}")), organisationId=org, aggregateId=product, aggregateVersion=1)
             payload = source["payload"]
             payload.update(organisationId=org, formulaVersion={"id": formula, "versionNumber": 1}, previousFormulaVersion=None)
             payload["product"]["productId"] = product
-            payload["items"] = [payload["items"][0]]
-            payload["items"][0].update(formulaItemId=product + "_item", materialId=material, specificationVersion={"id": previous, "versionNumber": 1})
+            formula_index = (tenant - 1) * 250 + index
+            group, references_candidate = formula_index % 4, formula_index % 5 == 0
+            references = [backgrounds["wheat"]]
+            if references_candidate:
+                references.append((material, previous))
+            if group in (2, 3):
+                references.append(backgrounds["soy" if group == 2 else "unresolved"])
+            references.extend(rng.sample(safe, rng.randint(4, 12) - len(references)))
+            payload["items"] = [{"formulaItemId": f"{formula}_i{sequence:02}", "sequenceNo": sequence,
+                                 "materialId": item_material, "specificationVersion": {"id": spec_id, "versionNumber": 1},
+                                 "quantity": 1, "unit": "kg"}
+                                for sequence, (item_material, spec_id) in enumerate(references, 1)]
             formulas.append(source)
-            declared = ["all_wheat"] + (["all_soy"] if rng.randrange(4) == 0 else [])
+            declared = ["all_wheat"] + (["all_soy"] if group in (1, 2) else [])
             # This is an explicit synthetic business version, to be created/approved by M4's importer.
             labels.append({"organisationId": org, "productId": product, "labelVersionId": label, "versionNumber": 1,
                            "formulaVersionId": formula, "ruleSetVersionId": "ruleset_us_falcpa_demo_v1", "jurisdiction": "US",
-                           "declaredAllergens": declared, "fixtureKind": "owner-import-plan-not-a-published-event"})
-            expected.append({"findingId": finding_id(org, candidate, formula, label),
-                             "outcome": "NO_ACTION" if "all_soy" in declared else "REVIEW_REQUIRED"})
+                           "declaredAllergens": declared, "fixtureGroup": ["MISSING_AFTER_SUBSTITUTION", "FULLY_DECLARED", "UNCHANGED_CONCLUSION", "UNRESOLVED_EXPLICIT"][group],
+                           "fixtureKind": "owner-import-plan-not-a-published-event"})
+            # The 80% controls do not reference the candidate; group 2 already contains soy in another item.
+            if references_candidate and group != 2:
+                expected.append({"findingId": finding_id(org, candidate, formula, label),
+                                 "outcome": "NO_ACTION" if group == 1 else "REVIEW_REQUIRED"})
         cases.append({"request": {"organisationId": org, "specificationChange": {"previous": {"id": previous, "versionNumber": 1},
                         "candidate": {"id": candidate, "versionNumber": 2}}, "ruleSetVersionId": "ruleset_us_falcpa_demo_v1", "jurisdiction": "US"},
                       "expected": {"findings": expected}})
     for name, rows in (("specification-owner-import.jsonl", specifications), ("formula-owner-import.jsonl", formulas), ("label-owner-import.jsonl", labels)):
         (destination / name).write_text("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows), encoding="utf-8")
-    write(destination / "requests.json", {"fixtureKind": "synthetic-owner-import-plan-not-loaded", "cases": cases})
-    manifest = {"status": "GENERATED_NOT_LOADED", "seed": 5001, "releasedFormulaVersions": len(formulas), "manufacturers": 20,
+    write(destination / "requests.json", {"datasetFormatVersion": 2, "fixtureKind": "synthetic-owner-import-plan-not-loaded", "cases": cases})
+    manifest = {"status": "GENERATED_NOT_LOADED", "datasetFormatVersion": 2, "seed": 5001,
+                "releasedSpecificationVersions": len(specifications), "releasedFormulaVersions": len(formulas), "manufacturers": 20,
                 "formulaVersionsPerManufacturer": 250, "sourceCommit": source_commit, "targetsSha256": sha(TARGET),
+                "workload": {"formulaItemMinimum": 4, "formulaItemMaximum": 12, "candidateMaterialId": material,
+                             "candidateFormulaFraction": .2, "candidateFormulaCount": 1000, "candidateFormulasPerManufacturer": 50,
+                             "expectedFindingCount": sum(len(c["expected"]["findings"]) for c in cases),
+                             "supplierOrganisations": ["org-supplier-alpha", "org-supplier-beta"], "groupPartition": "formulaIndex % 4"},
                 "files": {p.name: sha(p) for p in sorted(destination.iterdir()) if p.is_file()},
                 "loading": "M1/M4 must import through owned APIs, return exact released snapshots and approve expectations before measurement."}
     write(destination / "manifest.json", manifest)
@@ -224,8 +274,10 @@ def fingerprint(environment):
     return hashlib.sha256(json.dumps(environment, sort_keys=True).encode()).hexdigest()
 
 def transient_tokens(config, requests, minimum_seconds):
+    fixtures = read(requests)
+    require(fixtures.get("datasetFormatVersion") == 2, "Regenerate superseded performance dataset before load")
     tokens = read(config["tokenFile"])
-    require(set(tokens) == {c["request"]["organisationId"] for c in read(requests)["cases"]}, "Tenant token coverage mismatch")
+    require(set(tokens) == {c["request"]["organisationId"] for c in fixtures["cases"]}, "Tenant token coverage mismatch")
     # Expiry is only a preflight freshness check. Only the service's signature/issuer/audience validation authorizes a JWT.
     try:
         for token in tokens.values():
