@@ -160,7 +160,7 @@
     {
       "clientId": "spectrace-web",
       "name": "SpecTrace web reference client",
-      "description": "Public browser client: authorisation code flow with PKCE S256 only; implicit flow, direct access grants and service accounts disabled; no client secret. Local development redirect URIs only. See deploy/keycloak/README.md.",
+      "description": "Public browser client: authorisation code flow with PKCE S256 only; implicit flow, direct access grants and service accounts disabled; no client secret. Redirect URIs: local development and the GitHub Pages origin. See deploy/keycloak/README.md.",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": true,
@@ -174,14 +174,15 @@
       "frontchannelLogout": true,
       "redirectUris": [
         "http://localhost:5173/*",
-        "http://127.0.0.1:5173/*"
+        "http://127.0.0.1:5173/*",
+        "https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/"
       ],
       "webOrigins": [
         "+"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:5173/*##http://127.0.0.1:5173/*",
+        "post.logout.redirect.uris": "http://localhost:5173/*##http://127.0.0.1:5173/*##https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/",
         "backchannel.logout.session.required": "true",
         "oauth2.device.authorization.grant.enabled": "false",
         "oidc.ciba.grant.enabled": "false",
@@ -243,7 +244,8 @@
       ],
       "requiredActions": [],
       "realmRoles": [
-        "LABEL_OFFICER"
+        "LABEL_OFFICER",
+        "ADMIN_DATA_MAINTENANCE"
       ]
     },
     {
@@ -298,7 +300,8 @@
       ],
       "requiredActions": [],
       "realmRoles": [
-        "LABEL_OFFICER"
+        "LABEL_OFFICER",
+        "ADMIN_DATA_MAINTENANCE"
       ]
     },
     {
@@ -354,7 +357,8 @@
       "requiredActions": [],
       "realmRoles": [
         "ADMIN_DATA_MAINTENANCE",
-        "CHANGE_MANAGER"
+        "CHANGE_MANAGER",
+        "LABEL_OFFICER"
       ]
     },
     {
@@ -381,7 +385,8 @@
       ],
       "requiredActions": [],
       "realmRoles": [
-        "APPROVER"
+        "APPROVER",
+        "PUBLISHER"
       ]
     },
     {
@@ -409,7 +414,8 @@
       "requiredActions": [],
       "realmRoles": [
         "ADMIN_DATA_MAINTENANCE",
-        "CHANGE_MANAGER"
+        "CHANGE_MANAGER",
+        "LABEL_OFFICER"
       ]
     },
     {
@@ -436,7 +442,8 @@
       ],
       "requiredActions": [],
       "realmRoles": [
-        "APPROVER"
+        "APPROVER",
+        "PUBLISHER"
       ]
     },
     {

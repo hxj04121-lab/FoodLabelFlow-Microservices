@@ -137,3 +137,18 @@ decided. The design above is unchanged.
   requirement to reject missing/multiple/invalid organisation claims is
   implemented by the profile cardinality/enum rules at provisioning time and
   must additionally be enforced fail-closed by the G1-M4.2 starter.
+- Redirect URIs: the exact GitHub Pages project root
+  `https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/` is registered
+  for sign-in (`spectrace-web.redirectUris`) and sign-out
+  (`post.logout.redirect.uris`). It is exact, not a wildcard, so the design rule
+  that production redirects must be exact entries holds; if the static site uses
+  a sub-path callback, that exact path is added separately.
+- Demo user role assignments: the design declares the role vocabulary, and the
+  realm assigns it so the demo steps can run. All four makers
+  (`supplier.alpha.maker`, `supplier.beta.maker`, `manufacturer.north.maker`,
+  `manufacturer.south.maker`) hold `ADMIN_DATA_MAINTENANCE`, because creating and
+  releasing a specification version checks `DATA.MAINTAIN`, which the seed grants
+  to that role only. Each manufacturer also has a `LABEL_OFFICER` (draft,
+  validate, submit) and a *different* identity holding `APPROVER` + `PUBLISHER`,
+  because a label belongs to a manufacturer product and BR-06 keeps the maker and
+  the checker separate. `KeycloakRealmContractTest` asserts both.

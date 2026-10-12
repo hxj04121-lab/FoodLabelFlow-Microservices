@@ -40,6 +40,7 @@
       "org_id": "org-supplier-alpha",
       "org_type": "SUPPLIER",
       "business_roles": [
+        "ADMIN_DATA_MAINTENANCE",
         "LABEL_OFFICER"
       ],
       "access_token": {
@@ -52,10 +53,12 @@
         "org_id": "org-supplier-alpha",
         "org_type": "SUPPLIER",
         "roles": [
+          "ADMIN_DATA_MAINTENANCE",
           "LABEL_OFFICER"
         ],
         "realm_access": {
           "roles": [
+            "ADMIN_DATA_MAINTENANCE",
             "LABEL_OFFICER"
           ]
         }
@@ -95,6 +98,7 @@
       "org_id": "org-supplier-beta",
       "org_type": "SUPPLIER",
       "business_roles": [
+        "ADMIN_DATA_MAINTENANCE",
         "LABEL_OFFICER"
       ],
       "access_token": {
@@ -107,10 +111,12 @@
         "org_id": "org-supplier-beta",
         "org_type": "SUPPLIER",
         "roles": [
+          "ADMIN_DATA_MAINTENANCE",
           "LABEL_OFFICER"
         ],
         "realm_access": {
           "roles": [
+            "ADMIN_DATA_MAINTENANCE",
             "LABEL_OFFICER"
           ]
         }
@@ -151,7 +157,8 @@
       "org_type": "MANUFACTURER",
       "business_roles": [
         "ADMIN_DATA_MAINTENANCE",
-        "CHANGE_MANAGER"
+        "CHANGE_MANAGER",
+        "LABEL_OFFICER"
       ],
       "access_token": {
         "iss": "http://localhost:8180/auth/realms/spectrace",
@@ -164,12 +171,14 @@
         "org_type": "MANUFACTURER",
         "roles": [
           "ADMIN_DATA_MAINTENANCE",
-          "CHANGE_MANAGER"
+          "CHANGE_MANAGER",
+          "LABEL_OFFICER"
         ],
         "realm_access": {
           "roles": [
             "ADMIN_DATA_MAINTENANCE",
-            "CHANGE_MANAGER"
+            "CHANGE_MANAGER",
+            "LABEL_OFFICER"
           ]
         }
       }
@@ -179,7 +188,8 @@
       "org_id": "org-manufacturer-north",
       "org_type": "MANUFACTURER",
       "business_roles": [
-        "APPROVER"
+        "APPROVER",
+        "PUBLISHER"
       ],
       "access_token": {
         "iss": "http://localhost:8180/auth/realms/spectrace",
@@ -191,11 +201,13 @@
         "org_id": "org-manufacturer-north",
         "org_type": "MANUFACTURER",
         "roles": [
-          "APPROVER"
+          "APPROVER",
+          "PUBLISHER"
         ],
         "realm_access": {
           "roles": [
-            "APPROVER"
+            "APPROVER",
+            "PUBLISHER"
           ]
         }
       }
@@ -206,7 +218,8 @@
       "org_type": "MANUFACTURER",
       "business_roles": [
         "ADMIN_DATA_MAINTENANCE",
-        "CHANGE_MANAGER"
+        "CHANGE_MANAGER",
+        "LABEL_OFFICER"
       ],
       "access_token": {
         "iss": "http://localhost:8180/auth/realms/spectrace",
@@ -219,12 +232,14 @@
         "org_type": "MANUFACTURER",
         "roles": [
           "ADMIN_DATA_MAINTENANCE",
-          "CHANGE_MANAGER"
+          "CHANGE_MANAGER",
+          "LABEL_OFFICER"
         ],
         "realm_access": {
           "roles": [
             "ADMIN_DATA_MAINTENANCE",
-            "CHANGE_MANAGER"
+            "CHANGE_MANAGER",
+            "LABEL_OFFICER"
           ]
         }
       }
@@ -234,7 +249,8 @@
       "org_id": "org-manufacturer-south",
       "org_type": "MANUFACTURER",
       "business_roles": [
-        "APPROVER"
+        "APPROVER",
+        "PUBLISHER"
       ],
       "access_token": {
         "iss": "http://localhost:8180/auth/realms/spectrace",
@@ -246,11 +262,13 @@
         "org_id": "org-manufacturer-south",
         "org_type": "MANUFACTURER",
         "roles": [
-          "APPROVER"
+          "APPROVER",
+          "PUBLISHER"
         ],
         "realm_access": {
           "roles": [
-            "APPROVER"
+            "APPROVER",
+            "PUBLISHER"
           ]
         }
       }
