@@ -83,10 +83,15 @@ adds split issuer/JWKS defaults for direct-IdP local use. The Gateway-fronted
 override here follows M4's `/auth` contract, rather than mixing those direct-IdP
 defaults into the same login session.
 
-Prepare M4's realm JSON outside tracked files and point `G1_REALM_FILE` at its
-absolute path. The file must include the reviewed immutable-sub correction;
-this override neither generates a realm nor adds roles to demo users.
-For example, an explicitly selected provider Git ref can be exported as:
+The override imports the accepted #34 realm in `deploy/keycloak/realm` by default.
+Start the complete local Gateway stack with:
+
+```powershell
+docker compose -p spectrace-m3-g1 -f deploy/local/compose.yaml -f platform/gateway/compose.local.yaml up -d --build
+```
+
+Optionally, `G1_REALM_FILE` may select another explicitly reviewed absolute file.
+The override neither generates a realm nor adds roles. For that optional case:
 
 ```powershell
 $taskRealm = Join-Path $PWD '.git/xfy-review/spectrace-realm.json'
@@ -98,8 +103,8 @@ docker compose -p spectrace-m3-g1 -f deploy/local/compose.yaml -f platform/gatew
 docker compose -p spectrace-m3-g1 -f deploy/local/compose.yaml -f platform/gateway/compose.local.yaml up -d --build mysql rabbitmq keycloak specification formulation gateway
 ```
 
-Replace `<reviewed-realm-ref>` with the agreed provider ref. The environment
-variable is mandatory; a missing file cannot silently become a directory.
+Replace `<reviewed-realm-ref>` with the agreed provider ref only when overriding
+the accepted default. A bind cannot silently create a missing host directory.
 The override uses a separate local project and leaves other stacks untouched.
 Check host-port availability before starting; `G1_GATEWAY_HOST_PORT` changes
 both the Gateway binding and every local external-issuer value consistently.
@@ -111,10 +116,10 @@ The browser does not use the container DNS name. Keycloak's management probe
 stays on9000 at `/health/ready`, explicitly separate from `/auth`
 ([vendor documentation](https://www.keycloak.org/server/management-interface)).
 The Gateway sends Authorization/X-Correlation-ID unchanged and preserves
-downstream403. Only Specification/Formulation's existing resource-server
-settings are bound here; Compliance/Label starter identity configuration needs
-its owner's reviewed implementation before those services can be claimed as
-authenticated integration evidence.
+downstream403. All four services bind the same public issuer, private JWKS and
+spectrace-api audience through both Boot and the accepted security starter.
+Bindings alone do not establish authenticated integration evidence for all four.
+The provider-confirmed caller path is `/api/specifications/caller-claims` (PR47).
 
 Set `G1_FRONTEND_ORIGIN` to the exact local frontend origin and align the
 frontend VITE authority/Gateway origin with the selected Gateway host port.

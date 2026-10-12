@@ -38,6 +38,11 @@ with tempfile.TemporaryDirectory(prefix="m3-compose-check-") as directory:
             assert services[service]["environment"]["SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI"] == jwks
             assert gateway[f"GATEWAY_{prefix}"] == f"http://{service}:8080"
             assert gateway[f"GATEWAY_{prefix}_WRITE_ROLES"] == "ADMIN_DATA_MAINTENANCE"
+        for service in ("specification", "formulation", "compliance", "label-workflow"):
+            identity = services[service]["environment"]
+            assert identity["SPECTRACE_SECURITY_ISSUER_URI"] == issuer
+            assert identity["SPECTRACE_SECURITY_JWK_SET_URI"] == jwks
+            assert identity["SPECTRACE_SECURITY_AUDIENCE"] == gateway["GATEWAY_AUDIENCE"]
         keycloak = services["keycloak"]
         assert keycloak["environment"]["KC_HOSTNAME"] == f"http://localhost:{port}/auth"
         assert keycloak["environment"]["KC_HTTP_RELATIVE_PATH"] == "/auth"
@@ -49,7 +54,27 @@ with tempfile.TemporaryDirectory(prefix="m3-compose-check-") as directory:
         assert Path(services["gateway"]["build"]["context"]).resolve() == ROOT / "platform" / "gateway"
         assert model["name"] == "spectrace-m3-g1"
         print(f"PASS Compose identity/JWKS/roles/import/build bindings at Gateway port {port}")
-    missing = {**os.environ}
-    missing.pop("G1_REALM_FILE", None)
-    assert render(missing).returncode != 0, "Missing provider realm must fail closed"
-    print("PASS missing provider realm rejected; no containers started")
+    default = {**os.environ}
+    default.pop("G1_REALM_FILE", None)
+    result = render(default)
+    assert result.returncode == 0, result.stderr
+    mounted = json.loads(result.stdout)["services"]["keycloak"]["volumes"][0]
+    assert Path(mounted["source"]).resolve() == ROOT / "deploy/keycloak/realm/spectrace-realm.json"
+    assert mounted["read_only"] and not mounted.get("bind", {}).get("create_host_path", False)
+    realm = json.loads(Path(mounted["source"]).read_text(encoding="utf-8"))
+    assert any(mapper["protocolMapper"] == "oidc-sub-mapper" for scope in realm["clientScopes"]
+               for mapper in scope["protocolMappers"]), "Accepted realm must mint native sub"
+    base = subprocess.run(["docker", "compose", "-f", "deploy/local/compose.yaml", "config", "--format", "json"],
+                          cwd=ROOT, env=default, text=True, encoding="utf-8", capture_output=True, timeout=30)
+    assert base.returncode == 0, base.stderr
+    direct = json.loads(base.stdout)["services"]
+    assert direct["keycloak"]["environment"]["KC_HTTP_RELATIVE_PATH"] == "/auth"
+    assert direct["keycloak"]["environment"]["KC_HTTP_MANAGEMENT_RELATIVE_PATH"] == "/"
+    for service in ("specification", "formulation", "compliance", "label-workflow"):
+        assert direct[service]["environment"]["OIDC_ISSUER_URI"] == default.get(
+            "OIDC_ISSUER_URI", "http://localhost:8180/auth/realms/spectrace")
+        assert direct[service]["environment"]["SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI"] == jwks
+        assert direct[service]["environment"]["SPECTRACE_SECURITY_ISSUER_URI"] == direct[service]["environment"]["OIDC_ISSUER_URI"]
+        assert direct[service]["environment"]["SPECTRACE_SECURITY_JWK_SET_URI"] == jwks
+        assert direct[service]["environment"]["SPECTRACE_SECURITY_AUDIENCE"] == "spectrace-api"
+    print("PASS accepted default realm and direct/Gateway /auth bindings; no containers started")

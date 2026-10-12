@@ -21,6 +21,7 @@
 
 | 路由 | 方法与 suffix（相对于上表 prefix） | 备注 |
 |---|---|---|
+| specification | GET `caller-claims` | G1-M4 PR47：`/api/specifications/caller-claims` 返回 `{subject,org_id,org_type,roles}`；现有路由原样转发，无 rewrite；前端核对服务实际解析的身份。待非空 sub 修复采纳及部署验收 |
 | specification | GET `suppliers`、`suppliers/{supplierId}`、`materials`、`materials/{materialId}`、`ingredients`、`versions`、`versions/{specificationVersionId}`；POST `materials`、`versions`、`versions/{specificationVersionId}/release` | 候选写角色 SPEC_AUTHOR / SPEC_RELEASER；尚需 M4 realm 对齐 |
 | formulation | GET `products`、`products/{productId}`、`products/{productId}/formula-versions`、`released-specifications`、`formula-versions/{formulaVersionId}`、`formula-versions/{formulaVersionId}/trace`；POST `formula-versions`、`formula-versions/{formulaVersionId}/release` | 候选写角色 FORMULA_AUTHOR / FORMULA_RELEASER；release body 用 expectedCurrentFormulaVersionId，无 If-Match 要求 |
 
@@ -96,5 +97,30 @@ Origin 是 scheme + host + port，不含路径；GitHub Pages 项目路径属于
 M4 realm 设计现已提供 spectrace-web public PKCE S256 及顶层 org_id/org_type/roles；设计文件不代表 realm 已部署。G1 确认结果再记录于本文件；若改变契约，遵循 M2 + ADR 流程。G0 的本次提交不包含 Gateway 运行代码或 G1 测试结论。
 
 ## G1 本地实现进度（2026-10-11）
+
+### 对接确认（2026-10-12）
+
+- 登录 `redirect_uri` 与退出 `post_logout_redirect_uri` 均为精确根路径
+  `https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/`。前端用 origin 和
+  Pages base path 构造同一个回调；hash 业务路由不进入回调，不使用 `/*`。
+  Gateway CORS origin 为 `https://hxj04121-lab.github.io`，不含项目路径。
+- 身份统一使用 `/auth/realms/spectrace`。Gateway 本地联调 issuer 为
+  `http://localhost:8080/auth/realms/spectrace`，容器 JWKS 为
+  `http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs`。
+  直连本地 Keycloak 时入口为8180，issuer 对应
+  `http://localhost:8180/auth/realms/spectrace`；同一次联调不能混用两个入口。
+  四个服务的 Boot 与 starter 都显式绑定同一外部 issuer/私有 JWKS/audience。
+  staging 将入口替换为 M5 提供的实际 HTTPS origin；切换后重新登录取得新 token。
+- G1 只使用真实 JWT。`X-Auth-Provider` / `X-External-Subject` 的旧单体 seam
+  依赖数据库 identity service 查询组织和角色，保留在 baseline backend。
+  starter 的 `X-Auth-Subject` / `X-Auth-Org-*` / `X-Auth-Roles` 只是默认关闭的
+  local/test fixture，不宣称兼容旧 seam；不通过改名或客户端头补组织/角色实现兼容。
+  将来若要迁移，应由 M4/M1提供可信身份查询适配器，再由 M3审阅。
+- PR47 的 NetworkPolicy 是部署候选：gateway→各服务及 label-workflow→compliance。
+  L3/L4 策略不能限定 `/internal/**`，服务权限检查和 Gateway 的内部路径拒绝同时保留。
+  ALB→Gateway、namespace/Keycloak CR 绑定及实际 egress 由 M4/M5 在 staging 验证。
+- #34/#36 已合入 main；XFY 已同步。Pages 部署、AWS LB 登录和 M4最终验收仍待完成。
+
+### 历史本地记录
 
 G0 文档已合并后，XFY 继续添加 [本地 Gateway](../../platform/gateway/README.md)、[登录与 Pages 构建](../../frontend/README-G1.md)，测试范围及联调依赖见 [G1 本地验证记录](evidence/G1-M3-local-progress.md)。当前实现不新增公开契约；C-03/C-04/C-07 的团队决定仍待 M4/M2 对齐。实际部署的来源、issuer/audience、角色和 service 地址必须显式配置，不能把本地 fixture 当团队认可值。

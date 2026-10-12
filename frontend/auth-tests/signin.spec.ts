@@ -67,7 +67,7 @@ test.beforeAll(async () => {
         org_type: mode === 'array-org-type' ? ['MANUFACTURER'] : 'MANUFACTURER',
         ...(mode === 'roleless' ? {} : { roles: ['LABEL_OFFICER', 'APPROVER'] }) })
       json({ access_token: sentToken, token_type: 'Bearer', id_token: id, expires_in: mode === 'expires' ? 2 : 120 })
-    } else if (url.pathname === '/api/labels/whoami') {
+    } else if (url.pathname === '/api/specifications/caller-claims') {
       const roles = mode === 'caller-role-mismatch' ? ['LABEL_OFFICER']
         : mode === 'caller-role-delimiter' ? ['APPROVER\nLABEL_OFFICER']
         : mode === 'foreign-roles' ? ['APPROVER', 'PUBLISHER'] : ['APPROVER', 'LABEL_OFFICER']

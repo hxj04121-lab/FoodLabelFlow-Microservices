@@ -4,6 +4,9 @@ name: spectrace-m3-g1
 x-service-identity: &service-identity
   OIDC_ISSUER_URI: http://localhost:${G1_GATEWAY_HOST_PORT:-8080}/auth/realms/spectrace
   SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
+  SPECTRACE_SECURITY_ISSUER_URI: http://localhost:${G1_GATEWAY_HOST_PORT:-8080}/auth/realms/spectrace
+  SPECTRACE_SECURITY_JWK_SET_URI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
+  SPECTRACE_SECURITY_AUDIENCE: spectrace-api
 
 services:
   keycloak:
@@ -16,7 +19,7 @@ services:
       KC_HTTP_MANAGEMENT_RELATIVE_PATH: /
     volumes:
       - type: bind
-        source: ${G1_REALM_FILE:?Set G1_REALM_FILE to the absolute path of M4's realm JSON}
+        source: ${G1_REALM_FILE:-../keycloak/realm/spectrace-realm.json}
         target: /opt/keycloak/data/import/spectrace-realm.json
         read_only: true
         bind:
@@ -25,6 +28,10 @@ services:
   specification:
     environment: *service-identity
   formulation:
+    environment: *service-identity
+  compliance:
+    environment: *service-identity
+  label-workflow:
     environment: *service-identity
 
   gateway:

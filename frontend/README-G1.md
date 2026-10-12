@@ -3,8 +3,8 @@
 STCN-52 implements the browser sign-in/session boundary. STCN-53 supplies the
 static build and gated Pages workflow. The existing baseline UI remains available
 without `VITE_AUTH_ENABLED=true`; it is not the authenticated microservice UI.
-The G1 reference view deliberately reads only the merged public Formulation
-product list. Later UI work must use its owner's public contract rather than
+The G1 reference view reads the public Formulation product list and provider
+PR47 `/api/specifications/caller-claims`. Later UI work must use its owner's public contract rather than
 silently reuse `/api/catalog` or `/api/v1` baseline DTOs.
 
 ## Local use
@@ -73,7 +73,7 @@ public repository variables before enabling deployment:
 - `VITE_CALLER_CLAIMS_PATH`: provider-confirmed public path returning subject/org_id/org_type/roles. The UI checks this response against the signed-in identity; production configuration rejects missing or internal paths.
 
 The job derives the exact repository base path from its name. At the current
-repository, the candidate root callback is
+repository, both the confirmed login and logout root callbacks are
 `https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/`; its web/CORS origin
 is `https://hxj04121-lab.github.io`. Routes use hash paths at a project base so
 refresh works without a server rewrite. OIDC callback parameters remain in the
@@ -89,15 +89,16 @@ surfaces/adapters with M4/M2 separately; missing contracts are not invented here
 ## Real local identity integration evidence
 
 `npx playwright test --config playwright.real-signin.config.ts` expects a real
-Keycloak on18180 behind a real Gateway on18080 and an independently validating
-M4-starter test service on18084. CI starts these processes and the real Keycloak
-26.0.7 container, then performs browser Code+PKCE login and confirms the service's
+Keycloak on18180 behind a real Gateway on18080 and the Specification service
+on18084 backed by real MySQL/RabbitMQ. CI starts these processes and Keycloak
+26.0.7, then performs browser Code+PKCE login and confirms the service's
 caller subject/organisation/roles match the token-derived UI identity.
 
-The test uses provider security source pinned to PR36 `9e1bc34`, and a realm
-candidate from PR41 `7656780` containing M2's native immutable-sub correction.
-These are integration candidate inputs, not substituted M4 acceptance. The
-`/api/labels/whoami` route exists only in the test service; no production Label
-Workflow route is asserted. Real browser traces are redacted before uploading
+The Specification source is pinned to PR47 `78855e7`; the realm comes from the
+accepted #34 source now in XFY. The actual path is `/api/specifications/caller-claims`;
+the test-only whoami service has been removed. PR47 still needs its nonblank-sub
+guard correction before adoption; XFY supplies that guard and a regression for
+the owner to adopt. Valid-token login does not resolve that direct-service
+negative-case review. Real browser traces are redacted before uploading
 the `m3-real-keycloak-evidence` artifact. This evidence is distinct from the
 protocol-fixture suite and from AWS LB/staging acceptance.

@@ -125,13 +125,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
-          ref: 9e1bc340785f4d6124d52bb0c65863721527460c
+          # Real Specification caller endpoint from the M4-owned PR47; not a test echo service.
+          ref: 78855e713691cf06506fc6fef30894aa15c38c7b
           path: platform/gateway/target/m4-provider
-          persist-credentials: false
-      - uses: actions/checkout@v4
-        with:
-          ref: 765678024c3c0d7767425518a849bd300fac76a6
-          path: platform/gateway/target/realm-source
           persist-credentials: false
       - uses: actions/setup-java@v4
         with:
@@ -143,14 +139,13 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Build the real security-provider test service and Gateway
+      - name: Build the real Specification service and Gateway
         run: |
-          mvn -B -ntp -f platform/gateway/target/m4-provider/pom.xml -pl platform/starter -am -DskipTests -Djackson-bom.version=3.1.7 install
-          mvn -B -ntp -f platform/gateway/integration/caller-service/pom.xml -DskipTests package
+          mvn -B -ntp -f platform/gateway/target/m4-provider/pom.xml -pl services/specification -am -DskipTests -Djackson-bom.version=3.1.7 package
           mvn -B -ntp -f platform/gateway/pom.xml -DskipTests package
       - run: npm ci && npx playwright install --with-deps chromium
         working-directory: frontend
-      - name: Real browser Keycloak / Gateway / M4-starter verification
+      - name: Real browser Keycloak / Gateway / Specification verification
         shell: bash
         run: |
           set -euo pipefail
@@ -158,19 +153,23 @@ jobs:
           mkdir -p "$evidence"
           issuer=http://localhost:18080/auth/realms/spectrace
           jwks=http://localhost:18180/auth/realms/spectrace/protocol/openid-connect/certs
-          realm="$PWD/platform/gateway/target/realm-source/deploy/keycloak/realm/spectrace-realm.json"
+          realm="$PWD/deploy/keycloak/realm/spectrace-realm.json"
+          compose="$PWD/platform/gateway/target/m4-provider/deploy/local/compose.yaml"
+          docker compose -p m3-real-services -f "$compose" up -d --wait mysql rabbitmq
           docker run -d --name m3-real-keycloak -p 127.0.0.1:18180:8080 \
             -e KC_HTTP_RELATIVE_PATH=/auth -e KC_HOSTNAME=http://localhost:18080/auth \
             -v "$realm:/opt/keycloak/data/import/spectrace-realm.json:ro" \
             quay.io/keycloak/keycloak:26.0.7 start-dev --import-realm --hostname-strict=false
-          trap 'kill ${gateway_pid:-} ${caller_pid:-} 2>/dev/null || true; docker logs m3-real-keycloak > "$evidence/keycloak.log" 2>&1; docker rm -f m3-real-keycloak' EXIT
+          trap 'kill ${gateway_pid:-} ${caller_pid:-} 2>/dev/null || true; docker logs m3-real-keycloak > "$evidence/keycloak.log" 2>&1; docker compose -p m3-real-services -f "$compose" logs > "$evidence/infrastructure.log" 2>&1; docker rm -f m3-real-keycloak; docker compose -p m3-real-services -f "$compose" down -v' EXIT
           for attempt in $(seq 1 90); do
             if curl -fsS http://localhost:18180/auth/realms/spectrace/.well-known/openid-configuration > /dev/null; then break; fi
             sleep 2
           done
           curl -fsS "$jwks" > /dev/null
-          SPECTRACE_SECURITY_ISSUER_URI="$issuer" SPECTRACE_SECURITY_JWK_SET_URI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
-            java -jar platform/gateway/integration/caller-service/target/caller-service.jar --server.port=18084 > "$evidence/caller.log" 2>&1 &
+          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
+          SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/specification?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
+          RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
+            java -jar platform/gateway/target/m4-provider/services/specification/target/app.jar --server.port=18084 > "$evidence/specification.log" 2>&1 &
           caller_pid=$!
           GATEWAY_PORT=18080 GATEWAY_REALM=spectrace GATEWAY_ISSUER="$issuer" GATEWAY_JWK_SET_URI="$jwks" GATEWAY_AUDIENCE=spectrace-api \
           GATEWAY_KEYCLOAK=http://localhost:18180 GATEWAY_SPECIFICATION=http://localhost:18084 GATEWAY_FORMULATION=http://localhost:18084 \

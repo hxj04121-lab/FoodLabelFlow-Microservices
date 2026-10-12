@@ -19,9 +19,25 @@ test('an unsolicited callback fails closed and is cleaned at the exact Pages bas
   expect(new URL(page.url()).pathname).toBe('/FoodLabelFlow-Microservices/')
   expect(new URL(page.url()).search).toBe('')
 })
+
+test('sign-in from a hash route sends the exact project-root redirect URI', async ({ page }) => {
+  const issuer = 'https://identity.example.test/auth/realms/test'
+  await page.route(`${issuer}/.well-known/openid-configuration`, route => route.fulfill({ json: {
+    issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`,
+    jwks_uri: `${issuer}/certs`, response_types_supported: ['code'], subject_types_supported: ['public'],
+    id_token_signing_alg_values_supported: ['RS256'],
+  } }))
+  await page.route(`${issuer}/authorize?**`, route => route.fulfill({ contentType: 'text/html', body: 'OIDC test destination' }))
+  await page.goto('./#/labels')
+  await page.getByRole('button', { name: 'Continue with Keycloak' }).click()
+  await expect(page).toHaveURL(/\/authorize\?/)
+  const callback = new URL(new URL(page.url()).searchParams.get('redirect_uri')!)
+  expect(callback.href).toBe('http://127.0.0.1:5192/FoodLabelFlow-Microservices/')
+  expect(callback.hash).toBe('')
+})
 test('deployment configuration rejects missing values and insecure production addresses', () => {
   const env = { ...process.env, VITE_OIDC_AUTHORITY: 'https://identity.example.test/auth/realms/test',
-    VITE_GATEWAY_ORIGIN: 'https://gateway.example.test', VITE_OIDC_AUDIENCE: 'spectrace-api-test', VITE_SITE_BASE: '/FoodLabelFlow-Microservices/', VITE_CALLER_CLAIMS_PATH: '/api/labels/whoami' }
+    VITE_GATEWAY_ORIGIN: 'https://gateway.example.test', VITE_OIDC_AUDIENCE: 'spectrace-api-test', VITE_SITE_BASE: '/FoodLabelFlow-Microservices/', VITE_CALLER_CLAIMS_PATH: '/api/specifications/caller-claims' }
   const run = (patch: Record<string, string>) => spawnSync(process.execPath, ['scripts/check-pages-config.mjs'], { env: { ...env, ...patch } })
   expect(run({}).status).toBe(0)
   for (const patch of [{ VITE_OIDC_AUTHORITY: '' }, { VITE_GATEWAY_ORIGIN: 'http://gateway.example.test' },
