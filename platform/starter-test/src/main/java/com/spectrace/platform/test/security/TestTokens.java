@@ -76,6 +76,13 @@ public final class TestTokens {
         return sign(signingKey, claims(caller, issuer, now, now.plus(Duration.ofMinutes(5))));
     }
 
+    /** Valid signature/issuer/time/organisation and username, but no immutable native subject. */
+    public String withoutSubject(Caller caller) {
+        Instant now = Instant.now();
+        JWTClaimsSet ordinary = claims(caller, issuer, now, now.plus(Duration.ofMinutes(5)));
+        return sign(signingKey, new JWTClaimsSet.Builder(ordinary).subject(null).build());
+    }
+
     public String expired(Caller caller) {
         Instant past = Instant.now().minus(Duration.ofHours(1));
         return sign(signingKey, claims(caller, issuer, past.minus(Duration.ofMinutes(5)), past));
