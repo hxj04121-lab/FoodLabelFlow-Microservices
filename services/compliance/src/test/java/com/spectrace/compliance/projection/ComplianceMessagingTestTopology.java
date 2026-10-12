@@ -6,7 +6,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 
 /**
- * M5 queue/routing names from #39 at f191198, independent of the listener constants so a
+ * M5 queue/routing names from #39 at bb7eda9 (including adopted #42), independent of the listener constants so a
  * consumer name regression fails real Rabbit tests. The starter supplies the local quorum/DLQ
  * fixture; deployed policies remain M5-owned and require separate staging acceptance.
  */
@@ -29,5 +29,11 @@ public class ComplianceMessagingTestTopology {
     Declarables labelProjectionQueue() {
         return SpectraceTopology.consumerQueue("compliance.label-published",
                 "label.published.v1");
+    }
+
+    @Bean
+    Declarables labelWorkflowImpactFindingQueue() {
+        return SpectraceTopology.consumerQueue("label-workflow.impact-finding",
+                "impact.finding.v1");
     }
 }

@@ -241,6 +241,41 @@ class ComplianceImpactHttpTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM impact_finding_projection WHERE organisation_id = ? AND kind='CONFIRMED'", Integer.class, poisonFixture.org())).isZero();
     }
 
+    @Test void realImpactFindingOutboxReachesTheAdoptedM5BindingWithCanonicalRouting() throws Exception {
+        var f = fixture();
+        var event = adoption(f);
+        rabbit.send("spectrace.events", "formula.published.v1",
+                new org.springframework.amqp.core.Message(json.writeValueAsBytes(event.toJson(json))));
+        org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(20)).untilAsserted(() ->
+                assertThat(jdbc.queryForObject("""
+                        SELECT COUNT(*) FROM outbox WHERE organisation_id = ?
+                        AND JSON_UNQUOTE(JSON_EXTRACT(envelope, '$.payload.kind')) = 'CONFIRMED'
+                        """, Integer.class, f.org())).isEqualTo(1));
+        String storedEnvelope = jdbc.queryForObject("""
+                SELECT envelope FROM outbox WHERE organisation_id = ?
+                AND JSON_UNQUOTE(JSON_EXTRACT(envelope, '$.payload.kind')) = 'CONFIRMED'
+                """, String.class, f.org());
+        var expected = EventEnvelope.parse(storedEnvelope.getBytes(java.nio.charset.StandardCharsets.UTF_8), json);
+        assertThat(expected.routingKey()).isEqualTo("impact.finding.v1");
+        org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(20)).untilAsserted(() ->
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM outbox WHERE event_id = ? AND published_at IS NOT NULL",
+                        Integer.class, expected.eventId())).isEqualTo(1));
+        org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+            // Other test fixtures also emit findings; match this exact committed event, not queue size.
+            var delivered = rabbit.receive("label-workflow.impact-finding", 1000);
+            assertThat(delivered).isNotNull();
+            var actual = EventEnvelope.parse(delivered.getBody(), json);
+            assertThat(actual.eventId()).isEqualTo(expected.eventId());
+            assertThat(actual.eventType()).isEqualTo("ImpactFinding.v1");
+            assertThat(actual.organisationId()).isEqualTo(f.org());
+            assertThat(actual.payload()).isEqualTo(expected.payload());
+            assertThat(actual.payload().get("kind").asString()).isEqualTo("CONFIRMED");
+            assertThat(actual.payload().at("/labelVersion/versionNumber").asInt()).isEqualTo(7);
+            assertThat(delivered.getMessageProperties().getReceivedRoutingKey()).isEqualTo("impact.finding.v1");
+            assertThat(delivered.getMessageProperties().getMessageId()).isEqualTo(expected.eventId());
+        });
+    }
+
     @Test void verifiedActorCanValidateOverHttpAndReplayExactPersistedRun() throws Exception {
         var f = fixture();
         String snapshot = json.writeValueAsString(Map.of("organisationId", f.org(), "labelVersionId", f.label(), "versionNumber", 7,
