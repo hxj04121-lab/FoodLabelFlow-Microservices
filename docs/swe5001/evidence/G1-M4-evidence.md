@@ -6,7 +6,7 @@ Work order: [G1-M4](../../../.project-control/work-orders/G1/M4-keycloak-securit
 | Subtask | Artifact | Test that fails when it regresses | State |
 |---|---|---|---|
 | G1-M4.1 realm as code | `deploy/keycloak/realm/spectrace-realm.json`, `docker-compose.keycloak.yml`, `claims/sample-access-token-claims.json` | `KeycloakRealmContractTest` (19 tests, backend job) | code complete on `codex/g1-m4.1-realm-as-code`; awaiting review |
-| G1-M4.2 starter security module | `platform/starter/.../security/*`, `.../autoconfigure/StarterSecurityAutoConfiguration.java` | `SecurityModuleUnitTest`, `OrganisationSecurityIntegrationTest`, `LegacyHeaderBridgeTest`, `NegativeAuthKitTest` | code complete on `feature/g1-m4.2-starter-security` (merged with main); awaiting review |
+| G1-M4.2 starter security module | `platform/starter/.../security/*`, `.../autoconfigure/StarterSecurityAutoConfiguration.java` | `SecurityModuleUnitTest`, `OrganisationSecurityIntegrationTest`, `LegacyHeaderBridgeTest`, `NegativeAuthKitTest` | code complete on `feature/g1-m4.2-starter-security` (merged with main); awaiting review. Exactly four paths stay open: the health probes, the metrics scrape (Alloy carries no token; the NetworkPolicy limits who can reach it) and `/error` |
 | G1-M4.3 realm import into the cluster | `deploy/keycloak/operator/keycloak-realm-import.yaml` + generator | `KeycloakOperatorRealmImportContractTest` | needs the staging window: the operator is G1-M5 |
 | G1-M4.4 NetworkPolicy allow-list | `docs/swe5001/security/networkpolicy-allowlist.md`, chart template and values | `HelmNetworkPolicyContractTest` | allow-list encoded; enforcement needs the VPC CNI in staging |
 | G1-M4.5 Label Workflow skeleton and Flyway root | `services/label-workflow/**`, `V1__label_workflow_schema_root.sql` | `LabelWorkflowApplicationTest` (platform-services job) | code complete; the G2 domain tables follow from V2 |
@@ -38,7 +38,7 @@ Work order: [G1-M4](../../../.project-control/work-orders/G1/M4-keycloak-securit
 | `mvn -B -ntp -f backend/pom.xml test -Dtest=KeycloakOperatorRealmImportContractTest` | 3/3 PASS |
 | `python deploy/keycloak/scripts/verify-token-claims.py --self-check` | PASS |
 | `python deploy/keycloak/scripts/generate-realm-import.py --check` | PASS |
-| `mvn -B -ntp -pl platform/starter -am test` (messaging integration excluded: needs Docker) | 42/42 PASS |
+| `mvn -B -ntp -pl platform/starter -am test` (messaging integration excluded: needs Docker) | 44/44 PASS |
 | `mvn -B -ntp test-compile` (root reactor, 7 modules) | BUILD SUCCESS |
 
 ## Not measured, and who can close it
