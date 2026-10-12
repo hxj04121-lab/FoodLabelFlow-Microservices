@@ -7,6 +7,6 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1 --port 5191 --strictPort', url: 'http://127.0.0.1:5191', reuseExistingServer: false,
     env: { VITE_AUTH_ENABLED: 'true', VITE_OIDC_AUTHORITY: 'http://127.0.0.1:8191/auth/realms/test',
-      VITE_GATEWAY_ORIGIN: 'http://127.0.0.1:8191', VITE_OIDC_AUDIENCE: 'spectrace-api-test' },
+      VITE_GATEWAY_ORIGIN: 'http://127.0.0.1:8191', VITE_OIDC_AUDIENCE: 'spectrace-api-test', VITE_CALLER_CLAIMS_PATH: '/api/labels/whoami' },
   },
 })

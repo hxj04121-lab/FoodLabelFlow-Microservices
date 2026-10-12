@@ -70,6 +70,7 @@ public repository variables before enabling deployment:
 - `VITE_OIDC_AUTHORITY`: public HTTPS realm issuer, matching Gateway/services.
 - `VITE_OIDC_AUDIENCE`: API audience accepted by Gateway/services.
 - `VITE_GATEWAY_ORIGIN`: fixed public HTTPS origin without a path.
+- `VITE_CALLER_CLAIMS_PATH`: provider-confirmed public path returning subject/org_id/org_type/roles. The UI checks this response against the signed-in identity; production configuration rejects missing or internal paths.
 
 The job derives the exact repository base path from its name. At the current
 repository, the candidate root callback is
@@ -84,3 +85,19 @@ insecure production addresses and a gateway URL containing a path.
 This local work does not enable Pages, change repository settings, import M4's
 realm, provision AWS or prove staging sign-in. Confirm role aliases/public read
 surfaces/adapters with M4/M2 separately; missing contracts are not invented here.
+
+## Real local identity integration evidence
+
+`npx playwright test --config playwright.real-signin.config.ts` expects a real
+Keycloak on18180 behind a real Gateway on18080 and an independently validating
+M4-starter test service on18084. CI starts these processes and the real Keycloak
+26.0.7 container, then performs browser Code+PKCE login and confirms the service's
+caller subject/organisation/roles match the token-derived UI identity.
+
+The test uses provider security source pinned to PR36 `9e1bc34`, and a realm
+candidate from PR41 `7656780` containing M2's native immutable-sub correction.
+These are integration candidate inputs, not substituted M4 acceptance. The
+`/api/labels/whoami` route exists only in the test service; no production Label
+Workflow route is asserted. Real browser traces are redacted before uploading
+the `m3-real-keycloak-evidence` artifact. This evidence is distinct from the
+protocol-fixture suite and from AWS LB/staging acceptance.

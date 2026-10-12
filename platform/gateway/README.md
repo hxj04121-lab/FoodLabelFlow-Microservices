@@ -128,3 +128,19 @@ makers lacking ADMIN_DATA_MAINTENANCE should get403 on publication after a
 valid login; a token missing immutable sub instead fails401 before role checks.
 Neither result is a successful seven-step demo. This setup is local integration
 configuration, not LB/AWS acceptance.
+
+## Gateway image publication
+
+Trusted XFY pushes run tests, container readiness/401 verification and a
+HIGH/CRITICAL Trivy image gate. After Gateway and frontend checks pass, the
+publisher loads that same tested image, pushes a full-commit tag to
+`ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway`, and records the actual
+registry digest in `gateway-release.json` / the `m3-gateway-release` artifact.
+The job uses the repository's scoped GITHUB_TOKEN, not a stored personal PAT.
+See [GitHub's registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+
+Deploy using the recorded digest, not a guessed tag. A new package may be
+private; M5 must confirm registry pull access or approved package visibility
+before deploying. Publication is an artifact handoff and does not trigger AWS.
+PR builds never publish. No release is claimed until the push and digest record
+have actually succeeded.

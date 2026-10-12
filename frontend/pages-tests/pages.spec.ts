@@ -21,11 +21,11 @@ test('an unsolicited callback fails closed and is cleaned at the exact Pages bas
 })
 test('deployment configuration rejects missing values and insecure production addresses', () => {
   const env = { ...process.env, VITE_OIDC_AUTHORITY: 'https://identity.example.test/auth/realms/test',
-    VITE_GATEWAY_ORIGIN: 'https://gateway.example.test', VITE_OIDC_AUDIENCE: 'spectrace-api-test', VITE_SITE_BASE: '/FoodLabelFlow-Microservices/' }
+    VITE_GATEWAY_ORIGIN: 'https://gateway.example.test', VITE_OIDC_AUDIENCE: 'spectrace-api-test', VITE_SITE_BASE: '/FoodLabelFlow-Microservices/', VITE_CALLER_CLAIMS_PATH: '/api/labels/whoami' }
   const run = (patch: Record<string, string>) => spawnSync(process.execPath, ['scripts/check-pages-config.mjs'], { env: { ...env, ...patch } })
   expect(run({}).status).toBe(0)
   for (const patch of [{ VITE_OIDC_AUTHORITY: '' }, { VITE_GATEWAY_ORIGIN: 'http://gateway.example.test' },
-    { VITE_GATEWAY_ORIGIN: 'https://gateway.example.test/api' }, { VITE_OIDC_AUDIENCE: '' }, { VITE_SITE_BASE: '*' }]) {
+    { VITE_GATEWAY_ORIGIN: 'https://gateway.example.test/api' }, { VITE_OIDC_AUDIENCE: '' }, { VITE_SITE_BASE: '*' }, { VITE_CALLER_CLAIMS_PATH: '' }, { VITE_CALLER_CLAIMS_PATH: '/internal/validations' }]) {
     expect(run(patch).status).not.toBe(0)
   }
 })

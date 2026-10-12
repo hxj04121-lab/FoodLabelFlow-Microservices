@@ -168,3 +168,30 @@ without ADMIN_DATA_MAINTENANCE should be denied403 after valid authentication;
 an immutable-sub defect yields401 earlier and must not be treated as that
 expected permission denial. M4 must resolve the provider identity/role inputs
 before the complete publication demo is claimed as successful.
+
+## Publication and real-browser verification work
+
+Added a scoped XFY image publisher that publishes only the image passing actual
+Gateway tests, readiness/401 smoke and Trivy HIGH/CRITICAL scan. Its output is a
+full commit tag plus registry-reported digest; success is not inferred from the
+workflow definition. Pages deployment remains gated until the real public
+origin and provider caller route are supplied. Repository inspection found no
+configured public OIDC build variables; no deployed URL is assumed from Pages
+API404.
+
+The reference UI can query a configured caller endpoint and rejects subject,
+organisation or role mismatches. Protocol fixtures now cover13 browser cases;
+3 Pages checks pass, including the new caller-route configuration guard.
+
+Prepared real browser integration using Keycloak26.0.7, actual Gateway and a
+test-only service compiled against pinned M4 security starter9e1bc34. The realm
+candidate is pinned to M2 PR41 commit7656780 with the native-sub correction;
+this is not adoption of M4's production artifact. The service independently
+verifies JWT/issuer/audience/organisation before returning caller claims.
+Local Java compilation passes; actual runtime evidence is produced by CI.
+No AWS LB, deployed Label endpoint or M4 acceptance is substituted by this test.
+
+CI trace artifacts remove bearer/ID/refresh tokens, login passwords, cookies,
+authorization codes and PKCE verifier values before upload. The scoped demo
+claims and UI screenshot remain for review. Live staging and Pages completion
+still require actual domain/certificate/endpoint inputs and the approved window.

@@ -67,6 +67,8 @@ test.beforeAll(async () => {
         org_type: mode === 'array-org-type' ? ['MANUFACTURER'] : 'MANUFACTURER',
         ...(mode === 'roleless' ? {} : { roles: ['LABEL_OFFICER', 'APPROVER'] }) })
       json({ access_token: sentToken, token_type: 'Bearer', id_token: id, expires_in: mode === 'expires' ? 2 : 120 })
+    } else if (url.pathname === '/api/labels/whoami') {
+      json({ subject: 'test-user', org_id: mode === 'foreign-caller' ? 'another-org' : 'org-one', org_type: 'MANUFACTURER', roles: ['APPROVER', 'LABEL_OFFICER'] })
     } else if (url.pathname === '/api/formulations/products') {
       observedAuthorization = req.headers.authorization || ''
       expect(req.headers['x-auth-provider']).toBeUndefined()
@@ -90,6 +92,8 @@ test('PKCE round trip displays token organisation and roles, forwards bearer, an
   await login(page)
   await expect(page.getByRole('heading', { name: 'Your organisation’s workspace' })).toBeVisible()
   expect(verifiedPkce).toBe(true); expect(exchanges).toBe(1)
+  await page.getByRole('button', { name: 'Verify service identity' }).click()
+  await expect(page.getByRole('status')).toContainText('Service identity verified: org-one')
   await expect(page.getByText('org-one', { exact: true })).toBeVisible()
   await expect(page.getByText('LABEL_OFFICER, APPROVER', { exact: true })).toBeVisible()
   expect(new URL(page.url()).search).toBe('')
@@ -140,6 +144,12 @@ test('a product response for another organisation is never displayed', async ({ 
   mode = 'foreign-product'; await page.getByRole('button', { name: 'Load products' }).click()
   await expect(page.getByRole('status')).toContainText('unreadable product list')
   await expect(page.getByText('Organisation product', { exact: true })).toHaveCount(0)
+})
+test('does not verify a service caller from another organisation', async ({ page }) => {
+  await login(page); await expect(page.getByRole('button', { name: 'Verify service identity' })).toBeVisible()
+  mode = 'foreign-caller'; await page.getByRole('button', { name: 'Verify service identity' }).click()
+  await expect(page.getByRole('alert')).toContainText('does not match your signed-in organisation')
+  await expect(page.getByText(/Service identity verified:/)).toHaveCount(0)
 })
 test('expiry requires a new sign-in; reload never restores a stored token', async ({ page }) => {
   mode = 'expires'; await login(page)

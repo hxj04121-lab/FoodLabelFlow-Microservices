@@ -1,7 +1,15 @@
 import { InMemoryWebStorage, UserManager, WebStorageStateStore, type User } from 'oidc-client-ts'
 
 export const authEnabled = import.meta.env.VITE_AUTH_ENABLED === 'true'
+export const callerClaimsPath = import.meta.env.VITE_CALLER_CLAIMS_PATH?.trim()
+export type CallerIdentity = { subject: string; org_id: string; org_type: string; roles: string[] }
 type Identity = { subject: string; organisationId: string; organisationType: string; roles: string[] }
+export function matchesCaller(value: CallerIdentity, identity: Identity | undefined): boolean {
+  if (!identity || !value || value.subject !== identity.subject || value.org_id !== identity.organisationId
+    || value.org_type !== identity.organisationType || !Array.isArray(value.roles)
+    || value.roles.some(r => typeof r !== 'string')) return false
+  return [...new Set(value.roles)].sort().join('\n') === [...new Set(identity.roles)].sort().join('\n')
+}
 type Session = { status: 'loading' | 'signedOut' | 'signedIn' | 'error'; identity?: Identity; message?: string }
 let session: Session = { status: 'loading' }
 let manager: UserManager | undefined
