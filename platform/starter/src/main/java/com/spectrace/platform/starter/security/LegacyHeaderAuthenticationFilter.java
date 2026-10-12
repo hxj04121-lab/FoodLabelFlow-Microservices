@@ -5,9 +5,10 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -23,8 +24,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * <p>Two independent barriers keep it out of a deployment: the filter is only created when
  * {@code spectrace.security.legacy-header-auth.enabled=true}, and
- * {@link #assertLocalProfile(Environment)} fails the start-up when that happens outside the
- * {@code local} and {@code test} profiles.</p>
+ * {@link #assertLocalProfile(Environment)} fails the start-up unless <em>every</em> active profile is
+ * one of {@code local} and {@code test}. A profile set that merely contains {@code local} next to a
+ * real environment (for example {@code local,staging}) is refused too.</p>
  */
 public class LegacyHeaderAuthenticationFilter extends OncePerRequestFilter {
 
@@ -43,15 +45,21 @@ public class LegacyHeaderAuthenticationFilter extends OncePerRequestFilter {
      * environment.
      */
     public static void assertLocalProfile(Environment environment) {
-        for (String profile : environment.getActiveProfiles()) {
-            if (ALLOWED_PROFILES.contains(profile)) {
-                return;
-            }
+        Set<String> active = new LinkedHashSet<>(List.of(environment.getActiveProfiles()));
+        if (active.isEmpty()) {
+            throw new IllegalStateException(
+                    "spectrace.security.legacy-header-auth.enabled is true but no profile is active; "
+                            + "the legacy X-Auth header bridge is local/test only");
         }
-        throw new IllegalStateException(
-                "spectrace.security.legacy-header-auth.enabled is true but the active profiles "
-                        + Arrays.toString(environment.getActiveProfiles()) + " contain none of " + ALLOWED_PROFILES
-                        + "; the legacy X-Auth header bridge is local/test only");
+        Set<String> notLocalOrTest = new TreeSet<>(active);
+        notLocalOrTest.removeAll(ALLOWED_PROFILES);
+        if (!notLocalOrTest.isEmpty()) {
+            throw new IllegalStateException(
+                    "spectrace.security.legacy-header-auth.enabled is true but the active profiles " + active
+                            + " are not limited to " + ALLOWED_PROFILES + " (also active: " + notLocalOrTest
+                            + "); the legacy X-Auth header bridge is local/test only, so a profile set that "
+                            + "mixes a real environment in must never expose it");
+        }
     }
 
     @Override
