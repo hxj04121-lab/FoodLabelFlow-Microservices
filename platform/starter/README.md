@@ -59,9 +59,10 @@ try (CorrelationId.Scope ignored = CorrelationId.bind(envelope.correlationId()))
 The starter is a JWT resource server (G1-M4.2): every request must carry a bearer token that is
 validated against the configured issuer and JWKS, and the validated token becomes the
 `OrganisationContext` (`subject`, `org_id`, `org_type`, roles) a controller receives as a parameter
-and guards with `OrganisationGuard`. Probes (`/actuator/health/**`) and `/error` stay open;
-everything else needs a token. A service that needs a different policy defines its own
-`SecurityFilterChain` and the starter's chain backs off.
+and guards with `OrganisationGuard`. Probes (`/actuator/health/**`), the metrics scrape
+(`/actuator/prometheus`, which Alloy fetches without a token) and `/error` stay open — the
+NetworkPolicy limits who can reach them; every other endpoint needs a token. A service that needs a
+different policy defines its own `SecurityFilterChain` and the starter's chain backs off.
 
 | Setting | Rule |
 |---|---|

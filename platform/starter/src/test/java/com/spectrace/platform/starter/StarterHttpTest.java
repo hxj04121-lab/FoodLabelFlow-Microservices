@@ -112,6 +112,19 @@ class StarterHttpTest {
     }
 
     @Test
+    void theMetricsScrapeStaysOpenWithoutAToken() throws Exception {
+        // Alloy scrapes every pod without a bearer token; the NetworkPolicy limits who can reach the
+        // endpoint, so requiring a token here would only break monitoring.
+        HttpResponse<String> response = client.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/actuator/prometheus"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+    }
+
+    @Test
     void prometheusMetricsCarryTheApplicationTag() throws Exception {
         get("/test/ok", null);
         HttpResponse<String> response = get("/actuator/prometheus", null);

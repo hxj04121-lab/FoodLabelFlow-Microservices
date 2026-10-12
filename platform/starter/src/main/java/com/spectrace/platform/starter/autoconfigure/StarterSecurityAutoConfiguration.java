@@ -55,8 +55,15 @@ import tools.jackson.databind.json.JsonMapper;
 @EnableMethodSecurity
 public class StarterSecurityAutoConfiguration {
 
-    /** Paths that stay open: Kubernetes probes and the internal error dispatch. */
-    public static final String[] PUBLIC_PATHS = {"/actuator/health", "/actuator/health/**", "/error"};
+    /**
+     * Paths that stay open: Kubernetes probes, the metrics scrape and the internal error dispatch.
+     *
+     * <p>Prometheus carries no bearer token — Alloy scrapes every pod directly — and the NetworkPolicy
+     * limits who can reach the endpoint, so requiring a token here would only break monitoring.
+     * Every other actuator endpoint still needs one.</p>
+     */
+    public static final String[] PUBLIC_PATHS = {
+            "/actuator/health", "/actuator/health/**", "/actuator/prometheus", "/error"};
 
     @Bean
     @ConditionalOnMissingBean(JwtDecoder.class)
