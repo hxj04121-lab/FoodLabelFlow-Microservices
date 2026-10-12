@@ -22,7 +22,8 @@ public class CallerResolver {
         }
         String organisationId = jwt.getClaimAsString("org_id");
         String organisationType = jwt.getClaimAsString("org_type");
-        if (jwt.getSubject() == null || organisationId == null || organisationId.isBlank() || organisationType == null) {
+        if (jwt.getSubject() == null || jwt.getSubject().isBlank()
+                || organisationId == null || organisationId.isBlank() || organisationType == null) {
             throw ApiException.unauthenticated();
         }
         if (!Caller.SUPPLIER.equals(organisationType) && !Caller.MANUFACTURER.equals(organisationType)) {
