@@ -32,7 +32,7 @@ The first combined run verified signature/issuer/audience but rejected legitimat
 
 Full local Docker remains unavailable. Actual implementation CI38220274522 at 11f0c6c passes 144 shared-reactor /53 Compliance tests, including real Keycloak PKCE, mandatory finding-outbox Rabbit delivery and all-5000 dataset matcher regressions. Staging issuer, deployment, realm-owner acceptance and token-refresh acceptance remain pending M5/M4. M1 producer code and the four aligned organisation seeds are integrated through PR #26 (`34f7661`); shared-reactor checks cover those actual API/outbox implementations alongside Compliance. This is not a complete real Label-to-ReviewTask or 5000/20 loaded-data claim.
 
-No adapter guesses a Label version. ADR-G2-M2-002 remains PROPOSED until M4 supplies an approved, organisation-scoped exact version provider. Tests seed a clearly labelled exact provider fixture; they do not claim real M4 integration.
+No adapter guesses a Label version. M4 proposed and M2 accepted ADR-G2-M2-002's design direction: a separate `LabelPublished.v2` payload carries the authoritative positive `versionNumber`, while v1 remains unchanged. #41 contains a candidate v2 schema/consumer; M4's atomic producer/outbox, replay and organisation-scoped real publication evidence remain pending, as does exactly-one ReviewTask integration. Tests seed a clearly labelled exact provider fixture; they do not claim real M4 integration. See the [13 October G3 checkpoint](M2-HANDOFF-20261013-G3.md).
 
 ## Validation and review
 

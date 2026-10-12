@@ -4,6 +4,8 @@
 
 AWS capacity/failover: **BLOCKED / NOT RUN**. No measured R1, R3, p95, error rate, recovery time or replacement time exists. Owner approval, M5 staging window/budget/access, M1/M4 loaded dataset/version evidence, real tokens and Grafana/clock review remain required.
 
+Owner-reported local source import (not a performance measurement): M1 reported on 12 October that the corrected v2 dataset was imported and re-imported using **local MySQL 8.4 + RabbitMQ**. The Specification importer wrote 16 versions and emitted 16 events; replay appended 0. The Formulation importer waited for those 16 Specification envelopes through RabbitMQ, then wrote 5,000 formulas / 39,458 items / 20 organisations and emitted 5,000 events in 100 seconds; replay appended 0. M1's comment gives shortened snapshot hashes `0e96e27f…` and `b977d1ce…`, and points to its runbook for full hashes. See [M1's #43 evidence comment](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/43#issuecomment-6122807236). The generator manifest below remains `GENERATED_NOT_LOADED` because the generated artifact itself was not loaded into staging by M2; it must not be read as disproving M1's separate local owner import. **Staging import, real Labels/JWTs, capacity, failover and bottleneck experiments remain NOT RUN.**
+
 Actual local runs:
 
 | Check | Result | Runtime |
