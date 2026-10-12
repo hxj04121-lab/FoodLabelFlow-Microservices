@@ -31,6 +31,7 @@ jobs:
         env:
           SERVICE_NAME: ${{ inputs.service_name }}
           SERVICE_PATH: ${{ inputs.service_path }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
           BUILD_CONTEXT: ${{ inputs.build_context }}
           MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
           VALUES_FILE: ${{ inputs.values_file }}
@@ -39,6 +40,8 @@ jobs:
           [[ "$SERVICE_NAME" =~ ^[a-z0-9-]+$ ]]
           [[ "$SERVICE_PATH" != /* && "$SERVICE_PATH" != *..* ]]
           test -d "$SERVICE_PATH"
+          [[ "$DOCKERFILE" != /* && "$DOCKERFILE" != *..* ]]
+          test -f "$SERVICE_PATH/$DOCKERFILE"
           BUILD_CONTEXT="${BUILD_CONTEXT:-$SERVICE_PATH}"
           [[ "$BUILD_CONTEXT" != /* && "$BUILD_CONTEXT" != *..* ]]
           test -d "$BUILD_CONTEXT"

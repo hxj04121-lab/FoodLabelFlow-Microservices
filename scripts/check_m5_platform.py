@@ -94,11 +94,11 @@ steps = {
     for job, config in service_workflow["jobs"].items()
 }
 assert 'mvn -B -ntp verify -pl "$MAVEN_REACTOR_PROJECT" -am' in steps["checks"]["Build and unit/integration test JVM service"]
-assert 'mvn -B -ntp verify -pl "$MAVEN_REACTOR_PROJECT" -am' in steps["security"]["OWASP Dependency-Check gate"]
+assert 'mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am org.owasp:dependency-check-maven:' in steps["security"]["OWASP Dependency-Check gate"]
 for job, step_name in (("kind", "Build and load service image"), ("publish", "Build commit-pinned image locally")):
     assert '"$BUILD_CONTEXT"' in steps[job][step_name]
 for job, step_name in (("kind", "Deploy service chart to kind"), ("deploy", "Configure EKS context and deploy commit-pinned image")):
     helm_run = steps[job][step_name]
     assert 'values_args+=(--values "$VALUES_FILE")' in helm_run
     assert 'values_args+=(--values "$ENVIRONMENT_VALUES_FILE")' in helm_run
-print("M5 offline declarations: PASS (six consumer queues/DLQs, permissions, network flows, Alloy and dashboard)")
+print("M5 offline declarations and reusable service CI inputs: PASS")
