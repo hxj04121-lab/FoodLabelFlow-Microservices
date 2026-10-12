@@ -44,7 +44,8 @@ with tempfile.TemporaryDirectory(prefix="m3-compose-check-") as directory:
         assert keycloak["environment"]["KC_HTTP_MANAGEMENT_RELATIVE_PATH"] == "/"
         assert "--import-realm" in keycloak["command"]
         assert keycloak["volumes"][0]["read_only"] is True
-        assert keycloak["volumes"][0]["bind"]["create_host_path"] is False
+        # Compose versions may omit the normalized model's default false field.
+        assert keycloak["volumes"][0].get("bind", {}).get("create_host_path", False) is False
         assert Path(services["gateway"]["build"]["context"]).resolve() == ROOT / "platform" / "gateway"
         assert model["name"] == "spectrace-m3-g1"
         print(f"PASS Compose identity/JWKS/roles/import/build bindings at Gateway port {port}")
