@@ -258,6 +258,8 @@ def placement(config, replicas):
         replica_set = json.loads(kubectl(config, "get", "replicaset", owner["name"], "-o", "json"))
         require(any(o["uid"] == deploy["metadata"]["uid"] and o.get("controller") for o in replica_set["metadata"]["ownerReferences"]), "Pod is not owned by the approved Deployment")
         node = json.loads(kubectl(config, "get", "node", pod["spec"]["nodeName"], "-o", "json"))
+        require(any(c.get("type") == "Ready" and c.get("status") == "True"
+                    for c in node.get("status", {}).get("conditions", [])), "Node not Ready")
         labels = node["metadata"]["labels"]
         require(labels.get("eks.amazonaws.com/nodegroup") == "compliance" and labels.get("node.kubernetes.io/instance-type") == "c6i.large", "Wrong node placement")
         require(any(t["key"] == "dedicated" and t.get("value") == "compliance" and t["effect"] == "NoSchedule" for t in node["spec"].get("taints", [])), "Missing dedicated node taint")

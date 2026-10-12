@@ -44,7 +44,7 @@ class ProtocolTest(unittest.TestCase):
         self.assertTrue(all(x["rates"] == [1, 2, 4, 8, 16, 32, 64, 128, 256] and x["secondsPerRate"] == 540 for x in plan))
     def test_unconfirmed_window_never_runs(self):
         with self.assertRaisesRegex(ValueError, "approval"): e.authorize({})
-    def test_placement_accepts_current_terraform_taint_and_rejects_obsolete_workload(self):
+    def placement_fixture(self):
         digest = "sha256:" + "a" * 64
         config = {"deployment": "review", "podSelector": "app=compliance", "imageDigest": "registry/compliance@" + digest}
         deployment = {"metadata": {"uid": "deployment-uid"}, "spec": {"selector": {"matchLabels": {"app": "compliance"}},
@@ -54,18 +54,31 @@ class ProtocolTest(unittest.TestCase):
             "spec": {"nodeName": "node-1"}, "status": {"conditions": [{"type": "Ready", "status": "True"}],
                 "containerStatuses": [{"name": "compliance", "imageID": "registry/compliance@" + digest}]}}
         replica_set = {"metadata": {"ownerReferences": [{"uid": "deployment-uid", "controller": True}]}}
+        node = {"metadata": {"name": "node-1", "labels": {"eks.amazonaws.com/nodegroup": "compliance",
+            "node.kubernetes.io/instance-type": "c6i.large", "topology.kubernetes.io/zone": "ap-southeast-1a"}},
+            "spec": {"taints": [{"key": "dedicated", "value": "compliance", "effect": "NoSchedule"}]},
+            "status": {"conditions": [{"type": "Ready", "status": "True"}]}}
+        return config, [deployment, {"items": []}, {"items": [pod]}, replica_set, node]
+    def test_placement_accepts_current_terraform_taint_and_rejects_obsolete_workload(self):
         for key in ("dedicated", "workload"):
             with self.subTest(taint=key):
-                node = {"metadata": {"name": "node-1", "labels": {"eks.amazonaws.com/nodegroup": "compliance",
-                    "node.kubernetes.io/instance-type": "c6i.large", "topology.kubernetes.io/zone": "ap-southeast-1a"}},
-                    "spec": {"taints": [{"key": key, "value": "compliance", "effect": "NoSchedule"}]}}
-                observed = [deployment, {"items": []}, {"items": [pod]}, replica_set, node]
+                config, observed = self.placement_fixture()
+                observed[-1]["spec"]["taints"][0]["key"] = key
                 with patch.object(e, "kubectl", side_effect=[json.dumps(value) for value in observed]):
                     if key == "dedicated":
                         self.assertEqual(e.placement(config, 1)[0]["uid"], "pod-uid")
                     else:
                         with self.assertRaisesRegex(ValueError, "Missing dedicated node taint"):
                             e.placement(config, 1)
+    def test_placement_rejects_unready_node_even_when_pod_is_still_ready(self):
+        for conditions in ([{"type": "Ready", "status": "False"}],
+                           [{"type": "Ready", "status": "Unknown"}], []):
+            with self.subTest(conditions=conditions):
+                config, observed = self.placement_fixture()
+                observed[-1]["status"]["conditions"] = conditions
+                with patch.object(e, "kubectl", side_effect=[json.dumps(value) for value in observed]):
+                    with self.assertRaisesRegex(ValueError, "Node not Ready"):
+                        e.placement(config, 1)
     def test_expired_token_file_stops_before_load_and_freshness_does_not_authorize_identity(self):
         request = self.root / "request.json"; token_file = self.root / "private.json"
         e.write(request, {"cases": [{"request": {"organisationId": "org"}}]})
