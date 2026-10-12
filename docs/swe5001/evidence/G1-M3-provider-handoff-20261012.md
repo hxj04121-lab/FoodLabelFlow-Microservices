@@ -32,14 +32,15 @@ image/test-service evidence; that earlier evidence remains historical and unchan
 ## Real-component CI and remaining acceptance
 
 The real-keycloak job now builds the actual Specification service from pinned
-PR47 source78855e7, starts real MySQL/RabbitMQ/Keycloak and exercises its caller
+repaired PR47 source751ed77, starts real MySQL/RabbitMQ/Keycloak and exercises its caller
 path through Gateway. The old test-only whoami service is removed. Its eventual
 run result, claims and release digest must be recorded from actual CI artifacts;
 editing this workflow is not by itself a passed real-service run.
 
-PR47's direct-service blank-sub repair is still pending adoption by M4; the
-valid-token CI candidate does not resolve that negative-case review. XFY's guard
-and regression can be adopted without changing the four-field response contract.
+PR47's updated source now includes M4's direct-service blank-sub repair, the
+signed HTTP regression and shared-starter principal compatibility. XFY retains
+its independently prepared minimal guard and two local regressions; those do
+not change the four-field response contract. Re-review targets the new provider head.
 The NetworkPolicy/import artifacts are deployment candidates: actual namespace/
 Keycloak CR, egress, ALB ingress and service enforcement need M4/M5 verification.
 

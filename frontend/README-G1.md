@@ -94,11 +94,10 @@ on18084 backed by real MySQL/RabbitMQ. CI starts these processes and Keycloak
 26.0.7, then performs browser Code+PKCE login and confirms the service's
 caller subject/organisation/roles match the token-derived UI identity.
 
-The Specification source is pinned to PR47 `78855e7`; the realm comes from the
+The Specification source is pinned to repaired PR47 `751ed77`; the realm comes from the
 accepted #34 source now in XFY. The actual path is `/api/specifications/caller-claims`;
-the test-only whoami service has been removed. PR47 still needs its nonblank-sub
-guard correction before adoption; XFY supplies that guard and a regression for
-the owner to adopt. Valid-token login does not resolve that direct-service
-negative-case review. Real browser traces are redacted before uploading
+the test-only whoami service has been removed. The provider now rejects blank
+native sub and supports both the shared starter and service-owned JWT principal.
+Real browser traces are redacted before uploading
 the `m3-real-keycloak-evidence` artifact. This evidence is distinct from the
 protocol-fixture suite and from AWS LB/staging acceptance.
