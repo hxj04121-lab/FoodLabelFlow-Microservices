@@ -93,6 +93,9 @@ steps = {
     job: {step.get("name", step.get("uses", "")): step.get("run", "") for step in config.get("steps", [])}
     for job, config in service_workflow["jobs"].items()
 }
+input_validation = steps["checks"]["Validate service inputs"]
+assert '[[ "$DOCKERFILE" != /* && "$DOCKERFILE" != *..* ]]' in input_validation
+assert 'test -f "$SERVICE_PATH/$DOCKERFILE"' in input_validation
 assert 'mvn -B -ntp verify -pl "$MAVEN_REACTOR_PROJECT" -am' in steps["checks"]["Build and unit/integration test JVM service"]
 assert 'mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am org.owasp:dependency-check-maven:' in steps["security"]["OWASP Dependency-Check gate"]
 for job, step_name in (("kind", "Build and load service image"), ("publish", "Build commit-pinned image locally")):
@@ -101,4 +104,8 @@ for job, step_name in (("kind", "Deploy service chart to kind"), ("deploy", "Con
     helm_run = steps[job][step_name]
     assert 'values_args+=(--values "$VALUES_FILE")' in helm_run
     assert 'values_args+=(--values "$ENVIRONMENT_VALUES_FILE")' in helm_run
+for job in service_workflow["jobs"].values():
+    for step in job.get("steps", []):
+        if step.get("run"):
+            subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
 print("M5 offline declarations and reusable service CI inputs: PASS")
