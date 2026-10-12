@@ -69,7 +69,8 @@ test.beforeAll(async () => {
       json({ access_token: sentToken, token_type: 'Bearer', id_token: id, expires_in: mode === 'expires' ? 2 : 120 })
     } else if (url.pathname === '/api/labels/whoami') {
       const roles = mode === 'caller-role-mismatch' ? ['LABEL_OFFICER']
-        : mode === 'caller-role-delimiter' ? ['APPROVER\nLABEL_OFFICER'] : ['APPROVER', 'LABEL_OFFICER']
+        : mode === 'caller-role-delimiter' ? ['APPROVER\nLABEL_OFFICER']
+        : mode === 'foreign-roles' ? ['APPROVER', 'PUBLISHER'] : ['APPROVER', 'LABEL_OFFICER']
       json({ subject: 'test-user', org_id: mode === 'foreign-caller' ? 'another-org' : 'org-one', org_type: 'MANUFACTURER', roles })
     } else if (url.pathname === '/api/formulations/products') {
       observedAuthorization = req.headers.authorization || ''
@@ -147,9 +148,9 @@ test('a product response for another organisation is never displayed', async ({ 
   await expect(page.getByRole('status')).toContainText('unreadable product list')
   await expect(page.getByText('Organisation product', { exact: true })).toHaveCount(0)
 })
-test('does not verify a service caller from another organisation', async ({ page }) => {
+for (const mismatch of ['foreign-caller', 'foreign-roles']) test(`does not verify a service caller with ${mismatch}`, async ({ page }) => {
   await login(page); await expect(page.getByRole('button', { name: 'Verify service identity' })).toBeVisible()
-  mode = 'foreign-caller'; await page.getByRole('button', { name: 'Verify service identity' }).click()
+  mode = mismatch; await page.getByRole('button', { name: 'Verify service identity' }).click()
   await expect(page.getByRole('alert')).toContainText('does not match your signed-in organisation')
   await expect(page.getByText(/Service identity verified:/)).toHaveCount(0)
 })
