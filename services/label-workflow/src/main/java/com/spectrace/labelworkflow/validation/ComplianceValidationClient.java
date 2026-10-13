@@ -8,6 +8,8 @@ import java.net.http.HttpResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -61,7 +63,7 @@ public class ComplianceValidationClient implements ValidationClient {
             if (response.statusCode() == 409 || response.statusCode() == 400) {
                 // A rejection is an answer, not an outage: the caller sees a non-passing result.
                 recordSuccess();
-                return new ValidationResult(null, "FAILED", true);
+                return new ValidationResult(null, "FAILED", true, List.of());
             }
             if (response.statusCode() != 200 && response.statusCode() != 201) {
                 recordFailure();
@@ -71,7 +73,7 @@ public class ComplianceValidationClient implements ValidationClient {
             recordSuccess();
             JsonNode node = json.readTree(response.body());
             return new ValidationResult(text(node, "validationRunId"), text(node, "resultStatus"),
-                    node.path("blockingFindings").asBoolean(false));
+                    node.path("blockingFindings").asBoolean(false), findings(node));
         } catch (IOException | InterruptedException failure) {
             if (failure instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -100,6 +102,30 @@ public class ComplianceValidationClient implements ValidationClient {
     private static String text(JsonNode node, String field) {
         JsonNode value = node.get(field);
         return value == null || !value.isString() ? null : value.asString();
+    }
+
+    /** Maps the provider findings while enforcing the shape the reference client validates. */
+    private static List<ValidationFinding> findings(JsonNode node) {
+        JsonNode array = node.get("findings");
+        if (array == null || !array.isArray()) {
+            return List.of();
+        }
+        List<ValidationFinding> mapped = new ArrayList<>();
+        for (JsonNode finding : array) {
+            boolean blocking = finding.path("blocking").asBoolean(false);
+            mapped.add(new ValidationFinding(
+                    str(finding, "resultCode", blocking ? "VALIDATION_FAILED" : "VALIDATION_INFO"),
+                    blocking ? "ERROR" : str(finding, "severity", "INFO"),
+                    !blocking && finding.path("passed").asBoolean(true),
+                    blocking,
+                    str(finding, "message", "")));
+        }
+        return mapped;
+    }
+
+    private static String str(JsonNode node, String field, String fallback) {
+        JsonNode value = node.get(field);
+        return value != null && value.isString() ? value.asString() : fallback;
     }
 
     private void requireClosedCircuit() {
