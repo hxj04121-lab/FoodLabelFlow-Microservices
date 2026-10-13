@@ -1,6 +1,8 @@
 package com.spectrace.labelworkflow.persistence;
 
 import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -93,5 +95,89 @@ public class LabelWorkflowStore {
                 rs.getString("material_id"), rs.getString("specification_version_id"),
                 rs.getInt("specification_version_number"), rs.getBigDecimal("quantity_value"),
                 rs.getString("quantity_unit")), formulaVersionId);
+    }
+
+    // ---------------------------------------------------------------- labels
+
+    public record LabelVersionRow(String labelVersionId, String organisationId, String productId, int versionNumber,
+                                  String formulaVersionId, String ruleSetVersionId, String jurisdictionCode,
+                                  String lifecycleStatus, String createdBySubject) {
+    }
+
+    public record DeclarationRow(String allergenId, String declarationType, String declarationSource,
+                                 String displayText) {
+    }
+
+    /** Locks the label row for the publication transaction so concurrent publishes serialise here. */
+    public Optional<LabelVersionRow> lockLabelVersion(String labelVersionId) {
+        return jdbc.query("""
+                SELECT label_version_id, organisation_id, product_id, version_number, formula_version_id,
+                       rule_set_version_id, jurisdiction_code, lifecycle_status, created_by_subject
+                FROM label_version WHERE label_version_id = ? FOR UPDATE
+                """, LabelWorkflowStore::labelVersionRow, labelVersionId).stream().findFirst();
+    }
+
+    public Optional<LabelVersionRow> labelVersion(String labelVersionId) {
+        return jdbc.query("""
+                SELECT label_version_id, organisation_id, product_id, version_number, formula_version_id,
+                       rule_set_version_id, jurisdiction_code, lifecycle_status, created_by_subject
+                FROM label_version WHERE label_version_id = ?
+                """, LabelWorkflowStore::labelVersionRow, labelVersionId).stream().findFirst();
+    }
+
+    private static LabelVersionRow labelVersionRow(ResultSet rs, int row) throws SQLException {
+        return new LabelVersionRow(rs.getString("label_version_id"), rs.getString("organisation_id"),
+                rs.getString("product_id"), rs.getInt("version_number"), rs.getString("formula_version_id"),
+                rs.getString("rule_set_version_id"), rs.getString("jurisdiction_code"),
+                rs.getString("lifecycle_status"), rs.getString("created_by_subject"));
+    }
+
+    public boolean hasApproveDecision(String labelVersionId) {
+        Integer count = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM label_decision WHERE label_version_id = ? AND decision = 'APPROVE'
+                """, Integer.class, labelVersionId);
+        return count != null && count > 0;
+    }
+
+    /** A newer draft already exists for the same product and jurisdiction: the prechecked version is stale. */
+    public boolean hasNewerVersion(String productId, String jurisdictionCode, int versionNumber) {
+        Integer count = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM label_version
+                WHERE product_id = ? AND jurisdiction_code = ? AND version_number > ?
+                """, Integer.class, productId, jurisdictionCode, versionNumber);
+        return count != null && count > 0;
+    }
+
+    /** The retired cross-boundary product.current_published_label_version_id write is not used. */
+    public int supersedeCurrent(String productId, String jurisdictionCode, Instant updatedAt) {
+        return jdbc.update("""
+                UPDATE label_version SET lifecycle_status = 'SUPERSEDED', updated_at = ?
+                WHERE product_id = ? AND jurisdiction_code = ? AND lifecycle_status = 'PUBLISHED'
+                """, Timestamp.from(updatedAt), productId, jurisdictionCode);
+    }
+
+    public int markPublished(String labelVersionId, Instant updatedAt) {
+        return jdbc.update("""
+                UPDATE label_version SET lifecycle_status = 'PUBLISHED', updated_at = ?
+                WHERE label_version_id = ? AND lifecycle_status = 'APPROVED'
+                """, Timestamp.from(updatedAt), labelVersionId);
+    }
+
+    public void insertPublication(String publicationId, String labelVersionId, String productId,
+                                  String jurisdictionCode, int versionNumber, Instant publishedAt,
+                                  String publishedBySubject) {
+        jdbc.update("""
+                INSERT INTO label_publication (label_publication_id, label_version_id, product_id, jurisdiction_code,
+                    version_number, published_at, published_by_subject) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, publicationId, labelVersionId, productId, jurisdictionCode, versionNumber,
+                Timestamp.from(publishedAt), publishedBySubject);
+    }
+
+    public List<DeclarationRow> declarations(String labelVersionId) {
+        return jdbc.query("""
+                SELECT allergen_id, declaration_type, declaration_source, display_text
+                FROM label_allergen_declaration WHERE label_version_id = ? ORDER BY allergen_id
+                """, (rs, row) -> new DeclarationRow(rs.getString("allergen_id"), rs.getString("declaration_type"),
+                rs.getString("declaration_source"), rs.getString("display_text")), labelVersionId);
     }
 }
