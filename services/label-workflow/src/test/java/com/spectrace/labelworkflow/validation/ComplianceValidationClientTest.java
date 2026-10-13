@@ -20,6 +20,8 @@ import tools.jackson.databind.json.JsonMapper;
 class ComplianceValidationClientTest {
 
     private final List<String> idempotencyKeys = new ArrayList<>();
+    private final List<String> authorizations = new ArrayList<>();
+    private final List<String> correlations = new ArrayList<>();
     private final AtomicInteger requests = new AtomicInteger();
     private HttpServer server;
 
@@ -35,6 +37,8 @@ class ComplianceValidationClientTest {
         server.createContext("/internal/validations", exchange -> {
             int index = requests.getAndIncrement();
             idempotencyKeys.add(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
+            authorizations.add(exchange.getRequestHeaders().getFirst("Authorization"));
+            correlations.add(exchange.getRequestHeaders().getFirst("X-Correlation-ID"));
             int status = statuses[Math.min(index, statuses.length - 1)];
             byte[] payload = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -116,5 +120,17 @@ class ComplianceValidationClientTest {
                 .isInstanceOf(ValidationClient.ValidationUnavailableException.class)
                 .hasMessageContaining("circuit is open");
         assertThat(requests.get()).isEqualTo(attemptsBeforeOpen);
+    }
+
+    @Test
+    void forwardsTheActorJwtAndTheCorrelationId() throws IOException {
+        ComplianceValidationClient client = clientResponding(new int[] {200},
+                "{\"validationRunId\":\"run_3\",\"resultStatus\":\"PASSED\",\"blockingFindings\":false}");
+
+        client.validate("lbl_9:2", Map.of(), "Bearer actor-token", "corr-9");
+
+        assertThat(authorizations).containsExactly("Bearer actor-token");
+        assertThat(correlations).containsExactly("corr-9");
+        assertThat(idempotencyKeys).containsExactly("lbl_9:2");
     }
 }
