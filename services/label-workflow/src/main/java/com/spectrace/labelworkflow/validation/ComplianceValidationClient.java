@@ -8,8 +8,6 @@ import java.net.http.HttpResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -46,36 +44,34 @@ public class ComplianceValidationClient implements ValidationClient {
     }
 
     @Override
-    public ValidationResult validate(String idempotencyKey, Map<String, Object> payload,
-                                     String actorJwt, String correlationId) {
-        if (actorJwt == null || actorJwt.isBlank()) {
-            throw new ValidationUnavailableException("A validated actor token is required for Compliance");
-        }
-        if (correlationId == null || correlationId.isBlank()) {
-            throw new ValidationUnavailableException("A request correlation identifier is required");
-        }
+    public ValidationResult validate(String idempotencyKey, Map<String, Object> payload, String authorization,
+                                     String correlationId) {
         requireClosedCircuit();
         String body = json.writeValueAsString(payload);
         try {
-            HttpResponse<String> response = attempt(idempotencyKey, body, actorJwt, correlationId);
+            HttpResponse<String> response = attempt(idempotencyKey, body, authorization, correlationId);
             if (response.statusCode() >= 500) {
-                response = attempt(idempotencyKey, body, actorJwt, correlationId); // one retry, same snapshot/key
+                response = attempt(idempotencyKey, body, authorization, correlationId); // one retry, same key
             }
             if (response.statusCode() >= 500) {
                 recordFailure();
                 throw new ValidationUnavailableException("Compliance validation failed with "
                         + response.statusCode());
             }
+            if (response.statusCode() == 409 || response.statusCode() == 400) {
+                // A rejection is an answer, not an outage: the caller sees a non-passing result.
+                recordSuccess();
+                return new ValidationResult(null, "FAILED", true);
+            }
             if (response.statusCode() != 200 && response.statusCode() != 201) {
                 recordFailure();
-                throw new ValidationUnavailableException("Compliance rejected the validation request with HTTP "
+                throw new ValidationUnavailableException("Unexpected validation status "
                         + response.statusCode());
             }
-            JsonNode node = json.readTree(response.body());
-            ValidationResult result = result(node);
-            requireMatchesRequest(result, payload, correlationId);
             recordSuccess();
-            return result;
+            JsonNode node = json.readTree(response.body());
+            return new ValidationResult(text(node, "validationRunId"), text(node, "resultStatus"),
+                    node.path("blockingFindings").asBoolean(false));
         } catch (IOException | InterruptedException failure) {
             if (failure instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -85,84 +81,20 @@ public class ComplianceValidationClient implements ValidationClient {
         }
     }
 
-    private HttpResponse<String> attempt(String idempotencyKey, String body, String actorJwt, String correlationId)
+    private HttpResponse<String> attempt(String idempotencyKey, String body, String authorization, String correlationId)
             throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder(endpoint).timeout(TIMEOUT)
+        HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint).timeout(TIMEOUT)
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
-                .header("Authorization", "Bearer " + actorJwt)
-                .header("X-Correlation-ID", correlationId)
-                .header("Idempotency-Key", idempotencyKey)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
-        return http.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private static ValidationResult result(JsonNode node) {
-        JsonNode findingsNode = node.get("findings");
-        if (findingsNode == null || !findingsNode.isArray()) {
-            throw new ValidationUnavailableException("Compliance returned no findings array");
+                .header("Idempotency-Key", idempotencyKey);
+        if (authorization != null && !authorization.isBlank()) {
+            builder.header("Authorization", authorization); // actor JWT, forwarded unchanged
         }
-        List<ValidationFinding> findings = new ArrayList<>();
-        for (JsonNode finding : findingsNode) {
-            String resultCode = text(finding, "resultCode");
-            String severity = text(finding, "severity");
-            String message = text(finding, "message");
-            JsonNode passed = finding.get("passed");
-            JsonNode blocking = finding.get("blocking");
-            if (resultCode == null || severity == null || message == null
-                    || passed == null || !passed.isBoolean() || blocking == null || !blocking.isBoolean()) {
-                throw new ValidationUnavailableException("Compliance returned a malformed finding");
-            }
-            findings.add(new ValidationFinding(text(finding, "ruleDefinitionId"), resultCode, severity,
-                    passed.booleanValue(), blocking.booleanValue(), message));
+        if (correlationId != null && !correlationId.isBlank()) {
+            builder.header("X-Correlation-ID", correlationId);
         }
-        String status = text(node, "status");
-        int versionNumber = positiveInt(node, "versionNumber");
-        int draftRevision = positiveInt(node, "draftRevision");
-        ValidationResult result = new ValidationResult(requiredText(node, "validationRunId"),
-                requiredText(node, "organisationId"), requiredText(node, "correlationId"),
-                requiredText(node, "labelVersionId"), versionNumber, draftRevision,
-                requiredText(node, "formulaVersionId"), requiredText(node, "jurisdiction"),
-                requiredText(node, "ruleSetVersionId"), status, requiredText(node, "ranAt"),
-                List.copyOf(findings));
-        boolean hasBlocking = findings.stream().anyMatch(ValidationFinding::blocking);
-        if ((!"PASSED".equals(status) && !"FAILED".equals(status))
-                || ("PASSED".equals(status) && hasBlocking)
-                || ("FAILED".equals(status) && !hasBlocking)) {
-            throw new ValidationUnavailableException("Compliance returned an inconsistent validation result");
-        }
-        return result;
-    }
-
-    private static void requireMatchesRequest(ValidationResult result, Map<String, Object> request,
-                                              String correlationId) {
-        if (!result.organisationId().equals(request.get("organisationId"))
-                || !result.labelVersionId().equals(request.get("labelVersionId"))
-                || result.versionNumber() != ((Number) request.get("versionNumber")).intValue()
-                || result.draftRevision() != ((Number) request.get("draftRevision")).intValue()
-                || !result.formulaVersionId().equals(request.get("formulaVersionId"))
-                || !result.jurisdiction().equals(request.get("jurisdiction"))
-                || !result.ruleSetVersionId().equals(request.get("ruleSetVersionId"))
-                || !result.correlationId().equals(correlationId)) {
-            throw new ValidationUnavailableException("Compliance returned a result for a different snapshot");
-        }
-    }
-
-    private static String requiredText(JsonNode node, String field) {
-        String value = text(node, field);
-        if (value == null || value.isBlank()) {
-            throw new ValidationUnavailableException("Compliance response is missing " + field);
-        }
-        return value;
-    }
-
-    private static int positiveInt(JsonNode node, String field) {
-        JsonNode value = node.get(field);
-        if (value == null || !value.isIntegralNumber() || value.intValue() < 1) {
-            throw new ValidationUnavailableException("Compliance response has invalid " + field);
-        }
-        return value.intValue();
+        return http.send(builder.POST(HttpRequest.BodyPublishers.ofString(body)).build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private static String text(JsonNode node, String field) {
