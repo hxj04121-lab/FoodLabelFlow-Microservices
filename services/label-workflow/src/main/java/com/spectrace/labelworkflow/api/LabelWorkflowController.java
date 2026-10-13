@@ -89,7 +89,9 @@ public class LabelWorkflowController {
 
     @PostMapping("/drafts")
     @ResponseStatus(HttpStatus.CREATED)
-    public LabelDraft createDraft(@RequestBody CreateLabelDraft request) {
+    public LabelDraft createDraft(@RequestBody CreateLabelDraft request,
+                                  @RequestHeader(value = "Authorization", required = false) String authorization,
+                                  @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
         OrganisationContext caller = OrganisationContexts.current();
         if (!caller.roles().contains(LABEL_OFFICER)) {
             throw ApiException.forbidden();
@@ -103,12 +105,11 @@ public class LabelWorkflowController {
                         "No released formula is known for product " + request.productId()))
                 .formulaVersionId();
         String ruleSetVersionId = ruleSets
-                .getIfAvailable(() -> (organisationId, productId, jurisdictionCode) -> {
-                    throw new IllegalStateException("No active rule-set source is configured for product "
-                            + productId + " in jurisdiction " + jurisdictionCode
-                            + " (organisation " + organisationId + ")");
+                .getIfAvailable(() -> (organisationId, jurisdictionCode, actorJwt, correlation) -> {
+                    throw new IllegalStateException("No active rule-set source is configured for jurisdiction "
+                            + jurisdictionCode + " (organisation " + organisationId + ")");
                 })
-                .resolve(caller.organisationId(), request.productId(), request.jurisdictionCode());
+                .resolve(caller.organisationId(), request.jurisdictionCode(), authorization, correlationId);
         String labelVersionId = "lbl_" + UUID.randomUUID().toString().replace("-", "");
         int versionNumber = store.nextVersionNumber(request.productId(), request.jurisdictionCode());
         try {
