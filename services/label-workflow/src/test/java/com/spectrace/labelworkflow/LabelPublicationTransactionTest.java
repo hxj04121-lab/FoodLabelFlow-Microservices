@@ -109,7 +109,8 @@ class LabelPublicationTransactionTest {
         seedDecision("lbl_other_1", "APPROVE");
 
         assertThatThrownBy(() -> service.publish("org-manufacturer-002", "lbl_other_1", "publisher"))
-                .isInstanceOf(ApiException.class).hasMessageContaining("does not exist");
+                .isInstanceOfSatisfying(ApiException.class,
+                        thrown -> assertThat(thrown.code()).isEqualTo("AUTHORIZATION_DENIED"));
         assertThat(v2OutboxRows()).isZero();
     }
 
