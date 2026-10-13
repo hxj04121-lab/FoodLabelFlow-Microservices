@@ -64,7 +64,8 @@ public class LabelWorkflowService {
         LabelWorkflowStore.LabelVersionRow label = store.lockLabelVersion(labelVersionId)
                 .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
         if (!label.organisationId().equals(organisationId)) {
-            throw ApiException.notFound("Label version " + labelVersionId + " does not exist");
+            // Agreed policy: another organisation private resource is 403; 404 is reserved for absence.
+            throw ApiException.forbidden();
         }
         if (!"APPROVED".equals(label.lifecycleStatus())) {
             throw ApiException.conflict("Only an APPROVED label version can be published");
