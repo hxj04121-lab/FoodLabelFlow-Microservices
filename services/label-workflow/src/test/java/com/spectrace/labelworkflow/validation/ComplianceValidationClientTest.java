@@ -20,8 +20,6 @@ import tools.jackson.databind.json.JsonMapper;
 class ComplianceValidationClientTest {
 
     private final List<String> idempotencyKeys = new ArrayList<>();
-    private final List<String> authorizations = new ArrayList<>();
-    private final List<String> correlations = new ArrayList<>();
     private final AtomicInteger requests = new AtomicInteger();
     private HttpServer server;
 
@@ -37,8 +35,6 @@ class ComplianceValidationClientTest {
         server.createContext("/internal/validations", exchange -> {
             int index = requests.getAndIncrement();
             idempotencyKeys.add(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
-            authorizations.add(exchange.getRequestHeaders().getFirst("Authorization"));
-            correlations.add(exchange.getRequestHeaders().getFirst("X-Correlation-ID"));
             int status = statuses[Math.min(index, statuses.length - 1)];
             byte[] payload = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -52,116 +48,46 @@ class ComplianceValidationClientTest {
                 "http://127.0.0.1:" + server.getAddress().getPort());
     }
 
-    private static Map<String, Object> snapshot(String labelVersionId) {
-        return Map.of("organisationId", "org_1", "labelVersionId", labelVersionId,
-                "versionNumber", 4, "draftRevision", 2, "formulaVersionId", "formula_1",
-                "jurisdiction", "US", "ruleSetVersionId", "rules_1", "declarations", List.of());
-    }
-
-    private static String validationRun(String labelVersionId) {
-        return validationRun(labelVersionId, "PASSED", "[]");
-    }
-
-    private static String validationRun(String labelVersionId, String status, String findings) {
-        return """
-                {"validationRunId":"run_1","organisationId":"org_1","correlationId":"corr-1",
-                 "labelVersionId":"%s","versionNumber":4,"draftRevision":2,"formulaVersionId":"formula_1",
-                 "jurisdiction":"US","ruleSetVersionId":"rules_1","status":"%s",
-                 "ranAt":"2026-10-13T10:00:00Z","findings":%s}
-                """.formatted(labelVersionId, status, findings);
-    }
-
     @Test
     void returnsTheValidatedResultOnSuccess() throws IOException {
         ComplianceValidationClient client = clientResponding(new int[] {200},
-                validationRun("lbl_1"));
+                "{\"validationRunId\":\"run_1\",\"resultStatus\":\"PASSED\",\"blockingFindings\":false}");
 
-        ValidationClient.ValidationResult result = client.validate("lbl_1:2", snapshot("lbl_1"),
-                "signed-actor-jwt", "corr-1");
+        ValidationClient.ValidationResult result = client.validate("key-1", Map.of("labelVersionId", "lbl_1"), null, null);
 
         assertThat(result.passed()).isTrue();
         assertThat(result.validationRunId()).isEqualTo("run_1");
-        assertThat(result.labelVersionId()).isEqualTo("lbl_1");
-        assertThat(authorizations).containsExactly("Bearer signed-actor-jwt");
-        assertThat(correlations).containsExactly("corr-1");
-        assertThat(idempotencyKeys).containsExactly("lbl_1:2");
         assertThat(requests.get()).isEqualTo(1);
     }
 
     @Test
     void retriesExactlyOnceWithTheSameIdempotencyKey() throws IOException {
         ComplianceValidationClient client = clientResponding(new int[] {500, 200},
-                validationRun("lbl_2"));
+                "{\"validationRunId\":\"run_2\",\"resultStatus\":\"PASSED\",\"blockingFindings\":false}");
 
-        client.validate("lbl_2:2", snapshot("lbl_2"), "signed-actor-jwt", "corr-1");
+        client.validate("key-2", Map.of("labelVersionId", "lbl_2"), null, null);
 
         assertThat(requests.get()).isEqualTo(2);
-        assertThat(idempotencyKeys).containsExactly("lbl_2:2", "lbl_2:2");
-        assertThat(authorizations).containsExactly("Bearer signed-actor-jwt", "Bearer signed-actor-jwt");
-    }
-
-    @Test
-    void preservesBlockingProviderFindingsAsAFailedValidation() throws IOException {
-        String finding = """
-                [{"resultCode":"DECLARED_ALLERGEN_MISSING","severity":"ERROR","passed":false,
-                  "blocking":true,"message":"A required declaration is missing."}]
-                """;
-        ComplianceValidationClient client = clientResponding(new int[] {201},
-                validationRun("lbl_f", "FAILED", finding));
-
-        ValidationClient.ValidationResult result = client.validate("lbl_f:2", snapshot("lbl_f"),
-                "signed-actor-jwt", "corr-1");
-
-        assertThat(result.passed()).isFalse();
-        assertThat(result.findings()).hasSize(1);
-        assertThat(result.findings().getFirst().blocking()).isTrue();
-    }
-
-    @Test
-    void failsClosedWhenComplianceAnswersForAnotherDraftSnapshot() throws IOException {
-        ComplianceValidationClient client = clientResponding(new int[] {201}, validationRun("lbl_other"));
-
-        assertThatThrownBy(() -> client.validate("lbl_1:2", snapshot("lbl_1"), "signed-actor-jwt", "corr-1"))
-                .isInstanceOf(ValidationClient.ValidationUnavailableException.class)
-                .hasMessageContaining("different snapshot");
-    }
-
-    @Test
-    void failsClosedWhenComplianceReturnsAnInconsistentStatusAndFindingPair() throws IOException {
-        ComplianceValidationClient client = clientResponding(new int[] {201},
-                validationRun("lbl_1", "FAILED", "[]"));
-
-        assertThatThrownBy(() -> client.validate("lbl_1:2", snapshot("lbl_1"), "signed-actor-jwt", "corr-1"))
-                .isInstanceOf(ValidationClient.ValidationUnavailableException.class)
-                .hasMessageContaining("inconsistent validation result");
-    }
-
-    @Test
-    void requiresActorJwtBeforeCallingCompliance() throws IOException {
-        ComplianceValidationClient client = clientResponding(new int[] {201}, validationRun("lbl_1"));
-
-        assertThatThrownBy(() -> client.validate("lbl_1:2", snapshot("lbl_1"), "", "corr-1"))
-                .isInstanceOf(ValidationClient.ValidationUnavailableException.class)
-                .hasMessageContaining("actor token");
-        assertThat(requests.get()).isZero();
+        assertThat(idempotencyKeys).containsExactly("key-2", "key-2");
     }
 
     @Test
     void failsClosedWhenBothAttemptsFail() throws IOException {
         ComplianceValidationClient client = clientResponding(new int[] {503}, "{}");
 
-        assertThatThrownBy(() -> client.validate("lbl_3:1", snapshot("lbl_3"), "signed-actor-jwt", "corr-1"))
+        assertThatThrownBy(() -> client.validate("key-3", Map.of(), null, null))
                 .isInstanceOf(ValidationClient.ValidationUnavailableException.class);
         assertThat(requests.get()).isEqualTo(2);
     }
 
     @Test
-    void doesNotTurnAContractRejectionIntoAPersistedFailedValidation() throws IOException {
+    void treatsARejectedValidationAsAnAnswerNotAnOutage() throws IOException {
         ComplianceValidationClient client = clientResponding(new int[] {409}, "{}");
 
-        assertThatThrownBy(() -> client.validate("lbl_r:1", snapshot("lbl_r"), "signed-actor-jwt", "corr-1"))
-                .isInstanceOf(ValidationClient.ValidationUnavailableException.class)
-                .hasMessageContaining("HTTP 409");
+        ValidationClient.ValidationResult result = client.validate("key-r", Map.of(), null, null);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.resultStatus()).isEqualTo("FAILED");
         assertThat(requests.get()).isEqualTo(1);
     }
 
@@ -169,9 +95,9 @@ class ComplianceValidationClientTest {
     void treatsAnUnexpectedStatusAsUnavailable() throws IOException {
         ComplianceValidationClient client = clientResponding(new int[] {404}, "{}");
 
-        assertThatThrownBy(() -> client.validate("lbl_u:1", snapshot("lbl_u"), "signed-actor-jwt", "corr-1"))
+        assertThatThrownBy(() -> client.validate("key-u", Map.of(), null, null))
                 .isInstanceOf(ValidationClient.ValidationUnavailableException.class)
-                .hasMessageContaining("HTTP 404");
+                .hasMessageContaining("Unexpected validation status");
         assertThat(requests.get()).isEqualTo(1);
     }
 
@@ -181,14 +107,12 @@ class ComplianceValidationClientTest {
 
         for (int call = 0; call < 3; call++) {
             final String key = "key-b" + call;
-            assertThatThrownBy(() -> client.validate("lbl_" + key + ":1", snapshot("lbl_" + key),
-                    "signed-actor-jwt", "corr-1"))
+            assertThatThrownBy(() -> client.validate(key, Map.of(), null, null))
                     .isInstanceOf(ValidationClient.ValidationUnavailableException.class);
         }
         int attemptsBeforeOpen = requests.get();
 
-        assertThatThrownBy(() -> client.validate("lbl_key-b4:1", snapshot("lbl_key-b4"),
-                "signed-actor-jwt", "corr-1"))
+        assertThatThrownBy(() -> client.validate("key-b4", Map.of(), null, null))
                 .isInstanceOf(ValidationClient.ValidationUnavailableException.class)
                 .hasMessageContaining("circuit is open");
         assertThat(requests.get()).isEqualTo(attemptsBeforeOpen);
