@@ -1,6 +1,7 @@
 package com.spectrace.labelworkflow.validation;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -29,7 +30,15 @@ public interface ValidationClient {
         }
     }
 
-    record ValidationResult(String validationRunId, String resultStatus, boolean blockingFindings) {
+    /**
+     * One provider finding. The reference client requires that a blocking finding is an ERROR that did
+     * not pass, and that a PASSED run carries no blocking finding.
+     */
+    record ValidationFinding(String resultCode, String severity, boolean passed, boolean blocking, String message) {
+    }
+
+    record ValidationResult(String validationRunId, String resultStatus, boolean blockingFindings,
+                            List<ValidationFinding> findings) {
 
         public boolean passed() {
             return "PASSED".equals(resultStatus) && !blockingFindings;
