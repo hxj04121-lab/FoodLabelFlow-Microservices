@@ -246,4 +246,17 @@ public class LabelWorkflowStore {
                 VALUES (?, ?, ?, ?, ?)
                 """, decisionId, labelVersionId, decision, actorSubject, Timestamp.from(now));
     }
+
+    public void insertValidationRecord(String validationRunId, String labelVersionId, String formulaVersionId,
+                                       String ruleSetVersionId, String jurisdictionCode, String resultStatus,
+                                       int draftRevision, Instant now) {
+        jdbc.update("""
+                INSERT INTO label_validation_record (validation_run_id, label_version_id, formula_version_id,
+                    rule_set_version_id, jurisdiction_code, result_status, draft_revision, recorded_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE result_status = VALUES(result_status), draft_revision = VALUES(draft_revision),
+                    recorded_at = VALUES(recorded_at)
+                """, validationRunId, labelVersionId, formulaVersionId, ruleSetVersionId, jurisdictionCode,
+                resultStatus, draftRevision, Timestamp.from(now));
+    }
 }
