@@ -30,6 +30,9 @@ class ImpactFindingConsumerTest {
     @BeforeEach
     void clear() {
         jdbc.update("DELETE FROM impact_review_task");
+        // processed_event is shared by the test classes in this module; clear this consumer's rows so
+        // each test can assert an exact count instead of one accumulated across tests.
+        jdbc.update("DELETE FROM processed_event WHERE consumer = ?", ImpactFindingConsumer.QUEUE);
     }
 
     private String envelope(String eventId, String findingId, String kind, String outcome) {
