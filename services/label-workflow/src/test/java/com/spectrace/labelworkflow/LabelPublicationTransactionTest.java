@@ -8,6 +8,7 @@ import com.spectrace.platform.starter.error.ApiException;
 import com.spectrace.platform.test.MySqlTestcontainers;
 import java.time.Instant;
 import java.sql.Timestamp;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,6 +24,17 @@ class LabelPublicationTransactionTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired LabelWorkflowService service;
+
+    /** MySqlTestcontainers shares one database across the module run, so each test starts from the label tables cleared. */
+    @BeforeEach
+    void clearLabelState() {
+        jdbc.update("DELETE FROM label_publication");
+        jdbc.update("DELETE FROM label_decision");
+        jdbc.update("DELETE FROM label_validation_record");
+        jdbc.update("DELETE FROM label_allergen_declaration");
+        jdbc.update("DELETE FROM label_version");
+        jdbc.update("DELETE FROM outbox WHERE event_type = 'LabelPublished.v2'");
+    }
 
     private void seedLabel(String id, int version, String status) {
         Instant now = Instant.parse("2026-10-13T08:00:00Z");
