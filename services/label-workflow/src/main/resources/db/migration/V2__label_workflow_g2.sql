@@ -56,7 +56,38 @@ CREATE TABLE label_version (
     UNIQUE KEY uk_label_one_current (current_product_id, current_jurisdiction_code),
     KEY ix_label_organisation (organisation_id, label_version_id),
     CONSTRAINT ck_label_version_number CHECK (version_number >= 1),
-    CONSTRAINT ck_label_lifecycle CHECK (lifecycle_status IN ('DRAFT', 'PENDING_REVIEW', 'APPROVED', 'PUBLISHED', 'REJECTED'))
+    CONSTRAINT ck_label_lifecycle CHECK (lifecycle_status IN
+        ('DRAFT', 'PENDING_REVIEW', 'APPROVED', 'PUBLISHED', 'SUPERSEDED', 'REJECTED'))
+);
+
+-- Decision history (BR-06, BR-09). BR-06 only forbids the creator from approving; the broader
+-- baseline "creator may never decide" comparison is deliberately not carried over.
+CREATE TABLE label_decision (
+    label_decision_id VARCHAR(140) NOT NULL,
+    label_version_id  VARCHAR(120) NOT NULL,
+    decision          VARCHAR(30)  NOT NULL,
+    actor_subject     VARCHAR(255) NOT NULL,
+    decided_at        DATETIME(3)  NOT NULL,
+    PRIMARY KEY (label_decision_id),
+    KEY ix_decision_label (label_version_id, decision),
+    CONSTRAINT ck_decision CHECK (decision IN ('APPROVE', 'REQUEST_CHANGES', 'REJECT')),
+    CONSTRAINT fk_decision_label FOREIGN KEY (label_version_id) REFERENCES label_version (label_version_id)
+);
+
+-- One immutable publication record per label version (BR-08).
+CREATE TABLE label_publication (
+    label_publication_id VARCHAR(140) NOT NULL,
+    label_version_id     VARCHAR(120) NOT NULL,
+    product_id           VARCHAR(100) NOT NULL,
+    jurisdiction_code    VARCHAR(40)  NOT NULL,
+    version_number       INT          NOT NULL,
+    published_at         DATETIME(3)  NOT NULL,
+    published_by_subject VARCHAR(255) NOT NULL,
+    PRIMARY KEY (label_publication_id),
+    UNIQUE KEY uk_publication_label (label_version_id),
+    KEY ix_publication_product (product_id, jurisdiction_code),
+    CONSTRAINT ck_publication_version CHECK (version_number >= 1),
+    CONSTRAINT fk_publication_label FOREIGN KEY (label_version_id) REFERENCES label_version (label_version_id)
 );
 
 CREATE TABLE label_allergen_declaration (
