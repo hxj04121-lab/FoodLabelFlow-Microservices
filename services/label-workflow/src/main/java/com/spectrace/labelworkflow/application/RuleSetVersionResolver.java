@@ -11,5 +11,5 @@ package com.spectrace.labelworkflow.application;
 @FunctionalInterface
 public interface RuleSetVersionResolver {
 
-    String resolve(String organisationId, String productId, String jurisdictionCode);
+    String resolve(String organisationId, String jurisdictionCode, String authorization, String correlationId);
 }
