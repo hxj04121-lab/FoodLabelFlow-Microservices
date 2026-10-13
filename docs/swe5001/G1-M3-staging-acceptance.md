@@ -9,7 +9,7 @@ Current source/release evidence: [13 October checkpoint](evidence/G1-M3-readines
 
 | Owner | Concrete input / condition |
 |---|---|
-| M1 | Correct PR48's `/auth` issuer/JWKS/audience; retain latest M4 dual-chain resolver when resolving the conflict; run combined caller HTTP and real login checks on the exact resulting head; provide same-organisation and foreign-organisation test resources |
+| M1 | PR48's identity corrections are reviewed; preserve the accepted caller resolver during integration. Existing Spec/Formulation Flyway seeds already supply same-organisation and foreign-organisation resources; no additional local import is required |
 | M4 | Fresh PR37 review; confirm actual imported spectrace realm, public spectrace-web client, native sub, audience spectrace-api and account roles; supply a test identity's expected native sub/org/type/roles through the approved account channel; accept final evidence |
 | M5 | Actual browser-reachable HTTPS Gateway and realm issuer; matching private JWKS/upstreams; TLS certificate and LB `/auth`/`/api` routing/forwarded-header policy; namespace/Keycloak CR/NetworkPolicy bindings; readiness and agreed window/access |
 | Repository owner | Approved PR37 source in main, Actions Pages source and required public variables; enable FRONTEND_PAGES_ENABLED only after actual inputs are confirmed |
@@ -22,6 +22,35 @@ or change owners' branches as part of these checks.
 The current Pages job runs only on main after owner enablement. Owners must
 distinguish code integration approval from final deployed acceptance; do not
 create a requirement for a main-only Pages deployment before its source can land.
+
+## Existing local seed resources
+
+M1 confirmed the resource IDs below. Spec/Formulation load their own Flyway seed
+on a fresh local database; account attributes and local-only credentials come
+from `deploy/keycloak/realm/spectrace-realm.json`. These credentials are never
+used by the deployed profile. No extra import or database-volume reset is needed
+for the read/denial suite.
+
+| Caller / resource | Expected local result |
+|---|---|
+| `manufacturer.north.maker`, products with `limit=100` | 30 north products only |
+| north, `prod_usda_1118468` / `formula_1118468_v1` / its trace | 200; exact RELEASED v1 |
+| north, south `prod_usda_1123666` | 403 with no resource body |
+| south, north `formula_1118468_v1` | 403 with no resource body |
+| manufacturer, beta `spec_chocolate_v1` | 200; released supplier versions are shared |
+| `supplier.alpha.maker`, manufacturer products or creating beta's chocolate spec | 403 |
+| `spectrace.no-role`, own caller-claims / specification write | 200 identity / 403 write |
+| anonymous or signature-tampered caller request | canonical 401 |
+
+`frontend/real-auth-tests/seeded-access.spec.ts` uses real browser Code+PKCE and
+then authenticated Gateway requests. It also checks cross-organisation denial
+at the CI-private Formulation port to establish the owner service's check.
+The M3 workflow builds both services from the current checkout and writes
+identity-free status evidence to `seeded-access.json`; trace redaction removes
+local authentication material before upload. Draft/release preparation from
+`perf/demo/run_demo.py` is a separate G3 concern and is not run by this suite.
+The deployed profile selects only `signin.spec.ts`, while this seed suite also
+refuses deployed execution. Local/CI success is not AWS or live Pages acceptance.
 
 ## Fixed callback and public build settings
 

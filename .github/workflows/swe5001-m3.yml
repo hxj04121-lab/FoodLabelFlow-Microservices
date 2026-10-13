@@ -140,13 +140,13 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Build the real Specification service and Gateway
+      - name: Build the real Specification/Formulation services and Gateway
         run: |
-          mvn -B -ntp -pl services/specification -am -DskipTests -Djackson-bom.version=3.1.7 package
+          mvn -B -ntp -pl services/specification,services/formulation -am -DskipTests -Djackson-bom.version=3.1.7 package
           mvn -B -ntp -f platform/gateway/pom.xml -DskipTests package
       - run: npm ci && npx playwright install --with-deps chromium
         working-directory: frontend
-      - name: Real browser Keycloak / Gateway / Specification verification
+      - name: Real browser Keycloak / Gateway / seeded service verification
         shell: bash
         run: |
           set -euo pipefail
@@ -161,7 +161,7 @@ jobs:
             -e KC_HTTP_RELATIVE_PATH=/auth -e KC_HOSTNAME=http://localhost:18080/auth \
             -v "$realm:/opt/keycloak/data/import/spectrace-realm.json:ro" \
             quay.io/keycloak/keycloak:26.0.7 start-dev --import-realm --hostname-strict=false
-          trap 'kill ${gateway_pid:-} ${caller_pid:-} 2>/dev/null || true; docker logs m3-real-keycloak > "$evidence/keycloak.log" 2>&1; docker compose -p m3-real-services -f "$compose" logs > "$evidence/infrastructure.log" 2>&1; docker rm -f m3-real-keycloak; docker compose -p m3-real-services -f "$compose" down -v' EXIT
+          trap 'kill ${gateway_pid:-} ${caller_pid:-} ${formulation_pid:-} 2>/dev/null || true; docker logs m3-real-keycloak > "$evidence/keycloak.log" 2>&1; docker compose -p m3-real-services -f "$compose" logs > "$evidence/infrastructure.log" 2>&1; docker rm -f m3-real-keycloak; docker compose -p m3-real-services -f "$compose" down -v' EXIT
           for attempt in $(seq 1 90); do
             if curl -fsS http://localhost:18180/auth/realms/spectrace/.well-known/openid-configuration > /dev/null; then break; fi
             sleep 2
@@ -173,18 +173,25 @@ jobs:
           RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
             java -jar services/specification/target/app.jar --server.port=18084 > "$evidence/specification.log" 2>&1 &
           caller_pid=$!
+          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
+          SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
+          SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/formulation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
+          RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
+            java -jar services/formulation/target/app.jar --server.port=18085 > "$evidence/formulation.log" 2>&1 &
+          formulation_pid=$!
           GATEWAY_PORT=18080 GATEWAY_REALM=spectrace GATEWAY_ISSUER="$issuer" GATEWAY_JWK_SET_URI="$jwks" GATEWAY_AUDIENCE=spectrace-api \
-          GATEWAY_KEYCLOAK=http://localhost:18180 GATEWAY_SPECIFICATION=http://localhost:18084 GATEWAY_FORMULATION=http://localhost:18084 \
+          GATEWAY_KEYCLOAK=http://localhost:18180 GATEWAY_SPECIFICATION=http://localhost:18084 GATEWAY_FORMULATION=http://localhost:18085 \
           GATEWAY_COMPLIANCE=http://localhost:18084 GATEWAY_LABEL_WORKFLOW=http://localhost:18084 \
           GATEWAY_ALLOWED_ORIGINS=http://localhost:5173 GATEWAY_SPECIFICATION_WRITE_ROLES=ADMIN_DATA_MAINTENANCE \
           GATEWAY_FORMULATION_WRITE_ROLES=ADMIN_DATA_MAINTENANCE GATEWAY_COMPLIANCE_WRITE_ROLES=CHANGE_MANAGER GATEWAY_LABEL_WRITE_ROLES=LABEL_OFFICER,APPROVER,PUBLISHER \
             java -jar platform/gateway/target/spectrace-gateway-0.1.0-SNAPSHOT.jar > "$evidence/gateway.log" 2>&1 &
           gateway_pid=$!
           for attempt in $(seq 1 60); do
-            if curl -fsS http://localhost:18084/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18080/actuator/health/readiness > /dev/null; then break; fi
+            if curl -fsS http://localhost:18084/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18085/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18080/actuator/health/readiness > /dev/null; then break; fi
             sleep 2
           done
           curl -fsS http://localhost:18084/actuator/health/readiness
+          curl -fsS http://localhost:18085/actuator/health/readiness
           curl -fsS http://localhost:18080/actuator/health/readiness
           cd frontend
           npx playwright test --config playwright.real-signin.config.ts

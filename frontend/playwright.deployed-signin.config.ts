@@ -15,7 +15,7 @@ assert(process.env.M3_EXPECTED_SUBJECT !== process.env.M3_TEST_USERNAME, 'Expect
 assert(process.env.M3_EXPECTED_ROLES!.split(',').every(role => role.trim()), 'Expected roles must be a nonempty comma-separated list')
 
 export default defineConfig({
-  testDir: './real-auth-tests', outputDir: './test-results/deployed-signin', workers: 1, reporter: 'list', timeout: 120000,
+  testDir: './real-auth-tests', testMatch: 'signin.spec.ts', outputDir: './test-results/deployed-signin', workers: 1, reporter: 'list', timeout: 120000,
   metadata: { deployed: true, gatewayOrigin: process.env.VITE_GATEWAY_ORIGIN,
     callerPath: process.env.VITE_CALLER_CLAIMS_PATH, identityOrigin: new URL(process.env.VITE_OIDC_AUTHORITY!).origin },
   // The deployed build already exists. Never start Vite or store live login secrets in traces.
