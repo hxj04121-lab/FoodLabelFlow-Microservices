@@ -110,6 +110,11 @@ jobs:
         working-directory: frontend
       - run: npx playwright test --config playwright.signin.config.ts
         working-directory: frontend
+      - name: Record the G2 draft-validation-submit reference flow
+        working-directory: frontend
+        env:
+          G2_RECORD_VIDEO: 'true'
+        run: npx playwright test --config playwright.signin.config.ts --grep 'STCN-74 creates' --output test-results/label-demo
       - run: npm run test:pages
         working-directory: frontend
       - run: npm run test:deployed-config

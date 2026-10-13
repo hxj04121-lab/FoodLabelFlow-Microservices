@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Layers3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { LabelWorkspace } from '@/features/labels/LabelWorkspace'
 import { callerClaimsPath, canSignIn, getSession, matchesCaller, publicApiGet, signIn, signOut, startSession, subscribeSession, type CallerIdentity } from './session'
 
 export function SignInWorkspace() {
@@ -11,8 +12,9 @@ export function SignInWorkspace() {
   const [caller, setCaller] = useState<CallerIdentity | null>(null)
   const [callerNotice, setCallerNotice] = useState('')
   const [callerBusy, setCallerBusy] = useState(false)
+  const [view, setView] = useState<'workspace' | 'labels'>('workspace')
   useEffect(() => { void startSession() }, [])
-  useEffect(() => { setProducts(null); setNotice(''); setCaller(null); setCallerNotice('') }, [session.status])
+  useEffect(() => { setProducts(null); setNotice(''); setCaller(null); setCallerNotice(''); setView('workspace') }, [session.status])
   async function verifyCaller() {
     if (!callerClaimsPath) return
     const identity = getSession().identity
@@ -49,6 +51,11 @@ export function SignInWorkspace() {
         </>}
       </section> : <>
         <div className="signin-heading"><div><h1>Your organisation’s workspace</h1><p>Signed in as {session.identity?.subject}</p></div><Button variant="outline" onClick={() => void signOut()}>Sign out</Button></div>
+        <nav className="workspace-navigation" aria-label="Workspace sections">
+          <Button variant="ghost" aria-current={view === 'workspace' ? 'page' : undefined} onClick={() => setView('workspace')}>Workspace</Button>
+          <Button variant="ghost" aria-current={view === 'labels' ? 'page' : undefined} onClick={() => setView('labels')}>Labels</Button>
+        </nav>
+        {view === 'labels' && session.identity ? <LabelWorkspace key={`${session.identity.subject}:${session.identity.organisationId}`} identity={session.identity} /> : <>
         <section className="signin-identity" aria-label="Signed-in identity"><dl>
           <div><dt>Organisation</dt><dd>{session.identity?.organisationId}</dd></div>
           <div><dt>Organisation type</dt><dd>{session.identity?.organisationType}</dd></div>
@@ -64,6 +71,7 @@ export function SignInWorkspace() {
           {notice && <p role="status" className="signin-notice">{notice}</p>}
           {products && (products.length ? <ul>{products.map(p => <li key={p.productId}><strong>{p.productDescription}</strong><span>{p.productId}</span></li>)}</ul> : <p role="status">No products are available to your organisation.</p>)}
         </section>}
+        </>}
       </>}
     </main>
   </div>

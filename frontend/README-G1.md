@@ -116,3 +116,10 @@ site, with no local server or live-secret trace. Follow the
 required public values, approved test account, expected identity and remaining
 cross-organisation/security/Pages acceptance rows. No deployed success is claimed
 by adding this profile or by passing its offline configuration tests.
+
+## G2 label workspace
+
+After signing in, open **Labels** for the independent draft, validation, review
+and publication reference UI. See the [G2 M3 frontend evidence and usage record](../docs/swe5001/G2-M3-frontend-independent.md)
+for role visibility, recovery behavior, fixture test evidence, recording commands
+and the remaining provider/deployment acceptance dependencies.

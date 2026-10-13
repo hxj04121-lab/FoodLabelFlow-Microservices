@@ -3,7 +3,7 @@ import { InMemoryWebStorage, UserManager, WebStorageStateStore, type User } from
 export const authEnabled = import.meta.env.VITE_AUTH_ENABLED === 'true'
 export const callerClaimsPath = import.meta.env.VITE_CALLER_CLAIMS_PATH?.trim()
 export type CallerIdentity = { subject: string; org_id: string; org_type: string; roles: string[] }
-type Identity = { subject: string; organisationId: string; organisationType: string; roles: string[] }
+export type Identity = { subject: string; organisationId: string; organisationType: string; roles: string[] }
 export function matchesCaller(value: CallerIdentity, identity: Identity | undefined): boolean {
   if (!identity || !value || value.subject !== identity.subject || value.org_id !== identity.organisationId
     || value.org_type !== identity.organisationType || !Array.isArray(value.roles)
@@ -128,27 +128,66 @@ export async function signOut() {
   catch { publish({ status: 'signedOut', message: 'This workspace session ended. The identity provider could not be reached; close its session before switching accounts.' }) }
 }
 
-export async function publicApiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+export class PublicApiError extends Error {
+  constructor(message: string, public status: number, public code: string,
+    public traceId: string | null = null, public outcomeUnknown = false) { super(message) }
+}
+
+export const publicApiGet = <T>(path: string, signal?: AbortSignal) => publicApiRequest<T>('GET', path, undefined, signal)
+export const publicApiPost = <T>(path: string, body?: unknown, signal?: AbortSignal) => publicApiRequest<T>('POST', path, body, signal)
+
+async function publicApiRequest<T>(method: 'GET' | 'POST', path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   if (!user || user.expired || session.status !== 'signedIn') {
     await endSession('Your session expired. Sign in again to continue.')
     throw new Error('Sign-in is required.')
   }
   const url = new URL(path, gateway)
+  const rawPath = path.split('?')[0]
   if (url.origin !== gateway || !path.startsWith('/api/')
     || !/^\/api\/(specifications|formulations|compliance|labels)(\/|$)/.test(url.pathname)
-    || /%(2f|5c|2e|25)/i.test(path) || /\/(internal|admin|actuator)(\/|$)/.test(url.pathname)) {
+    || url.hash || /%(2f|5c|2e|25|3b)/i.test(rawPath) || /[\\;]/.test(rawPath) || rawPath.includes('//')
+    || /(?:^|\/)\.{1,2}(?:\/|$)/.test(rawPath) || /\/(internal|admin|actuator)(\/|$)/.test(url.pathname)) {
     throw new Error('The requested API route is unavailable.')
   }
   const requestUser = user
-  const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000), credentials: 'omit', headers: {
-    Authorization: `Bearer ${requestUser.access_token}`, 'X-Correlation-ID': crypto.randomUUID(), Accept: 'application/json',
-  } })
+  const correlationId = crypto.randomUUID()
+  let response: Response
+  try {
+    response = await fetch(url, { method, body: body === undefined ? undefined : JSON.stringify(body),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+      credentials: 'omit', redirect: 'error', headers: {
+        Authorization: `Bearer ${requestUser.access_token}`, 'X-Correlation-ID': correlationId, Accept: 'application/json',
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      } })
+  } catch {
+    throw new PublicApiError(method === 'POST'
+      ? 'The result could not be confirmed. Check the label before trying again.'
+      : 'The service could not be reached. Try again.', 0, 'NETWORK_ERROR', correlationId, method === 'POST')
+  }
   if (user !== requestUser) throw new Error('Your session changed. Load the information again after signing in.')
   if (response.status === 401) {
     await endSession('Your session is no longer accepted. Sign in again to continue.')
     throw new Error('Sign-in is required.')
   }
-  if (response.status === 403) throw new Error('You do not have permission to view this information.')
-  if (!response.ok) throw new Error('The service is unavailable. Try again later.')
-  return response.json() as Promise<T>
+  const value = await response.json().catch(() => null)
+  if (user !== requestUser) throw new Error('Your session changed. Load the information again after signing in.')
+  if (!response.ok) {
+    const messages: Record<number, string> = {
+      400: 'Some information was not accepted. Check your entries.',
+      403: 'You do not have permission to perform this action or view this information.',
+      404: 'This label or service could not be found. Check the ID or contact your workspace administrator.',
+      409: 'The label has changed or is not ready for this action. Open it again before continuing.',
+      422: 'Required validation information is unavailable. Contact your workspace administrator.',
+      429: 'Too many requests. Wait before trying again.',
+    }
+    const code = typeof value?.code === 'string' ? value.code : 'HTTP_ERROR'
+    const traceId = response.headers.get('X-Correlation-ID') || correlationId
+    throw new PublicApiError(code === 'LABEL_VALIDATION_REQUIRED' ? 'Validate this draft again before submitting it.'
+      : messages[response.status] || 'The service is unavailable. Check the label before trying again.',
+    response.status, code, /^[A-Za-z0-9._:-]{1,128}$/.test(traceId) ? traceId : correlationId,
+    method === 'POST' && response.status >= 500)
+  }
+  if (value === null) throw new PublicApiError('The service returned an unreadable result. Open the label again before continuing.',
+    response.status, 'INVALID_RESPONSE', correlationId, method === 'POST')
+  return value as T
 }

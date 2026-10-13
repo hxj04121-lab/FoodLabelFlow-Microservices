@@ -294,3 +294,44 @@ th { position:relative; }
 .signin-products li strong, .signin-products li span { display: block; overflow-wrap: anywhere; }
 .signin-products li span { margin-top: 6px; color: #55556d; }
 @media (max-width: 600px) { .signin-identity dl { grid-template-columns: 1fr; } .signin-brand span { flex-basis: 100%; } }
+
+/* Authenticated label tasks extend the existing reference workspace. */
+.workspace-navigation { display: flex; gap: 8px; border-bottom: 1px solid #dad8e6; margin: 8px 0 32px; padding-bottom: 8px; }
+.workspace-navigation button[aria-current="page"] { color: #563aa5; background: #efecf8; font-weight: 700; }
+.g2-label-entry-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; margin: 28px 0 32px; }
+.g2-label-workspace fieldset { border: 0; padding: 0; min-width: 0; }
+.g2-label-workspace legend, .g2-label-workspace h3 { font-size: 19px; font-weight: 650; line-height: 1.4; margin-bottom: 18px; }
+.g2-label-workspace label { display: block; font-size: 14px; font-weight: 600; margin: 16px 0 7px; }
+.g2-label-workspace input { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid #9b95ac; border-radius: 6px; background: white; color: #303049; font: inherit; caret-color: #6747c1; }
+.g2-label-workspace input:focus-visible { outline: 3px solid #7155bc; outline-offset: 3px; }
+.g2-label-workspace input:disabled { background: #eeedf4; color: #55556d; }
+.g2-label-workspace .g2-label-hint { font-size: 14px; margin: 12px 0 18px; }
+.g2-label-workspace .g2-label-feedback { margin: 18px 0; padding: 16px; background: #efecf8; border-radius: 6px; overflow-wrap: anywhere; }
+.g2-label-workspace .g2-label-error { color: #812539; background: #fff1f2; border: 1px solid #d995a3; }
+.g2-label-feedback p { margin: 0; color: inherit; }
+.g2-label-feedback small { display: block; margin-top: 8px; }
+.g2-label-detail { margin-top: 32px; padding-top: 24px; border-top: 1px solid #dad8e6; }
+.g2-label-detail-heading { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.g2-label-detail h3:focus { outline: none; }
+.g2-label-state { color: #51407e; background: #efecf8; border: 1px solid #d5cdeb; padding: 5px 10px; border-radius: 5px; font-size: 13px; font-weight: 650; }
+.g2-label-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px; margin: 12px 0 28px; }
+.g2-label-facts dt { color: #55556d; font-size: 14px; margin-bottom: 5px; }
+.g2-label-facts dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.g2-label-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.g2-label-actions p { flex-basis: 100%; font-size: 14px; margin: 0; }
+.g2-label-validation { margin-top: 24px; padding-top: 24px; border-top: 1px solid #dad8e6; }
+.g2-label-validation h4 { font-size: 18px; font-weight: 650; }
+.g2-label-validation ul { list-style: none; padding: 0; }
+.g2-label-validation li { padding: 16px 0; border-bottom: 1px solid #dad8e6; overflow-wrap: anywhere; }
+.g2-label-validation li p { margin: 8px 0 0; }
+.g2-label-workspace ::selection { color: #303049; background: #ded5f5; }
+.g2-label-workspace textarea { width: 100%; padding: 12px; border: 1px solid #9b95ac; border-radius: 6px; background: white; color: #303049; font: inherit; resize: vertical; margin-bottom: 16px; }
+.g2-label-workspace textarea:focus-visible { outline: 3px solid #7155bc; outline-offset: 3px; }
+.g2-label-workspace .g2-publish-confirm { display: flex; gap: 12px; align-items: start; font-weight: 400; margin: 16px 0 24px; }
+.g2-label-workspace .g2-publish-confirm input { width: 20px; height: 20px; min-height: 20px; flex: none; margin-top: 2px; accent-color: #6747c1; }
+@media (max-width: 600px) {
+  .g2-label-entry-grid { grid-template-columns: 1fr; gap: 28px; }
+  .g2-label-entry-grid > :last-child { padding-top: 24px; border-top: 1px solid #dad8e6; }
+  .g2-label-facts { grid-template-columns: 1fr; }
+  .g2-label-actions button { flex: 1 1 180px; }
+}
