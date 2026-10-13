@@ -10,6 +10,7 @@ spec:
     matchLabels:
       {{- include "spectrace.selectorLabels" . | nindent 6 }}
   policyTypes: [Ingress, Egress]
+  {{- if or .Values.networkPolicy.ingressFromServices .Values.networkPolicy.ingressFromPeers .Values.networkPolicy.ingressFromCIDRs }}
   ingress:
     {{- range .Values.networkPolicy.ingressFromServices }}
     - from:
@@ -18,9 +19,29 @@ spec:
               app.kubernetes.io/name: {{ . | quote }}
       ports:
         - {port: http, protocol: TCP}
-    {{- else }}
-    []
     {{- end }}
+    {{- range .Values.networkPolicy.ingressFromPeers }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .name | quote }}
+      ports:
+        - {port: http, protocol: TCP}
+    {{- end }}
+    {{- range .Values.networkPolicy.ingressFromCIDRs }}
+    - from:
+        - ipBlock:
+            cidr: {{ . | quote }}
+      ports:
+        - {port: http, protocol: TCP}
+    {{- end }}
+  {{- else }}
+  ingress: []
+  {{- end }}
+  {{- if or .Values.networkPolicy.allowDNS .Values.networkPolicy.egressRules .Values.networkPolicy.databaseCidrs }}
   egress:
     {{- if .Values.networkPolicy.allowDNS }}
     - to:
@@ -36,9 +57,15 @@ spec:
     {{- end }}
     {{- with .Values.networkPolicy.egressRules }}
     {{- toYaml . | nindent 4 }}
-    {{- else }}
-    {{- if not .Values.networkPolicy.allowDNS }}
-    []
     {{- end }}
+    {{- range .Values.networkPolicy.databaseCidrs }}
+    - to:
+        - ipBlock:
+            cidr: {{ . | quote }}
+      ports:
+        - {port: 3306, protocol: TCP}
     {{- end }}
+  {{- else }}
+  egress: []
+  {{- end }}
 {{- end }}

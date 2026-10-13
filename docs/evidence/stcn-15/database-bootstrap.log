@@ -1,0 +1,47 @@
+mysqladmin: [Warning] Using a password on the command line interface can be insecure.
+Created the four service databases and restricted each account to its own database.
+Created the four service databases and restricted each account to its own database.
+mysql: [Warning] Using a password on the command line interface can be insecure.
+PASS specification can access specification
+PASS specification denied access to formulation
+PASS specification denied access to compliance
+PASS specification denied access to label_workflow
+mysql: [Warning] Using a password on the command line interface can be insecure.
+GRANTS specification:
+Grants for specification@%
+GRANT USAGE ON *.* TO `specification`@`%`
+GRANT ALL PRIVILEGES ON `specification`.* TO `specification`@`%`
+PASS specification grant list contains only its own database and no grant option
+PASS formulation denied access to specification
+mysql: [Warning] Using a password on the command line interface can be insecure.
+PASS formulation can access formulation
+PASS formulation denied access to compliance
+PASS formulation denied access to label_workflow
+mysql: [Warning] Using a password on the command line interface can be insecure.
+GRANTS formulation:
+Grants for formulation@%
+GRANT USAGE ON *.* TO `formulation`@`%`
+GRANT ALL PRIVILEGES ON `formulation`.* TO `formulation`@`%`
+PASS formulation grant list contains only its own database and no grant option
+PASS compliance denied access to specification
+PASS compliance denied access to formulation
+mysql: [Warning] Using a password on the command line interface can be insecure.
+PASS compliance can access compliance
+PASS compliance denied access to label_workflow
+mysql: [Warning] Using a password on the command line interface can be insecure.
+GRANTS compliance:
+Grants for compliance@%
+GRANT USAGE ON *.* TO `compliance`@`%`
+GRANT ALL PRIVILEGES ON `compliance`.* TO `compliance`@`%`
+PASS compliance grant list contains only its own database and no grant option
+PASS label_workflow denied access to specification
+PASS label_workflow denied access to formulation
+PASS label_workflow denied access to compliance
+mysql: [Warning] Using a password on the command line interface can be insecure.
+PASS label_workflow can access label_workflow
+mysql: [Warning] Using a password on the command line interface can be insecure.
+GRANTS label_workflow:
+Grants for label_workflow@%
+GRANT USAGE ON *.* TO `label_workflow`@`%`
+GRANT ALL PRIVILEGES ON `label_workflow`.* TO `label_workflow`@`%`
+PASS label_workflow grant list contains only its own database and no grant option

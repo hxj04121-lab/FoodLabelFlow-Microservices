@@ -49,10 +49,18 @@ for(const service of ['compliance','specification','formulation','label-workflow
     assert.equal(docs.find(d=>d.kind==='Service').spec.type,'ClusterIP');
     const np=docs.find(d=>d.kind==='NetworkPolicy');
     assert.deepEqual(np.spec.policyTypes,['Ingress','Egress']);
-    assert.equal(np.spec.egress.length,1,'Default egress is DNS only');
-    assert.deepEqual(np.spec.egress[0].ports.map(p=>p.protocol),['UDP','TCP']);
+    assert(np.spec.egress.some(r=>r.to?.some(t=>t.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='kube-system')),'DNS is allowed');
+    assert(!np.spec.egress.some(r=>r.to?.some(t=>t.ipBlock?.cidr==='0.0.0.0/0')),'No unrestricted egress');
     assert(!docs.some(d=>d.kind==='HorizontalPodAutoscaler'),'Fixed comparison must disable HPA');
+    if(service!=='gateway') assert.equal(pod.containers[0].envFrom?.[0]?.secretRef?.name,`${service}-runtime`);
     if(service!=='compliance') assert.equal(pod.nodeSelector['eks.amazonaws.com/nodegroup'],'general');
+    const allowedIngress=np.spec.ingress.flatMap(r=>r.from??[]).filter(s=>!s.namespaceSelector).map(s=>s.podSelector?.matchLabels?.['app.kubernetes.io/name']);
+    assert.deepEqual(allowedIngress,service==='gateway'?[]:service==='compliance'?['gateway','label-workflow']:['gateway']);
+    const crossNamespace=np.spec.ingress.flatMap(r=>r.from??[]).filter(s=>s.namespaceSelector).map(s=>[s.namespaceSelector.matchLabels['kubernetes.io/metadata.name'],s.podSelector.matchLabels['app.kubernetes.io/name']]);
+    assert(crossNamespace.some(([ns,name])=>ns==='observability'&&name==='grafana-alloy'));
+    if(service==='compliance') assert(crossNamespace.some(([ns,name])=>ns==='label-workflow'&&name==='label-workflow'));
+    if(service==='gateway') assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='specification'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='specification')&&r.ports?.some(p=>p.port===8080)));
+    else assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='rabbitmq'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='rabbitmq')));
   });
 }
 check('fixed three-replica placement requires c6i.large and compliance group',()=>{
@@ -68,7 +76,8 @@ check('fixed three-replica placement requires c6i.large and compliance group',()
   const host=pod.topologySpreadConstraints.find(t=>t.topologyKey==='kubernetes.io/hostname');
   assert.equal(host.whenUnsatisfiable,'DoNotSchedule');
   const np=docs.find(d=>d.kind==='NetworkPolicy');
-  assert.deepEqual(np.spec.ingress.map(r=>r.from[0].podSelector.matchLabels['app.kubernetes.io/name']),['gateway','label-workflow']);
+  assert.deepEqual(np.spec.ingress.filter(r=>r.from[0].podSelector&&!r.from[0].namespaceSelector).map(r=>r.from[0].podSelector.matchLabels['app.kubernetes.io/name']),['gateway','label-workflow']);
+  assert(np.spec.egress.some(r=>r.to?.some(t=>t.podSelector?.matchLabels?.['app.kubernetes.io/name']==='rabbitmq')&&r.ports[0].port===5672));
   writeFileSync(resolve(evidence,'compliance-three-replicas.json'),JSON.stringify(docs,null,2)+'\n');
 });
 check('optional Should HPA preserves 1–4 range and fixed per-pod limits',()=>{
@@ -90,10 +99,24 @@ for(const [name,args] of [
   ['autoscale range relaxed',['--set','autoscaling.maxReplicas=5']]
 ]) check(`reject ${name}`,()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),...args],false));
 check('empty ingress/egress values render explicit deny rules',()=>{
-  const docs=render('specification',['--set','networkPolicy.allowDNS=false','--set-json','networkPolicy.ingressFromServices=[]']);
+  const docs=render('specification',['--set','networkPolicy.allowDNS=false','--set-json','networkPolicy.ingressFromServices=[]','--set-json','networkPolicy.ingressFromPeers=[]','--set-json','networkPolicy.egressRules=[]']);
   const np=docs.find(d=>d.kind==='NetworkPolicy');
   assert.deepEqual(np.spec.ingress,[]);assert.deepEqual(np.spec.egress,[]);
 });
+
+check('database egress is restricted to configured private subnet CIDRs and MySQL port',()=>{
+  const docs=render('specification',['--set-json','networkPolicy.databaseCidrs=["10.20.4.0/24","10.20.5.0/24"]']);
+  const np=docs.find(d=>d.kind==='NetworkPolicy');
+  for(const cidr of ['10.20.4.0/24','10.20.5.0/24']) assert(np.spec.egress.some(r=>r.to?.some(t=>t.ipBlock?.cidr===cidr)&&r.ports?.some(p=>p.port===3306)));
+  assert(!np.spec.egress.some(r=>r.to?.some(t=>t.ipBlock?.cidr==='0.0.0.0/0')));
+});
+check('reject invalid RDS CIDR values',()=>run(['template','review',chart,'-f',resolve(root,'values/specification.yaml'),'--set-json','networkPolicy.databaseCidrs=["999.20.4.0/24"]'],false));
+check('ALB ingress is accepted only from an explicit CIDR allow-list',()=>{
+  const docs=render('gateway',['--set','networkPolicy.ingressFromCIDRs[0]=10.20.0.0/24']);
+  const np=docs.find(d=>d.kind==='NetworkPolicy');
+  assert.deepEqual(np.spec.ingress.filter(r=>r.from[0].ipBlock),[{from:[{ipBlock:{cidr:'10.20.0.0/24'}}],ports:[{port:'http',protocol:'TCP'}]}]);
+});
+check('reject invalid ALB CIDR values',()=>run(['template','review',chart,'-f',resolve(root,'values/gateway.yaml'),'--set','networkPolicy.ingressFromCIDRs[0]=999.20.0.0/24'],false));
 
 
 check('immutable image digest renders by digest',()=>{

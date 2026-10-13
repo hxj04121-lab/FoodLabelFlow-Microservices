@@ -1,0 +1,29 @@
+{
+  "title": "SpecTrace G2 - DLQ and service errors",
+  "uid": "spectrace-stcn-15-dlq-errors",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {"list": [{"name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus", "current": {"text": "Prometheus", "value": "Prometheus"}}]},
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "RabbitMQ dead-letter queue depth",
+      "description": "Total ready plus unacknowledged messages per queue ending in .dlq.",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 0},
+      "targets": [{"refId": "A", "expr": "rabbitmq_detailed_queue_messages{queue=~\".+\\\\.dlq\"}", "legendFormat": "{{queue}}"}]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Service 5xx ratio",
+      "description": "Five minute 5xx requests divided by all requests, grouped by service.",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 0},
+      "targets": [{"refId": "A", "expr": "sum by (service) (rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / clamp_min(sum by (service) (rate(http_server_requests_seconds_count[5m])), 0.1)", "legendFormat": "{{service}}"}]
+    }
+  ]
+}
