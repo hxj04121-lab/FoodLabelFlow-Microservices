@@ -18,6 +18,8 @@ tags:
   description: Specification-owned ingredient vocabulary.
 - name: specification-versions
   description: Versioned supplier material specifications (the platform Seed).
+- name: platform
+  description: Platform identity endpoint (G1-M4.2); technical, not a specification-domain operation.
 security:
 - bearerAuth: []
 paths:
@@ -457,6 +459,43 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /api/specifications/caller-claims:
+    get:
+      tags:
+      - platform
+      operationId: getCallerClaims
+      summary: Echo the identity the service resolved from the access token.
+      description: Platform endpoint the reference client and the gateway use to prove that the signed-in
+        Keycloak user is the identity a deployed service sees for the same token. It is not a specification-domain
+        operation; the starter security module (G1-M4.2) is its permanent home, and the path stays provisional
+        until the gateway route table and the contract steward confirm it. A token without an immutable sub,
+        without a single organisation or with an organisation type outside BR-11 is rejected before any body
+        is produced. The shared 403 response stays the edge's answer for a route-level role check.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: The caller's subject, organisation and business roles.
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallerClaims'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 components:
   securitySchemes:
     bearerAuth:
@@ -489,6 +528,33 @@ components:
         type: string
         minLength: 1
   schemas:
+    CallerClaims:
+      type: object
+      additionalProperties: false
+      description: The identity the service resolved from the validated access token. The field names mirror
+        the token claims the reference client compares against its own session.
+      required:
+      - subject
+      - org_id
+      - org_type
+      - roles
+      properties:
+        subject:
+          type: string
+          minLength: 1
+          description: The immutable OIDC sub claim (the Keycloak user id), never a username or a request field.
+        org_id:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        org_type:
+          type: string
+          enum: [SUPPLIER, MANUFACTURER]
+          description: The caller's organisation type (BR-11), from the org_type token claim.
+        roles:
+          type: array
+          description: The token's business realm roles, sorted; Keycloak's built-in default roles are not emitted.
+          items:
+            type: string
+            minLength: 1
     Supplier:
       type: object
       additionalProperties: false
