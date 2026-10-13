@@ -1,0 +1,35 @@
+# G3 M2 acceptance update — 14 October 2026 (Asia/Shanghai)
+
+This is the current G3 acceptance record and supersedes earlier status snapshots in the 13 October handoff, runtime note, and report draft. It separates merged implementation and CI from live service acceptance and cloud measurements.
+
+## M2 code and test tooling
+
+- [PR #41](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/41), head 3bbdf36b, merged 13 October as 82c0e5d4. It delivered the Phase 2 matcher, ImpactFinding.v1 outbox, preview/inbox APIs, immutable-version cache, fixed workload generator, load/failover controllers and analysis tools. Exact-head backend, platform/Testcontainers, contracts, LabelPublished, Compliance, k6-local, frontend, security, containers and Sonar checks passed.
+- [PR #51](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/51), head 4ea7f0ff, merged 14 October 00:42 CST as 356f9b8c. It adds the Label Workflow publication endpoint and atomic LabelPublished.v2 outbox with the authoritative business versionNumber, current published-label lookup and ImpactFinding consumer. M1 and M3 independently approved their scopes; exact-head backend/platform Testcontainers, contracts, label-contracts, k6-local, frontend, security, containers and Sonar checks passed. M3's stored-correlation replay finding is fixed on this head.
+- This establishes code and CI readiness. It does not establish a deployed end-to-end Label event to exactly one ReviewTask. The M5 routing correction [PR #42](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/42) is merged only into the M5 feature branch; its RabbitMQ binding is absent from current main. M5 [PR #39](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39) remains Draft, targets an outdated base, and reports no deployed applications, HTTPS route, or ready service. Static tests and green CI cannot substitute for that route.
+- Local Docker was checked on 14 October and its engine is unavailable. No new local MySQL/RabbitMQ container acceptance test was run. The stated Testcontainers results above are from GitHub CI.
+
+## Acceptance by Jira task
+
+| Jira | M2 code status | Live/measurement status |
+|---|---|---|
+| [STCN-95](https://hxj04121.atlassian.net/browse/STCN-95) | Phase 2 finding/outbox code and the Label publisher/consumer are merged; exact CI passed. | **BLOCKED:** M5's route is not on main/deployed. M1/M4 have not supplied observed real LabelPublished.v2 → CONFIRMED REVIEW_REQUIRED → exactly one ReviewTask evidence. |
+| [STCN-96](https://hxj04121.atlassian.net/browse/STCN-96) | Preview/inbox APIs, tenant/role guards and Gateway reference UI are merged and tested. | **BLOCKED:** no deployed Gateway/Compliance/Label path with real HTTPS issuer/JWKS and same-organisation success plus foreign-organisation 403 traces. |
+| [STCN-97](https://hxj04121.atlassian.net/browse/STCN-97) | Immutable-version cache and correctness tests are merged. | No measured performance benefit until the fixed cloud run is completed. |
+| [STCN-98](https://hxj04121.atlassian.net/browse/STCN-98) | Frozen 1-vs-3 replica k6 protocol, dataset validator, readiness/placement gates and strict result analyzer are merged. | **NOT RUN.** No approved window/access, ready deployed services, required c6i.large placement, accepted current Labels/tokens, or telemetry. No SLO was relaxed. |
+| [STCN-99](https://hxj04121.atlassian.net/browse/STCN-99) | One-Pod failover runner and recovery analyzer are merged. | **NOT RUN.** Requires an accepted R3 load result, then separate explicit approval to delete one verified Deployment-owned Pod. No Pod was deleted. |
+| [STCN-100](https://hxj04121.atlassian.net/browse/STCN-100) | Bottleneck measurement framework is merged. | **NOT RUN.** No raw measurements or reviewed Grafana/UTC traces exist; no measured bottleneck is claimed. |
+| [STCN-117](https://hxj04121.atlassian.net/browse/STCN-117) | Eight-section report draft and traceability are in main. | Draft still needs the observed ReviewTask and cloud evidence. Do not invent measurements. |
+
+The frozen workload, duration, SLOs and thresholds in test-plan-G0-M2.md remain unchanged.
+
+## External inputs needed to close G3
+
+- **M4:** provide accepted real test identities/JWTs for the 20 organisations and real current Label business versions; coordinate an observable publication and ReviewTask trace with M1/M3.
+- **M1:** provide a staging-loaded, replayable dataset and identify the actual released Products/Formulas/Labels for the run. The reported 5,000-formula/20-organisation import is local owner-reported input data; it is not 5,000 published Labels, 20 tested JWTs, or staging evidence.
+- **M5:** bring the #42 canonical impact.finding.v1 binding into a reviewed main-targeted deployment PR; synchronize the Draft platform branch with current main; configure protected staging access and a VPC runner; provide real HTTPS Gateway/issuer/JWKS/network values, deployed image digests, readiness and telemetry; explicitly approve one UTC test window, a maximum spend ceiling and cleanup owner/time. Current #39 says those deployment prerequisites are unavailable, eligible credits are unverified, and Terraform plan is skipped. A Jira date or monthly budget is not experiment authorization.
+- **M3/M5:** complete the deployed Gateway/Pages configuration needed for real sign-in and caller checks. #54 is still Draft; its CI validates preparation, while Pages and deployment checks are skipped.
+
+After those dependencies arrive, M2 can run the unchanged 1-vs-3 protocol, save raw k6/Grafana/image/placement evidence, analyze measured bottlenecks, and request the separate Pod-delete approval only after R3 passes.
+
+**Current result:** G3 implementation and test tooling are merged; live integration, AWS load/failover, and measured bottleneck analysis remain **BLOCKED / NOT RUN**. STCN-17 and STCN-117 must stay In Progress. No AWS experiment, source-database write, identity creation, Pod deletion or spend was performed by M2.
