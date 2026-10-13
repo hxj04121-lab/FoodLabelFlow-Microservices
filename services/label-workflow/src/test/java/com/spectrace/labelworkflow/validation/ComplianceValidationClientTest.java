@@ -81,6 +81,27 @@ class ComplianceValidationClientTest {
     }
 
     @Test
+    void treatsARejectedValidationAsAnAnswerNotAnOutage() throws IOException {
+        ComplianceValidationClient client = clientResponding(new int[] {409}, "{}");
+
+        ValidationClient.ValidationResult result = client.validate("key-r", Map.of());
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.resultStatus()).isEqualTo("FAILED");
+        assertThat(requests.get()).isEqualTo(1);
+    }
+
+    @Test
+    void treatsAnUnexpectedStatusAsUnavailable() throws IOException {
+        ComplianceValidationClient client = clientResponding(new int[] {404}, "{}");
+
+        assertThatThrownBy(() -> client.validate("key-u", Map.of()))
+                .isInstanceOf(ValidationClient.ValidationUnavailableException.class)
+                .hasMessageContaining("Unexpected validation status");
+        assertThat(requests.get()).isEqualTo(1);
+    }
+
+    @Test
     void opensTheBreakerAfterRepeatedFailuresAndStopsCallingTheService() throws IOException {
         ComplianceValidationClient client = clientResponding(new int[] {503}, "{}");
 
