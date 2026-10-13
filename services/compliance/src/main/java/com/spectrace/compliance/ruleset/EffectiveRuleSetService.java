@@ -16,12 +16,14 @@ import org.springframework.stereotype.Service;
 public class EffectiveRuleSetService {
 
     private static final String FIND_EFFECTIVE = """
-            SELECT rule_set_version_id, version_number, jurisdiction_code, effective_from, effective_to
-            FROM compliance_rule_set
-            WHERE jurisdiction_code = ? AND lifecycle_status = 'ACTIVE'
-              AND effective_from <= ? AND (effective_to IS NULL OR effective_to >= ?)
-            ORDER BY version_number DESC, effective_from DESC, rule_set_version_id
-            LIMIT 2
+            SELECT ruleSet.rule_set_version_id, ruleSet.version_number, ruleSet.jurisdiction_code,
+                ruleSet.effective_from, ruleSet.effective_to
+            FROM compliance_effective_rule_set currentRuleSet
+            JOIN compliance_rule_set ruleSet
+              ON ruleSet.jurisdiction_code = currentRuleSet.jurisdiction_code
+             AND ruleSet.rule_set_version_id = currentRuleSet.rule_set_version_id
+            WHERE currentRuleSet.jurisdiction_code = ? AND ruleSet.lifecycle_status = 'ACTIVE'
+              AND ruleSet.effective_from <= ? AND (ruleSet.effective_to IS NULL OR ruleSet.effective_to >= ?)
             """;
 
     private final JdbcTemplate jdbc;
@@ -45,11 +47,6 @@ public class EffectiveRuleSetService {
         }
         Map<String, Object> selected = rows.getFirst();
         int versionNumber = ((Number) selected.get("version_number")).intValue();
-        if (rows.size() > 1 && ((Number) rows.get(1).get("version_number")).intValue() == versionNumber) {
-            throw new ApiException(HttpStatus.CONFLICT, "RULE_SET_AMBIGUOUS",
-                    "More than one effective active rule set has the same version number for jurisdiction "
-                            + jurisdiction + ".");
-        }
         return new EffectiveRuleSet((String) selected.get("rule_set_version_id"), versionNumber,
                 (String) selected.get("jurisdiction_code"), toLocalDate(selected.get("effective_from")),
                 toLocalDate(selected.get("effective_to")));

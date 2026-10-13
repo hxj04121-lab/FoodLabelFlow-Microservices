@@ -35,12 +35,12 @@ class EffectiveRuleSetServiceTest {
     }
 
     @Test
-    void selectsTheHighestEffectiveVersionAndReturnsItsPinnedIdentity() {
+    void returnsTheExplicitCurrentPointerAndItsPinnedIdentity() {
         when(jdbc.queryForList(anyString(), eq("US"), eq(Date.valueOf(TODAY)), eq(Date.valueOf(TODAY))))
-                .thenReturn(List.of(row("ruleset-us-v2", 2, "US", TODAY, null),
-                        row("ruleset-us-v1", 1, "US", LocalDate.parse("2026-01-01"), null)));
+                .thenReturn(List.of(row("ruleset_us_falcpa_demo_v1", 1, "US", LocalDate.parse("2026-01-01"), null)));
 
-        assertThat(service.resolve("US")).isEqualTo(new EffectiveRuleSet("ruleset-us-v2", 2, "US", TODAY, null));
+        assertThat(service.resolve("US")).isEqualTo(new EffectiveRuleSet("ruleset_us_falcpa_demo_v1", 1, "US",
+                LocalDate.parse("2026-01-01"), null));
     }
 
     @Test
@@ -52,18 +52,6 @@ class EffectiveRuleSetServiceTest {
                 .isInstanceOf(ApiException.class)
                 .satisfies(error -> assertThat(((ApiException) error).status()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY))
                 .hasMessageContaining("No effective active rule set");
-    }
-
-    @Test
-    void tiedHighestVersionsFailClosedInsteadOfChoosingById() {
-        when(jdbc.queryForList(anyString(), eq("US"), eq(Date.valueOf(TODAY)), eq(Date.valueOf(TODAY))))
-                .thenReturn(List.of(row("ruleset-us-v2a", 2, "US", TODAY, null),
-                        row("ruleset-us-v2b", 2, "US", TODAY, null)));
-
-        assertThatThrownBy(() -> service.resolve("US"))
-                .isInstanceOf(ApiException.class)
-                .satisfies(error -> assertThat(((ApiException) error).status()).isEqualTo(HttpStatus.CONFLICT))
-                .hasMessageContaining("same version number");
     }
 
     @Test

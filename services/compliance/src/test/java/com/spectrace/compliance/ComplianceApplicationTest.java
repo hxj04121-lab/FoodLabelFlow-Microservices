@@ -137,15 +137,19 @@ class ComplianceApplicationTest {
     @Test
     void flywayOwnsTheComplianceRootAndReapplyingDoesNotDuplicateHistory() {
         assertThat(jdbc.queryForObject("SELECT DATABASE()", String.class)).isEqualTo("compliance");
-        assertThat(flyway.info().current().getVersion().toString()).isEqualTo("5");
+        assertThat(flyway.info().current().getVersion().toString()).isEqualTo("6");
         assertThat(jdbc.queryForList("SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank",
-                String.class)).containsExactly("0.1", "1", "2", "3", "4", "5");
+                String.class)).containsExactly("0.1", "1", "2", "3", "4", "5", "6");
         assertThat(jdbc.queryForList("""
                 SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()
                 AND table_name IN ('outbox', 'local_audit', 'processed_event', 'consumed_aggregate_version',
-                    'compliance_allergen', 'validation_run', 'specification_version_projection')""", String.class))
+                    'compliance_allergen', 'validation_run', 'specification_version_projection',
+                    'compliance_effective_rule_set')""", String.class))
                 .containsExactlyInAnyOrder("outbox", "local_audit", "processed_event", "consumed_aggregate_version",
-                        "compliance_allergen", "validation_run", "specification_version_projection");
+                        "compliance_allergen", "validation_run", "specification_version_projection",
+                        "compliance_effective_rule_set");
+        assertThat(jdbc.queryForObject("SELECT rule_set_version_id FROM compliance_effective_rule_set WHERE jurisdiction_code = 'US'",
+                String.class)).isEqualTo("ruleset_us_falcpa_demo_v1");
         assertThat(flyway.getConfiguration().isBaselineOnMigrate()).isFalse();
         assertThat(flyway.getConfiguration().isValidateOnMigrate()).isTrue();
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();

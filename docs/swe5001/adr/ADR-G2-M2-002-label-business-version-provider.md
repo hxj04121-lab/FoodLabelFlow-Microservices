@@ -60,11 +60,13 @@ M2 now publishes the Compliance-owned internal lookup in PR #41:
 `GET /internal/rule-sets/effective?jurisdiction={code}`. Label Workflow calls it with the actor JWT
 that authorized draft creation, and pins the returned exact `ruleSetVersionId` to the new draft.
 The database model owns rule sets by jurisdiction (not by product or organisation), so the endpoint
-does not accept either as an override. It accepts only a `LABEL_OFFICER` with `LABEL.CREATE`, selects
-an `ACTIVE` version effective on the current UTC date, and uses the highest `versionNumber` to match
-the existing baseline selector. No match returns 422; a tie at the highest version returns 409.
-The endpoint is read-only and fails closed; Label Workflow must not read Compliance's database or
-replace the pinned version during later validation.
+does not accept either as an override. It accepts only a `LABEL_OFFICER` with `LABEL.CREATE` and
+returns the single version named by Compliance's explicit per-jurisdiction effective-rule-set
+pointer, only while that version remains `ACTIVE` and effective on the current UTC date. A missing,
+inactive, or out-of-date pointer returns 422 without falling back to another row. The pointer avoids
+ambiguous current rules where compatibility seeds intentionally keep older identifiers `ACTIVE` for
+already pinned snapshots. The endpoint is read-only and fails closed; Label Workflow must not read
+Compliance's database or replace the pinned version during later validation.
 
 This gives M4 a concrete provider contract to implement in `RuleSetVersionResolver`. M4's HTTP client
 must forward the same verified actor Bearer token and correlation ID. The owner-side adapter and the

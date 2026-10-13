@@ -33,7 +33,7 @@ See the evidence note in `docs/swe5001/evidence/` for the completed run and limi
 
 This change implements the Compliance-owned validation and projection slice for STCN-12 / STCN-69–73: seeded allergen and rule data, idempotent validation runs, immutable Specification/Formula/Label projections, duplicate/stale event handling, and the read-only Phase 1 `SpecificationPublished → POTENTIAL` matcher. Unresolved components remain blocking review findings. The matcher does not write Formula state.
 
-The same Compliance-owned slice now exposes `GET /internal/rule-sets/effective?jurisdiction={code}` for Label Workflow draft creation. It requires a verified manufacturer `LABEL_OFFICER` with `LABEL.CREATE`, returns the exact active/effective rule-set ID plus version and effective dates, and never falls back when no unique highest version is available. M4 must pin that returned ID in its draft and add the owner-side client and joint integration test in PR #51.
+The same Compliance-owned slice now exposes `GET /internal/rule-sets/effective?jurisdiction={code}` for Label Workflow draft creation. It requires a verified manufacturer `LABEL_OFFICER` with `LABEL.CREATE` and returns the exact ID, version, and dates named by Compliance's per-jurisdiction effective-rule-set pointer. The pointed version must be active and effective today; a missing, inactive, or expired pointer returns 422 without fallback. Compatibility-seeded active IDs remain available to existing pinned snapshots but cannot make new drafts ambiguous. M4 must pin that returned ID in its draft and add the owner-side client and joint integration test in PR #51.
 
 ## Unresolved-result semantics
 
