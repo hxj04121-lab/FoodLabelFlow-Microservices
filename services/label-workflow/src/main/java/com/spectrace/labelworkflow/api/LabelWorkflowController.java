@@ -54,6 +54,9 @@ public class LabelWorkflowController {
     public record RecordDecision(String decision) {
     }
 
+    public record ValidateDraft(Integer draftRevision) {
+    }
+
     public record LabelDraft(String labelVersionId, String productId, String formulaVersionId,
                              String ruleSetVersionId, String jurisdictionCode, int versionNumber,
                              String lifecycleStatus) {
@@ -127,5 +130,19 @@ public class LabelWorkflowController {
         String status = service.decide(caller.organisationId(), labelVersionId, decision, caller.subject());
         return Map.of("labelVersionId", labelVersionId, "decision",
                 decision == null ? "" : decision.trim().toUpperCase(java.util.Locale.ROOT), "lifecycleStatus", status);
+    }
+
+    @PostMapping("/{labelVersionId}/validations")
+    public Map<String, Object> validate(@PathVariable String labelVersionId,
+                                        @RequestBody(required = false) ValidateDraft request) {
+        OrganisationContext caller = OrganisationContexts.current();
+        if (!caller.roles().contains(LABEL_OFFICER)) {
+            throw ApiException.forbidden();
+        }
+        int draftRevision = request == null || request.draftRevision() == null ? 0 : request.draftRevision();
+        var result = service.validate(caller.organisationId(), labelVersionId, draftRevision);
+        return java.util.Map.of("labelVersionId", labelVersionId,
+                "validationRunId", result.validationRunId() == null ? "" : result.validationRunId(),
+                "resultStatus", result.passed() ? "PASSED" : "FAILED");
     }
 }
