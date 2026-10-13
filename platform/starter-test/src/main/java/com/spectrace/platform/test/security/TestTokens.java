@@ -18,7 +18,6 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -76,6 +75,12 @@ public final class TestTokens {
         return sign(signingKey, claims(caller, issuer, now, now.plus(Duration.ofMinutes(5))));
     }
 
+    /** A valid token carrying one explicit resource audience. */
+    public String tokenWithAudience(Caller caller, String audience) {
+        Instant now = Instant.now();
+        return sign(signingKey, claims(caller, issuer, now, now.plus(Duration.ofMinutes(5)), audience));
+    }
+
     public String expired(Caller caller) {
         Instant past = Instant.now().minus(Duration.ofHours(1));
         return sign(signingKey, claims(caller, issuer, past.minus(Duration.ofMinutes(5)), past));
@@ -96,7 +101,7 @@ public final class TestTokens {
     public JwtDecoder jwtDecoder() {
         try {
             NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(signingKey.toRSAPublicKey()).build();
-            decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(JwtValidators.createDefaultWithIssuer(issuer)));
+            decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(issuer));
             return decoder;
         } catch (JOSEException exception) {
             throw new IllegalStateException(exception);
@@ -109,7 +114,12 @@ public final class TestTokens {
     }
 
     private static JWTClaimsSet claims(Caller caller, String issuer, Instant issuedAt, Instant expiresAt) {
-        return new JWTClaimsSet.Builder()
+        return claims(caller, issuer, issuedAt, expiresAt, null);
+    }
+
+    private static JWTClaimsSet claims(Caller caller, String issuer, Instant issuedAt, Instant expiresAt,
+                                       String audience) {
+        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .issuer(issuer)
                 .subject(caller.subject())
                 .jwtID(UUID.randomUUID().toString())
@@ -120,8 +130,11 @@ public final class TestTokens {
                 .claim("preferred_username", caller.subject())
                 .claim("org_id", caller.organisationId())
                 .claim("org_type", caller.organisationType())
-                .claim("roles", caller.roles())
-                .build();
+                .claim("roles", caller.roles());
+        if (audience != null) {
+            claims.audience(audience);
+        }
+        return claims.build();
     }
 
     private static String sign(RSAKey key, JWTClaimsSet claims) {
