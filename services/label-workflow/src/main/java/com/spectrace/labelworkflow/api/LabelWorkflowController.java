@@ -1,11 +1,13 @@
 package com.spectrace.labelworkflow.api;
 
 import com.spectrace.labelworkflow.application.RuleSetVersionResolver;
+import com.spectrace.labelworkflow.application.LabelWorkflowService;
 import com.spectrace.labelworkflow.persistence.LabelWorkflowStore;
 import com.spectrace.platform.starter.error.ApiException;
 import com.spectrace.platform.starter.security.OrganisationContext;
 import com.spectrace.platform.starter.security.OrganisationContexts;
 import java.time.Clock;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
@@ -31,19 +33,25 @@ import org.springframework.web.bind.annotation.RestController;
 public class LabelWorkflowController {
 
     private static final String LABEL_OFFICER = "LABEL_OFFICER";
+    private static final String APPROVER = "APPROVER";
 
     private final LabelWorkflowStore store;
+    private final LabelWorkflowService service;
     private final ObjectProvider<RuleSetVersionResolver> ruleSets;
     private final Clock clock;
 
-    public LabelWorkflowController(LabelWorkflowStore store, ObjectProvider<RuleSetVersionResolver> ruleSets,
-                                   Clock clock) {
+    public LabelWorkflowController(LabelWorkflowStore store, LabelWorkflowService service,
+                                   ObjectProvider<RuleSetVersionResolver> ruleSets, Clock clock) {
         this.store = store;
+        this.service = service;
         this.ruleSets = ruleSets;
         this.clock = clock;
     }
 
     public record CreateLabelDraft(String productId, String jurisdictionCode) {
+    }
+
+    public record RecordDecision(String decision) {
     }
 
     public record LabelDraft(String labelVersionId, String productId, String formulaVersionId,
@@ -95,5 +103,29 @@ public class LabelWorkflowController {
         }
         return new LabelDraft(row.labelVersionId(), row.productId(), row.formulaVersionId(), row.ruleSetVersionId(),
                 row.jurisdictionCode(), row.versionNumber(), row.lifecycleStatus());
+    }
+
+    @PostMapping("/{labelVersionId}/submit")
+    public Map<String, Object> submit(@PathVariable String labelVersionId) {
+        OrganisationContext caller = OrganisationContexts.current();
+        if (!caller.roles().contains(LABEL_OFFICER)) {
+            throw ApiException.forbidden();
+        }
+        String reviewTaskId = service.submit(caller.organisationId(), labelVersionId, caller.subject());
+        return Map.of("labelVersionId", labelVersionId, "lifecycleStatus", "PENDING_REVIEW",
+                "reviewTaskId", reviewTaskId);
+    }
+
+    @PostMapping("/{labelVersionId}/decisions")
+    public Map<String, Object> recordDecision(@PathVariable String labelVersionId,
+                                              @RequestBody(required = false) RecordDecision request) {
+        OrganisationContext caller = OrganisationContexts.current();
+        if (!caller.roles().contains(APPROVER)) {
+            throw ApiException.forbidden();
+        }
+        String decision = request == null ? null : request.decision();
+        String status = service.decide(caller.organisationId(), labelVersionId, decision, caller.subject());
+        return Map.of("labelVersionId", labelVersionId, "decision",
+                decision == null ? "" : decision.trim().toUpperCase(java.util.Locale.ROOT), "lifecycleStatus", status);
     }
 }
