@@ -53,6 +53,16 @@ public class LabelWorkflowController {
     public record CreateLabelDraft(String productId, String jurisdictionCode) {
     }
 
+    /** Frozen allergen declaration. */
+    public record DeclarationBody(String allergenId, String declarationType, String declarationSource,
+                                  String displayText) {
+    }
+
+    /** Frozen declaration-facts response. */
+    public record LabelDeclarationFactsBody(String labelVersionId, String formulaVersionId, String ruleSetVersionId,
+                                            String jurisdictionCode, java.util.List<DeclarationBody> declarations) {
+    }
+
     public record RecordDecision(String decision) {
     }
 
@@ -117,7 +127,7 @@ public class LabelWorkflowController {
         LabelWorkflowStore.LabelVersionRow row = store.labelVersion(labelVersionId)
                 .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
         if (!row.organisationId().equals(caller.organisationId())) {
-            throw ApiException.notFound("Label version " + labelVersionId + " does not exist");
+            throw ApiException.forbidden();
         }
         return new LabelDraft(row.labelVersionId(), row.productId(), row.formulaVersionId(), row.ruleSetVersionId(),
                 row.jurisdictionCode(), row.versionNumber(), row.lifecycleStatus());
@@ -165,6 +175,22 @@ public class LabelWorkflowController {
     private static LabelDraft draft(LabelWorkflowStore.LabelVersionRow row) {
         return new LabelDraft(row.labelVersionId(), row.productId(), row.formulaVersionId(), row.ruleSetVersionId(),
                 row.jurisdictionCode(), row.versionNumber(), row.lifecycleStatus());
+    }
+
+    @GetMapping("/{labelVersionId}/declarations")
+    public LabelDeclarationFactsBody declarations(@PathVariable String labelVersionId) {
+        OrganisationContext caller = OrganisationContexts.current();
+        LabelWorkflowStore.LabelVersionRow row = store.labelVersion(labelVersionId)
+                .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
+        if (!row.organisationId().equals(caller.organisationId())) {
+            throw ApiException.forbidden();
+        }
+        var declarations = store.declarations(labelVersionId).stream()
+                .map(declaration -> new DeclarationBody(declaration.allergenId(), declaration.declarationType(),
+                        declaration.declarationSource(), declaration.displayText()))
+                .toList();
+        return new LabelDeclarationFactsBody(row.labelVersionId(), row.formulaVersionId(), row.ruleSetVersionId(),
+                row.jurisdictionCode(), declarations);
     }
 
     @PostMapping("/{labelVersionId}/publish")
