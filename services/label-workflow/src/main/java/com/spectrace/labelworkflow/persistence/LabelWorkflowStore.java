@@ -201,4 +201,49 @@ public class LabelWorkflowStore {
                 """, labelVersionId, organisationId, productId, versionNumber, formulaVersionId, ruleSetVersionId,
                 jurisdictionCode, createdBySubject, Timestamp.from(now), Timestamp.from(now));
     }
+
+    /** A draft can only be submitted against a PASSED validation record for this label version. */
+    public boolean hasPassedValidation(String labelVersionId) {
+        Integer count = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM label_validation_record
+                WHERE label_version_id = ? AND result_status = 'PASSED'
+                """, Integer.class, labelVersionId);
+        return count != null && count > 0;
+    }
+
+    public int transition(String labelVersionId, String from, String to, Instant now) {
+        return jdbc.update("""
+                UPDATE label_version SET lifecycle_status = ?, updated_at = ?
+                WHERE label_version_id = ? AND lifecycle_status = ?
+                """, to, Timestamp.from(now), labelVersionId, from);
+    }
+
+    public void insertReviewTask(String reviewTaskId, String labelVersionId, Instant now) {
+        jdbc.update("""
+                INSERT INTO label_review_task (label_review_task_id, label_version_id, status, created_at)
+                VALUES (?, ?, 'OPEN', ?)
+                """, reviewTaskId, labelVersionId, Timestamp.from(now));
+    }
+
+    public Optional<String> openReviewTask(String labelVersionId) {
+        return jdbc.queryForList("""
+                SELECT label_review_task_id FROM label_review_task
+                WHERE label_version_id = ? AND status = 'OPEN'
+                """, String.class, labelVersionId).stream().findFirst();
+    }
+
+    public int resolveReviewTask(String reviewTaskId, Instant now) {
+        return jdbc.update("""
+                UPDATE label_review_task SET status = 'RESOLVED', resolved_at = ?
+                WHERE label_review_task_id = ? AND status = 'OPEN'
+                """, Timestamp.from(now), reviewTaskId);
+    }
+
+    public void insertDecision(String decisionId, String labelVersionId, String decision, String actorSubject,
+                               Instant now) {
+        jdbc.update("""
+                INSERT INTO label_decision (label_decision_id, label_version_id, decision, actor_subject, decided_at)
+                VALUES (?, ?, ?, ?, ?)
+                """, decisionId, labelVersionId, decision, actorSubject, Timestamp.from(now));
+    }
 }
