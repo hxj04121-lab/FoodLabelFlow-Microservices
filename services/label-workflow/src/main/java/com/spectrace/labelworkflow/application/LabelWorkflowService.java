@@ -3,6 +3,7 @@ package com.spectrace.labelworkflow.application;
 import com.spectrace.labelworkflow.persistence.LabelWorkflowStore;
 import com.spectrace.labelworkflow.validation.ValidationClient;
 import com.spectrace.platform.starter.error.ApiException;
+import com.spectrace.platform.starter.error.ErrorCodes;
 import com.spectrace.platform.starter.messaging.Outbox;
 import java.time.Clock;
 import java.time.Instant;
@@ -13,6 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -290,18 +292,21 @@ public class LabelWorkflowService {
             declarations.add(entry);
         }
         request.put("declarations", declarations);
-        ValidationClient.ValidationResult result = validations.validate(
-                labelVersionId + ":" + draftRevision, request, authorization, correlationId);
+        ValidationClient.ValidationResult result;
+        try {
+            result = validations.validate(
+                    labelVersionId + ":" + draftRevision, request, authorization, correlationId);
+        } catch (ValidationClient.ValidationUnavailableException failure) {
+            throw validationUnavailable();
+        }
         if (result == null || result.validationRunId() == null || result.validationRunId().isBlank()
                 || !Set.of("PASSED", "FAILED").contains(result.resultStatus()) || result.findings() == null) {
-            throw new ValidationClient.ValidationUnavailableException(
-                    "Compliance did not return a complete validation result");
+            throw validationUnavailable();
         }
         String status = result.resultStatus();
         boolean blocking = result.findings().stream().anyMatch(ValidationClient.ValidationFinding::blocking);
         if ("PASSED".equals(status) && blocking || "FAILED".equals(status) && !blocking) {
-            throw new ValidationClient.ValidationUnavailableException(
-                    "Compliance returned an inconsistent status and findings tuple");
+            throw validationUnavailable();
         }
         java.util.List<ValidationClient.ValidationFinding> findings = List.copyOf(result.findings());
         String validationRunId = result.validationRunId();
@@ -309,5 +314,10 @@ public class LabelWorkflowService {
                 labelVersionId, label.formulaVersionId(), label.ruleSetVersionId(), label.jurisdictionCode(),
                 status, draftRevision, clock.instant());
         return new ValidationOutcome(validationRunId, status, findings);
+    }
+
+    private static ApiException validationUnavailable() {
+        return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.SERVICE_UNAVAILABLE,
+                "Compliance validation is unavailable or returned an invalid response.");
     }
 }
