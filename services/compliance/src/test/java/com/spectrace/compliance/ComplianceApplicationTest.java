@@ -6,6 +6,8 @@ import static org.awaitility.Awaitility.await;
 
 import com.spectrace.platform.starter.correlation.CorrelationId;
 import com.spectrace.platform.test.MySqlTestcontainers;
+import com.spectrace.platform.test.security.TestTokens;
+import com.spectrace.platform.test.security.TestTokens.Caller;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -22,16 +24,22 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.testcontainers.mysql.MySQLContainer;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Real HTTP and MySQL checks of the generated G1 skeleton; no business API or fake JWT adapter. */
+/**
+ * Real HTTP and MySQL checks of the generated G1 skeleton. The starter security module is a JWT
+ * resource server, so the test signs its own Keycloak-shaped tokens instead of disabling security.
+ */
 @Import(MySqlTestcontainers.class)
 @AutoConfigureMetrics
 @ExtendWith(OutputCaptureExtension.class)
@@ -44,11 +52,29 @@ class ComplianceApplicationTest {
     @Autowired
     MySQLContainer mysql;
 
+    /** The starter is a JWT resource server, so callers must present a token. */
+    @TestConfiguration
+    static class SignedTokens {
+
+        @Bean
+        TestTokens testTokens() {
+            return new TestTokens();
+        }
+
+        @Bean
+        JwtDecoder jwtDecoder(TestTokens tokens) {
+            return tokens.jwtDecoder();
+        }
+    }
+
     @LocalServerPort
     int port;
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    TestTokens tokens;
 
     @Autowired
     Flyway flyway;
@@ -59,9 +85,16 @@ class ComplianceApplicationTest {
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
     private HttpResponse<String> get(String path, String correlation) throws Exception {
-        return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-                .header(CorrelationId.HEADER, correlation).timeout(Duration.ofSeconds(30)).build(),
-                HttpResponse.BodyHandlers.ofString());
+        return get(path, correlation, null);
+    }
+
+    private HttpResponse<String> get(String path, String correlation, String token) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header(CorrelationId.HEADER, correlation).timeout(Duration.ofSeconds(30));
+        if (token != null) {
+            request.header("Authorization", "Bearer " + token);
+        }
+        return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     @SuppressWarnings("unchecked")
@@ -82,8 +115,16 @@ class ComplianceApplicationTest {
 
     @Test
     void unknownPathsAndUnexposedActuatorsUseTheCanonicalErrorAndCorrelation() throws Exception {
+        // The resource server decides before routing, so an anonymous call is 401 rather than 404;
+        // the canonical 404 envelope is asserted with a token. Both halves must hold: no path is
+        // reachable without one.
+        HttpResponse<String> anonymous = get("/api/compliance/unknown", "stcn49-anonymous");
+        assertThat(anonymous.statusCode()).isEqualTo(401);
+        assertThat(body(anonymous)).containsEntry("code", "AUTHENTICATION_REQUIRED");
+
         for (String path : new String[] {"/api/compliance/unknown", "/actuator/env", "/actuator/beans"}) {
-            HttpResponse<String> response = get(path, "stcn49-error");
+            HttpResponse<String> response = get(path, "stcn49-error", tokens.token(
+                    Caller.of("compliance-test", "org-test", "MANUFACTURER", "LABEL_OFFICER")));
             assertThat(response.statusCode()).isEqualTo(404);
             assertThat(body(response)).containsOnlyKeys("code", "message", "traceId", "evidenceId")
                     .containsEntry("code", "RESOURCE_NOT_FOUND").containsEntry("traceId", "stcn49-error")
