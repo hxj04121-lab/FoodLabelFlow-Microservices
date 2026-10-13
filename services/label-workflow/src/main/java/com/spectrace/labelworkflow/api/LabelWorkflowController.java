@@ -3,14 +3,11 @@ package com.spectrace.labelworkflow.api;
 import com.spectrace.labelworkflow.application.RuleSetVersionResolver;
 import com.spectrace.labelworkflow.application.LabelWorkflowService;
 import com.spectrace.labelworkflow.persistence.LabelWorkflowStore;
-import com.spectrace.labelworkflow.validation.ValidationClient.ValidationFinding;
 import com.spectrace.platform.starter.error.ApiException;
-import com.spectrace.platform.starter.security.OrganisationAuthenticationToken;
 import com.spectrace.platform.starter.security.OrganisationContext;
 import com.spectrace.platform.starter.security.OrganisationContexts;
 import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
@@ -28,9 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
  * Label Workflow REST API (G2-M4.3, STCN-80; contracts/openapi/label-workflow-v1.yaml).
  *
  * <p>The actor and organisation always come from the validated token (never the request body), and a
- * label owned by another organisation is denied without returning resource content (BR-11). Draft
- * creation pins the current released formula from the local projection and active rule set through
- * {@link RuleSetVersionResolver};
+ * label of another organisation is reported as absent (BR-11). Draft creation pins the current released
+ * formula from the local projection and the active rule set through {@link RuleSetVersionResolver};
  * when no resolver is configured the draft fails closed instead of guessing a rule set.</p>
  */
 @RestController
@@ -39,7 +35,6 @@ public class LabelWorkflowController {
 
     private static final String LABEL_OFFICER = "LABEL_OFFICER";
     private static final String APPROVER = "APPROVER";
-    private static final String PUBLISHER = "PUBLISHER";
 
     private final LabelWorkflowStore store;
     private final LabelWorkflowService service;
@@ -57,33 +52,23 @@ public class LabelWorkflowController {
     public record CreateLabelDraft(String productId, String jurisdictionCode) {
     }
 
-    public record RecordDecision(String decision, String comments) {
+    public record RecordDecision(String decision) {
+    }
+
+    /** Frozen decision response (contracts/openapi/label-workflow-v1.yaml). */
+    public record LabelDecisionBody(String decisionId, String labelVersionId, String decision, String decidedAt,
+                                    String comments) {
+    }
+
+    /** Frozen validation response; findings are filled in when the provider returns them. */
+    public record LabelValidationBody(String validationRunId, String labelVersionId, String formulaVersionId,
+                                      String ruleSetVersionId, String jurisdictionCode, String status,
+                                      java.util.List<Object> findings) {
     }
 
     public record LabelDraft(String labelVersionId, String productId, String formulaVersionId,
                              String ruleSetVersionId, String jurisdictionCode, int versionNumber,
                              String lifecycleStatus) {
-    }
-
-    public record LabelDeclaration(String allergenId, String declarationType, String declarationSource,
-                                   String displayText) {
-    }
-
-    public record LabelDeclarationFacts(String labelVersionId, String formulaVersionId, String ruleSetVersionId,
-                                        String jurisdictionCode, List<LabelDeclaration> declarations) {
-    }
-
-    public record LabelValidationRecord(String validationRunId, String labelVersionId, String formulaVersionId,
-                                        String ruleSetVersionId, String jurisdictionCode, String status,
-                                        List<ValidationFinding> findings) {
-    }
-
-    public record LabelDecision(String decisionId, String labelVersionId, String decision, Instant decidedAt,
-                                String comments) {
-    }
-
-    public record LabelPublication(String publicationRecordId, String labelVersionId, String lifecycleStatus,
-                                   Instant publishedAt) {
     }
 
     @PostMapping("/drafts")
@@ -123,19 +108,13 @@ public class LabelWorkflowController {
     @GetMapping("/{labelVersionId}")
     public LabelDraft getLabelVersion(@PathVariable String labelVersionId) {
         OrganisationContext caller = OrganisationContexts.current();
-        return toDraft(requireOwnedLabel(labelVersionId, caller.organisationId()));
-    }
-
-    @GetMapping("/{labelVersionId}/declarations")
-    public LabelDeclarationFacts getLabelDeclarations(@PathVariable String labelVersionId) {
-        OrganisationContext caller = OrganisationContexts.current();
-        LabelWorkflowStore.LabelVersionRow label = requireOwnedLabel(labelVersionId, caller.organisationId());
-        List<LabelDeclaration> declarations = store.declarations(labelVersionId).stream()
-                .map(declaration -> new LabelDeclaration(declaration.allergenId(), declaration.declarationType(),
-                        declaration.declarationSource(), declaration.displayText()))
-                .toList();
-        return new LabelDeclarationFacts(label.labelVersionId(), label.formulaVersionId(), label.ruleSetVersionId(),
-                label.jurisdictionCode(), declarations);
+        LabelWorkflowStore.LabelVersionRow row = store.labelVersion(labelVersionId)
+                .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
+        if (!row.organisationId().equals(caller.organisationId())) {
+            throw ApiException.notFound("Label version " + labelVersionId + " does not exist");
+        }
+        return new LabelDraft(row.labelVersionId(), row.productId(), row.formulaVersionId(), row.ruleSetVersionId(),
+                row.jurisdictionCode(), row.versionNumber(), row.lifecycleStatus());
     }
 
     @PostMapping("/{labelVersionId}/submit")
@@ -144,75 +123,41 @@ public class LabelWorkflowController {
         if (!caller.roles().contains(LABEL_OFFICER)) {
             throw ApiException.forbidden();
         }
-        service.submit(caller.organisationId(), labelVersionId, caller.subject());
-        LabelWorkflowStore.LabelVersionRow row = store.labelVersion(labelVersionId)
-                .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
-        return toDraft(row);
+        return draft(service.submit(caller.organisationId(), labelVersionId, caller.subject()));
     }
 
     @PostMapping("/{labelVersionId}/decisions")
-    @ResponseStatus(HttpStatus.CREATED)
-    public LabelDecision recordDecision(@PathVariable String labelVersionId,
-                                        @RequestBody(required = false) RecordDecision request) {
+    public LabelDecisionBody recordDecision(@PathVariable String labelVersionId,
+                                            @RequestBody(required = false) RecordDecision request) {
         OrganisationContext caller = OrganisationContexts.current();
         if (!caller.roles().contains(APPROVER)) {
             throw ApiException.forbidden();
         }
         String decision = request == null ? null : request.decision();
-        String comments = request == null ? null : request.comments();
-        LabelWorkflowService.DecisionResult result =
-                service.decide(caller.organisationId(), labelVersionId, decision, caller.subject(), comments);
-        return new LabelDecision(result.decisionId(), result.labelVersionId(), result.decision(), result.decidedAt(),
-                result.comments());
+        var outcome = service.decide(caller.organisationId(), labelVersionId, decision, caller.subject());
+        return new LabelDecisionBody(outcome.decisionId(), labelVersionId, outcome.decision(),
+                outcome.decidedAt().toString(), null);
     }
 
     @PostMapping("/{labelVersionId}/validations")
     @ResponseStatus(HttpStatus.CREATED)
-    public LabelValidationRecord validate(@PathVariable String labelVersionId,
-                                          @RequestHeader("X-Correlation-ID") String correlationId) {
+    public LabelValidationBody validate(@PathVariable String labelVersionId,
+                                        @RequestHeader(value = "Authorization", required = false) String authorization,
+                                        @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
         OrganisationContext caller = OrganisationContexts.current();
         if (!caller.roles().contains(LABEL_OFFICER)) {
             throw ApiException.forbidden();
         }
-        var result = service.validate(caller.organisationId(), labelVersionId, currentActorToken(), correlationId);
-        return new LabelValidationRecord(result.validationRunId(), result.labelVersionId(), result.formulaVersionId(),
-                result.ruleSetVersionId(), result.jurisdiction(), result.status(), result.findings());
+        var label = store.labelVersion(labelVersionId);
+        var outcome = service.validate(caller.organisationId(), labelVersionId, authorization, correlationId);
+        var row = label.orElse(null);
+        return new LabelValidationBody(outcome.validationRunId(), labelVersionId,
+                row == null ? null : row.formulaVersionId(), row == null ? null : row.ruleSetVersionId(),
+                row == null ? null : row.jurisdictionCode(), outcome.status(), java.util.List.of());
     }
 
-    @PostMapping("/{labelVersionId}/publish")
-    @ResponseStatus(HttpStatus.CREATED)
-    public LabelPublication publish(@PathVariable String labelVersionId) {
-        OrganisationContext caller = OrganisationContexts.current();
-        if (!caller.roles().contains(PUBLISHER)) {
-            throw ApiException.forbidden();
-        }
-        String publicationId = service.publish(caller.organisationId(), labelVersionId, caller.subject());
-        LabelWorkflowStore.PublicationRow publication = store.publication(publicationId)
-                .orElseThrow(() -> ApiException.notFound("Label publication " + publicationId + " does not exist"));
-        return new LabelPublication(publication.publicationRecordId(), publication.labelVersionId(), "PUBLISHED",
-                publication.publishedAt());
-    }
-
-    private static LabelDraft toDraft(LabelWorkflowStore.LabelVersionRow row) {
+    private static LabelDraft draft(LabelWorkflowStore.LabelVersionRow row) {
         return new LabelDraft(row.labelVersionId(), row.productId(), row.formulaVersionId(), row.ruleSetVersionId(),
                 row.jurisdictionCode(), row.versionNumber(), row.lifecycleStatus());
-    }
-
-    private LabelWorkflowStore.LabelVersionRow requireOwnedLabel(String labelVersionId, String organisationId) {
-        LabelWorkflowStore.LabelVersionRow label = store.labelVersion(labelVersionId)
-                .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
-        if (!label.organisationId().equals(organisationId)) {
-            throw ApiException.forbidden();
-        }
-        return label;
-    }
-
-    private static String currentActorToken() {
-        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext()
-                .getAuthentication();
-        if (authentication instanceof OrganisationAuthenticationToken token && token.jwt() != null) {
-            return token.jwt().getTokenValue();
-        }
-        throw ApiException.unauthenticated();
     }
 }
