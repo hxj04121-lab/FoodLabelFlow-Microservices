@@ -296,9 +296,10 @@ class SpecificationApiTest {
     }
 
     @Test
-    void tokensWithoutOrganisationClaimsAreRejected() throws Exception {
+    void tokensWithoutAUsableOrganisationAreUnauthenticated() throws Exception {
+        // The starter security module treats an organisation type outside BR-11 as an unusable identity.
         Caller noOrganisationType = new Caller("x", "org-supplier-alpha", "AUDITOR_ORG", List.of("SPEC_AUTHOR"));
-        assertThat(call("GET", "/api/specifications/suppliers", noOrganisationType, null).status()).isEqualTo(403);
+        assertThat(call("GET", "/api/specifications/suppliers", noOrganisationType, null).status()).isEqualTo(401);
         assertThat(call("GET", "/api/specifications/suppliers", null, null).status()).isEqualTo(401);
     }
 
