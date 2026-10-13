@@ -11,6 +11,8 @@ on:
       helm_chart: {type: string, required: true}
       values_file: {type: string, required: false, default: ''}
       environment_values_file: {type: string, required: false, default: ''}
+      kind_node_labels: {type: string, required: false, default: ''}
+      kind_node_taints: {type: string, required: false, default: ''}
       namespace: {type: string, required: true}
     secrets:
       SONAR_TOKEN: {required: true}
@@ -36,6 +38,8 @@ jobs:
           MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
           VALUES_FILE: ${{ inputs.values_file }}
           ENVIRONMENT_VALUES_FILE: ${{ inputs.environment_values_file }}
+          KIND_NODE_LABELS: ${{ inputs.kind_node_labels }}
+          KIND_NODE_TAINTS: ${{ inputs.kind_node_taints }}
         run: |
           [[ "$SERVICE_NAME" =~ ^[a-z0-9-]+$ ]]
           [[ "$SERVICE_PATH" != /* && "$SERVICE_PATH" != *..* ]]
@@ -54,6 +58,14 @@ jobs:
               [[ "$values_file" != /* && "$values_file" != *..* ]]
               test -f "$values_file"
             fi
+          done
+          IFS=',' read -r -a node_labels <<< "$KIND_NODE_LABELS"
+          for node_label in "${node_labels[@]}"; do
+            [[ -z "$node_label" || "$node_label" =~ ^[A-Za-z0-9./_-]+=[A-Za-z0-9._-]+$ ]]
+          done
+          IFS=',' read -r -a node_taints <<< "$KIND_NODE_TAINTS"
+          for node_taint in "${node_taints[@]}"; do
+            [[ -z "$node_taint" || "$node_taint" =~ ^[A-Za-z0-9./_-]+=[A-Za-z0-9._-]+:(NoSchedule|PreferNoSchedule|NoExecute)$ ]]
           done
       - uses: actions/setup-java@v4
         if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
@@ -131,6 +143,22 @@ jobs:
       - uses: helm/kind-action@v1.12.0
       - uses: azure/setup-helm@v4
         with: {version: v4.3.0}
+      - name: Configure kind node labels and taints
+        if: ${{ inputs.kind_node_labels != '' || inputs.kind_node_taints != '' }}
+        env:
+          KIND_NODE_LABELS: ${{ inputs.kind_node_labels }}
+          KIND_NODE_TAINTS: ${{ inputs.kind_node_taints }}
+        run: |
+          node="$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')"
+          test -n "$node"
+          IFS=',' read -r -a node_labels <<< "$KIND_NODE_LABELS"
+          for node_label in "${node_labels[@]}"; do
+            [[ -z "$node_label" ]] || kubectl label node "$node" "$node_label" --overwrite
+          done
+          IFS=',' read -r -a node_taints <<< "$KIND_NODE_TAINTS"
+          for node_taint in "${node_taints[@]}"; do
+            [[ -z "$node_taint" ]] || kubectl taint node "$node" "$node_taint" --overwrite
+          done
       - name: Build and load service image
         env:
           SERVICE_NAME: ${{ inputs.service_name }}
