@@ -120,10 +120,10 @@ public class ComplianceValidationClient implements ValidationClient {
         if (!Set.of("PASSED", "FAILED").contains(status)) {
             throw new ValidationUnavailableException("Compliance returned an unknown validation status");
         }
-        String responseCorrelationId = requiredText(node, "correlationId");
-        if (correlationId != null && !correlationId.isBlank() && !correlationId.equals(responseCorrelationId)) {
-            throw new ValidationUnavailableException("Compliance returned a different correlationId");
-        }
+        // A legitimate idempotent replay returns the stored run unchanged, so its correlationId belongs
+        // to the FIRST request. Requiring it to equal the current request would reject that correct 200
+        // replay and surface 503; presence is required and the semantic binding guards below still apply.
+        requiredText(node, "correlationId");
         matches(node, request, "organisationId");
         matches(node, request, "labelVersionId");
         matches(node, request, "versionNumber");
