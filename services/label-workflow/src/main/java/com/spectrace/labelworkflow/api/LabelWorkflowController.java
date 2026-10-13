@@ -35,6 +35,7 @@ public class LabelWorkflowController {
 
     private static final String LABEL_OFFICER = "LABEL_OFFICER";
     private static final String APPROVER = "APPROVER";
+    private static final String PUBLISHER = "PUBLISHER";
 
     private final LabelWorkflowStore store;
     private final LabelWorkflowService service;
@@ -64,6 +65,11 @@ public class LabelWorkflowController {
     public record LabelValidationBody(String validationRunId, String labelVersionId, String formulaVersionId,
                                       String ruleSetVersionId, String jurisdictionCode, String status,
                                       java.util.List<Object> findings) {
+    }
+
+    /** Frozen publication response. */
+    public record LabelPublicationBody(String publicationRecordId, String labelVersionId, String lifecycleStatus,
+                                       String publishedAt) {
     }
 
     public record LabelDraft(String labelVersionId, String productId, String formulaVersionId,
@@ -159,5 +165,17 @@ public class LabelWorkflowController {
     private static LabelDraft draft(LabelWorkflowStore.LabelVersionRow row) {
         return new LabelDraft(row.labelVersionId(), row.productId(), row.formulaVersionId(), row.ruleSetVersionId(),
                 row.jurisdictionCode(), row.versionNumber(), row.lifecycleStatus());
+    }
+
+    @PostMapping("/{labelVersionId}/publish")
+    @ResponseStatus(HttpStatus.CREATED)
+    public LabelPublicationBody publish(@PathVariable String labelVersionId) {
+        OrganisationContext caller = OrganisationContexts.current();
+        if (!caller.roles().contains(PUBLISHER)) {
+            throw ApiException.forbidden();
+        }
+        var outcome = service.publish(caller.organisationId(), labelVersionId, caller.subject());
+        return new LabelPublicationBody(outcome.publicationRecordId(), labelVersionId, "PUBLISHED",
+                outcome.publishedAt().toString());
     }
 }
