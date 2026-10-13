@@ -12,7 +12,9 @@ consumers:
       - name: formula-published
         routingKey: formula.published.v1
       - name: label-published
-        routingKey: label.published.v1
+        routingKeys:
+          - label.published.v1
+          - label.published.v2
   - service: formulation
     namespace: formulation
     queues:

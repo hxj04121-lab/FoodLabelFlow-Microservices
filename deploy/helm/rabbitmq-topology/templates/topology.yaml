@@ -26,6 +26,7 @@ spec:
 {{- $namespace := $consumer.namespace }}
 {{- range $queue := $consumer.queues }}
 {{- $queueName := printf "%s.%s" $service $queue.name }}
+{{- $routingKeys := $queue.routingKeys | default (list $queue.routingKey) }}
 ---
 apiVersion: rabbitmq.com/v1beta1
 kind: Queue
@@ -48,18 +49,20 @@ spec:
   durable: true
   autoDelete: false
   rabbitmqClusterReference: {name: {{ $.Values.rabbitmq.name }}, namespace: {{ $.Values.rabbitmq.namespace }}}
+{{- range $index, $key := $routingKeys }}
 ---
 apiVersion: rabbitmq.com/v1beta1
 kind: Binding
 metadata:
-  name: {{ printf "%s-%s-event" $service $queue.name }}
+  name: {{ printf "%s-%s-event-%d" $service $queue.name $index }}
   namespace: {{ $namespace }}
 spec:
   source: {{ $.Values.rabbitmq.exchange | quote }}
   destination: {{ $queueName | quote }}
   destinationType: queue
-  routingKey: {{ $queue.routingKey | quote }}
+  routingKey: {{ $key | quote }}
   rabbitmqClusterReference: {name: {{ $.Values.rabbitmq.name }}, namespace: {{ $.Values.rabbitmq.namespace }}}
+{{- end }}
 ---
 apiVersion: rabbitmq.com/v1beta1
 kind: Binding
