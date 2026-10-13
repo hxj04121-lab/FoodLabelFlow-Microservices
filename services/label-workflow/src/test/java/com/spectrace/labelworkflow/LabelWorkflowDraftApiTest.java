@@ -107,8 +107,8 @@ class LabelWorkflowDraftApiTest {
         String other = tokens.token(Caller.of("officer", "org-maker-2", "MANUFACTURER", "LABEL_OFFICER"));
         HttpResponse<String> read = request("GET", "/api/labels/" + labelVersionId, null, other);
 
-        assertThat(read.statusCode()).isEqualTo(404);
-        assertThat(read.body()).contains("RESOURCE_NOT_FOUND");
+        assertThat(read.statusCode()).isEqualTo(403);
+        assertThat(read.body()).contains("AUTHORIZATION_DENIED");
     }
 
     @Test
