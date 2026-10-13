@@ -74,7 +74,7 @@ public class LabelWorkflowController {
     /** Frozen validation response; findings are filled in when the provider returns them. */
     public record LabelValidationBody(String validationRunId, String labelVersionId, String formulaVersionId,
                                       String ruleSetVersionId, String jurisdictionCode, String status,
-                                      java.util.List<Object> findings) {
+                                      java.util.List<com.spectrace.labelworkflow.validation.ValidationClient.ValidationFinding> findings) {
     }
 
     /** Frozen publication response. */
@@ -169,7 +169,7 @@ public class LabelWorkflowController {
         var row = label.orElse(null);
         return new LabelValidationBody(outcome.validationRunId(), labelVersionId,
                 row == null ? null : row.formulaVersionId(), row == null ? null : row.ruleSetVersionId(),
-                row == null ? null : row.jurisdictionCode(), outcome.status(), java.util.List.of());
+                row == null ? null : row.jurisdictionCode(), outcome.status(), outcome.findings());
     }
 
     private static LabelDraft draft(LabelWorkflowStore.LabelVersionRow row) {
