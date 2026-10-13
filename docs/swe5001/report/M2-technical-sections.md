@@ -1,3 +1,5 @@
+> **Current acceptance status (13 October 2026, 22:45 CST):** G3 runtime/tooling from PR #41 is merged to `main`; PR #37 is also merged. The live Label-to-ReviewTask flow and cloud load/failover evidence remain incomplete. See the [current acceptance addendum](../evidence/G3-M2-acceptance-update-20261013.md); historical head-specific statements below are preserved as their original evidence records.
+
 # M2 Technical Report Sections — SWE5001 SpecTrace-CN
 
 Draft for Huang Xiangjia (M1), updated at the 13 October G3 checkpoint (Asia/Shanghai). Draft deadline: 15 October 23:59, following G2/G3 integration on 13–14 October and feature freeze on 14 October. The current sprint fields explicitly say [Re-planned 11 Oct]; G1 sprint 71 is 12 Oct, G2 sprint 72 is 13 Oct, G3 sprint 73 freezes features at 23:59 on 14 Oct, and report sprint 75 integrates on 16 Oct. Older issue descriptions/work-order windows remain historical. Planning dates do not authorize an AWS spending/access window.
