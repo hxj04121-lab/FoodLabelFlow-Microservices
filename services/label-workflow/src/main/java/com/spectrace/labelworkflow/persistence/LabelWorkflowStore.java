@@ -259,4 +259,17 @@ public class LabelWorkflowStore {
                 """, validationRunId, labelVersionId, formulaVersionId, ruleSetVersionId, jurisdictionCode,
                 resultStatus, draftRevision, Timestamp.from(now));
     }
+
+    /**
+     * Creates the review task for a confirmed finding. The unique key makes redelivery and concurrent
+     * duplicates a no-op instead of a second task or a rolled-back transaction.
+     */
+    public int insertImpactReviewTask(String reviewTaskId, String organisationId, String findingId, Instant now) {
+        return jdbc.update("""
+                INSERT INTO impact_review_task (impact_review_task_id, organisation_id, finding_id,
+                    lifecycle_status, created_at)
+                VALUES (?, ?, ?, 'OPEN', ?)
+                ON DUPLICATE KEY UPDATE impact_review_task_id = impact_review_task_id
+                """, reviewTaskId, organisationId, findingId, Timestamp.from(now));
+    }
 }
