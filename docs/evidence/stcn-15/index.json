@@ -2,15 +2,33 @@
   "schema_version": "1.0",
   "issue": "STCN-15",
   "updated_at": "2026-10-13",
-  "source_commit": "8316071699652d723e8a675d93b0011a17d04de5",
-  "pull_request": null,
+  "source_commit": "584534b3c5e4d8052bf86db044d4ba01468eff77",
+  "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
   "checks": {
-    "STCN-83": {"status": "LOCAL_PASS_RDS_PENDING", "evidence": "docs/evidence/stcn-15/database-bootstrap.log"},
-    "STCN-84": {"status": "LOCAL_PASS_REMOTE_RUN_PENDING", "evidence": "docs/evidence/stcn-15/maven-verify-summary.md"},
-    "STCN-85": {"status": "HELM_PASS_STAGING_PROBE_BLOCKED", "evidence": "docs/evidence/stcn-15/helm-template-tests.log"},
-    "STCN-86": {"status": "CONFIGURATION_BLOCKED", "evidence": "docs/evidence/stcn-15/README.md"},
-    "STCN-87": {"status": "SCHEMA_READY_NO_DEPLOYMENT_RECORD", "evidence": "docs/evidence/stcn-15/deployment-record.schema.json"},
-    "STCN-88": {"status": "PROMTOOL_PASS_G1_SCRAPE_BLOCKED", "evidence": "docs/evidence/stcn-15/alert-rules-validation.log"}
+    "STCN-83": {
+      "status": "LOCAL_PASS_RDS_PENDING",
+      "evidence": "docs/evidence/stcn-15/database-bootstrap.log"
+    },
+    "STCN-84": {
+      "status": "LOCAL_PASS_REMOTE_RUN_PENDING",
+      "evidence": "docs/evidence/stcn-15/maven-verify-summary.md"
+    },
+    "STCN-85": {
+      "status": "HELM_PASS_STAGING_PROBE_BLOCKED",
+      "evidence": "docs/evidence/stcn-15/helm-template-tests.log"
+    },
+    "STCN-86": {
+      "status": "CONFIGURATION_BLOCKED",
+      "evidence": "docs/evidence/stcn-15/README.md"
+    },
+    "STCN-87": {
+      "status": "SCHEMA_READY_NO_DEPLOYMENT_RECORD",
+      "evidence": "docs/evidence/stcn-15/deployment-record.schema.json"
+    },
+    "STCN-88": {
+      "status": "PROMTOOL_PASS_G1_SCRAPE_BLOCKED",
+      "evidence": "docs/evidence/stcn-15/alert-rules-validation.log"
+    }
   },
   "deployments": [],
   "blockers": [
