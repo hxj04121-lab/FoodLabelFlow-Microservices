@@ -180,4 +180,25 @@ public class LabelWorkflowStore {
                 """, (rs, row) -> new DeclarationRow(rs.getString("allergen_id"), rs.getString("declaration_type"),
                 rs.getString("declaration_source"), rs.getString("display_text")), labelVersionId);
     }
+
+    /** Next business version of the label for a product and jurisdiction; the unique key is the real guard. */
+    public int nextVersionNumber(String productId, String jurisdictionCode) {
+        Integer next = jdbc.queryForObject("""
+                SELECT COALESCE(MAX(version_number), 0) + 1 FROM label_version
+                WHERE product_id = ? AND jurisdiction_code = ?
+                """, Integer.class, productId, jurisdictionCode);
+        return next == null ? 1 : next;
+    }
+
+    public void insertDraft(String labelVersionId, String organisationId, String productId, int versionNumber,
+                            String formulaVersionId, String ruleSetVersionId, String jurisdictionCode,
+                            String createdBySubject, Instant now) {
+        jdbc.update("""
+                INSERT INTO label_version (label_version_id, organisation_id, product_id, version_number,
+                    formula_version_id, rule_set_version_id, jurisdiction_code, lifecycle_status,
+                    created_by_subject, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?)
+                """, labelVersionId, organisationId, productId, versionNumber, formulaVersionId, ruleSetVersionId,
+                jurisdictionCode, createdBySubject, Timestamp.from(now), Timestamp.from(now));
+    }
 }
