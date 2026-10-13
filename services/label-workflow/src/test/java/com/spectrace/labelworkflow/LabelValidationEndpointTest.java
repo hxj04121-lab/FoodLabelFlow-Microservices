@@ -123,6 +123,7 @@ class LabelValidationEndpointTest {
 
         assertThat(validated.statusCode()).isEqualTo(201);
         assertThat(validated.body()).contains("\"status\":\"FAILED\"");
+        assertThat(validated.body()).contains("\"severity\":\"ERROR\"").contains("\"blocking\":true");
         assertThat(jdbc.queryForObject("""
                 SELECT result_status FROM label_validation_record WHERE label_version_id = 'lbl_v1'
                 """, String.class)).isEqualTo("FAILED");
