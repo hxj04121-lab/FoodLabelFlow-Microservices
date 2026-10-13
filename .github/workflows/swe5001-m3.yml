@@ -130,12 +130,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          # Real Specification caller endpoint from the M4-owned PR47; not a test echo service.
-          ref: 088237586be335e85c91b368e1e5373854ace00b
-          path: platform/gateway/target/m4-provider
-          persist-credentials: false
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -148,7 +142,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Build the real Specification service and Gateway
         run: |
-          mvn -B -ntp -f platform/gateway/target/m4-provider/pom.xml -pl services/specification -am -DskipTests -Djackson-bom.version=3.1.7 package
+          mvn -B -ntp -pl services/specification -am -DskipTests -Djackson-bom.version=3.1.7 package
           mvn -B -ntp -f platform/gateway/pom.xml -DskipTests package
       - run: npm ci && npx playwright install --with-deps chromium
         working-directory: frontend
@@ -161,7 +155,7 @@ jobs:
           issuer=http://localhost:18080/auth/realms/spectrace
           jwks=http://localhost:18180/auth/realms/spectrace/protocol/openid-connect/certs
           realm="$PWD/deploy/keycloak/realm/spectrace-realm.json"
-          compose="$PWD/platform/gateway/target/m4-provider/deploy/local/compose.yaml"
+          compose="$PWD/deploy/local/compose.yaml"
           docker compose -p m3-real-services -f "$compose" up -d --wait mysql rabbitmq
           docker run -d --name m3-real-keycloak -p 127.0.0.1:18180:8080 \
             -e KC_HTTP_RELATIVE_PATH=/auth -e KC_HOSTNAME=http://localhost:18080/auth \
@@ -177,7 +171,7 @@ jobs:
           SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
           SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/specification?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
           RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
-            java -jar platform/gateway/target/m4-provider/services/specification/target/app.jar --server.port=18084 > "$evidence/specification.log" 2>&1 &
+            java -jar services/specification/target/app.jar --server.port=18084 > "$evidence/specification.log" 2>&1 &
           caller_pid=$!
           GATEWAY_PORT=18080 GATEWAY_REALM=spectrace GATEWAY_ISSUER="$issuer" GATEWAY_JWK_SET_URI="$jwks" GATEWAY_AUDIENCE=spectrace-api \
           GATEWAY_KEYCLOAK=http://localhost:18180 GATEWAY_SPECIFICATION=http://localhost:18084 GATEWAY_FORMULATION=http://localhost:18084 \

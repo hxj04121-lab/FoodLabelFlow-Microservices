@@ -94,8 +94,9 @@ on18084 backed by real MySQL/RabbitMQ. CI starts these processes and Keycloak
 26.0.7, then performs browser Code+PKCE login and confirms the service's
 caller subject/organisation/roles match the token-derived UI identity.
 
-The Specification source is pinned to independently reviewed PR47 `0882375`; the realm comes from the
-accepted #34 source now in XFY. The actual path is `/api/specifications/caller-claims`;
+The Specification service is built from the current checkout, which includes
+the accepted PR47 endpoint through main `a57d343`; the realm comes from accepted
+#34 source in the same checkout. The actual path is `/api/specifications/caller-claims`;
 the test-only whoami service has been removed. The provider now rejects blank
 native sub and supports both the shared starter and service-owned JWT principal.
 Real browser traces are redacted before uploading

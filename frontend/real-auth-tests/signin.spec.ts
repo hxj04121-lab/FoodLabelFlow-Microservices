@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
 
-// Real Keycloak, Gateway and the pinned PR47 Specification service with MySQL/RabbitMQ.
+// Real Keycloak, Gateway and the current checkout's Specification service with MySQL/RabbitMQ.
 test('real PKCE login reaches the Specification caller-claims endpoint', async ({ page, request }, testInfo) => {
   const deployed = testInfo.config.metadata.deployed === true
   const gatewayOrigin = deployed ? String(testInfo.config.metadata.gatewayOrigin) : 'http://localhost:18080'
@@ -52,7 +52,7 @@ test('real PKCE login reaches the Specification caller-claims endpoint', async (
   }
   await writeFile(`${evidence}/claims.json`, JSON.stringify({
     scope: deployed ? 'deployed browser login/caller/anonymous/logout smoke only; cross-organisation and final acceptance require separate evidence'
-      : 'real local Keycloak/Gateway with PR47 Specification service and MySQL/RabbitMQ; no AWS LB acceptance',
+      : 'real local Keycloak/Gateway with current-checkout Specification service and MySQL/RabbitMQ; no AWS LB acceptance',
     site: testInfo.project.use.baseURL, gatewayOrigin, callerPath,
     caller: { subject: callerResponse.subject, org_id: callerResponse.org_id,
       org_type: callerResponse.org_type, roles: callerResponse.roles },
