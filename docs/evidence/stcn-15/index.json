@@ -2,32 +2,47 @@
   "schema_version": "1.0",
   "issue": "STCN-15",
   "updated_at": "2026-10-13",
-  "source_commit": "584534b3c5e4d8052bf86db044d4ba01468eff77",
+  "source_commit": "7f8ca1db03f9059a0ff070235ba16f5c0a9a2cfb",
   "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
   "checks": {
     "STCN-83": {
-      "status": "LOCAL_PASS_RDS_PENDING",
-      "evidence": "docs/evidence/stcn-15/database-bootstrap.log"
+      "status": "PR_CI_PASS_RDS_PENDING",
+      "evidence": [
+        "docs/evidence/stcn-15/database-bootstrap.log",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38367284590"
+      ]
     },
     "STCN-84": {
-      "status": "LOCAL_PASS_REMOTE_RUN_PENDING",
-      "evidence": "docs/evidence/stcn-15/maven-verify-summary.md"
+      "status": "PR_CI_PASS",
+      "evidence": [
+        "docs/evidence/stcn-15/maven-verify-summary.md",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38367284590"
+      ]
     },
     "STCN-85": {
-      "status": "HELM_PASS_STAGING_PROBE_BLOCKED",
-      "evidence": "docs/evidence/stcn-15/helm-template-tests.log"
+      "status": "HELM_AND_PR_CI_PASS_STAGING_PROBE_BLOCKED",
+      "evidence": [
+        "docs/evidence/stcn-15/helm-template-tests.log",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38367284590"
+      ]
     },
     "STCN-86": {
-      "status": "CONFIGURATION_BLOCKED",
-      "evidence": "docs/evidence/stcn-15/README.md"
+      "status": "PR_CI_PASS_ENVIRONMENT_SETUP_BLOCKED",
+      "evidence": [
+        "docs/evidence/stcn-15/README.md",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38367284590"
+      ]
     },
     "STCN-87": {
       "status": "SCHEMA_READY_NO_DEPLOYMENT_RECORD",
       "evidence": "docs/evidence/stcn-15/deployment-record.schema.json"
     },
     "STCN-88": {
-      "status": "PROMTOOL_PASS_G1_SCRAPE_BLOCKED",
-      "evidence": "docs/evidence/stcn-15/alert-rules-validation.log"
+      "status": "PROMTOOL_AND_PR_CI_PASS_G1_SCRAPE_BLOCKED",
+      "evidence": [
+        "docs/evidence/stcn-15/alert-rules-validation.log",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38367284590"
+      ]
     }
   },
   "deployments": [],
@@ -36,5 +51,23 @@
     "GitHub staging Environment and its approval/secrets are not configured.",
     "AWS identity, current credits, Terraform state, security groups and Kubernetes access are unverified.",
     "No G2 staging window, human approval, successful image digest or Kubernetes revision exists in this evidence index."
-  ]
+  ],
+  "workflow_run": {
+    "run_id": 38367284590,
+    "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38367284590",
+    "commit_sha": "7f8ca1db03f9059a0ff070235ba16f5c0a9a2cfb",
+    "conclusion": "success",
+    "checks": [
+      "backend",
+      "platform-services",
+      "containers",
+      "frontend",
+      "database-privileges",
+      "helm",
+      "observability-alerts",
+      "security",
+      "SonarCloud Code Analysis",
+      "SonarQube analysis"
+    ]
+  }
 }

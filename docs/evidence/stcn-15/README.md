@@ -10,7 +10,7 @@ The current approved re-plan is G2 Services (Jira Sprint goal updated 11 Oct): f
 - Services: `mvn -B -ntp verify` exercises the four service modules and their MySQL Testcontainers integration tests.
 - Staging network probe: after G1 namespaces/services are deployed in an approved G2 window, run `TARGET_SERVICE_FQDN=<service>.<namespace>.svc.cluster.local ALLOWED_NAMESPACE=gateway ALLOWED_APP_NAME=gateway bash scripts/test-staging-networkpolicy.sh`. It confirms an allowed Gateway peer reaches readiness and an unapproved default-namespace peer is denied; it was not run because there is no usable cluster credential/context.
 
-CI repeats the database, alert, Maven, Helm, frontend, container, Sonar and security gates. The GitHub run for this PR is the authoritative CI result; local checks are not a substitute.
+CI repeats the database, alert, Maven, Helm, frontend, container, Sonar and security gates. The PR head `7f8ca1db03f9059a0ff070235ba16f5c0a9a2cfb` passed GitHub Actions run [38367284590](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38367284590): backend, platform-services, containers/browser smoke, frontend, database privileges, Helm, alert rules, SonarCloud/SonarQube and Trivy/OWASP Dependency-Check all passed. The evidence index records this run. This proves CI for that commit; it does not prove a staging deployment.
 
 ## Deployment configuration contract
 
