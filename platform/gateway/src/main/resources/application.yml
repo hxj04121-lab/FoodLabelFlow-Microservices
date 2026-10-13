@@ -1,0 +1,47 @@
+server:
+  port: ${GATEWAY_PORT:8080}
+  forward-headers-strategy: none
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: 5s
+          forwarded:
+            enabled: false
+          x-forwarded:
+            enabled: false
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+gateway:
+  issuer: ${GATEWAY_ISSUER}
+  jwk-set-uri: ${GATEWAY_JWK_SET_URI}
+  audience: ${GATEWAY_AUDIENCE}
+  realm: ${GATEWAY_REALM}
+  keycloak: ${GATEWAY_KEYCLOAK}
+  specification: ${GATEWAY_SPECIFICATION}
+  formulation: ${GATEWAY_FORMULATION}
+  compliance: ${GATEWAY_COMPLIANCE}
+  label-workflow: ${GATEWAY_LABEL_WORKFLOW}
+  allowed-origins: ${GATEWAY_ALLOWED_ORIGINS}
+  # Protective limits shared by all callers of ONE process, not global quotas.
+  burst: ${GATEWAY_BURST:100}
+  requests-per-second: ${GATEWAY_REQUESTS_PER_SECOND:50}
+  max-body-bytes: ${GATEWAY_MAX_BODY_BYTES:1048576}
+  write-roles:
+    specification: ${GATEWAY_SPECIFICATION_WRITE_ROLES}
+    formulation: ${GATEWAY_FORMULATION_WRITE_ROLES}
+    compliance: ${GATEWAY_COMPLIANCE_WRITE_ROLES}
+    label-workflow: ${GATEWAY_LABEL_WRITE_ROLES}

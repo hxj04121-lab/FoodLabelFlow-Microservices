@@ -1,0 +1,19 @@
+# Local defaults aligned to M4 PR38; staging still requires explicit environment values.
+gateway:
+  realm: spectrace
+  issuer: http://localhost:8080/auth/realms/spectrace
+  jwk-set-uri: http://localhost:8180/auth/realms/spectrace/protocol/openid-connect/certs
+  audience: spectrace-api
+  keycloak: http://localhost:8180
+  specification: http://localhost:8081
+  formulation: http://localhost:8082
+  compliance: http://localhost:8083
+  label-workflow: http://localhost:8084
+  allowed-origins:
+    - http://localhost:5173
+    - http://127.0.0.1:5173
+  write-roles:
+    specification: [ADMIN_DATA_MAINTENANCE]
+    formulation: [ADMIN_DATA_MAINTENANCE]
+    compliance: [CHANGE_MANAGER]
+    label-workflow: [LABEL_OFFICER, APPROVER, PUBLISHER]
