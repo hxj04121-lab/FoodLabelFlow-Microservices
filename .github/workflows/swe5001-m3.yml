@@ -1,0 +1,251 @@
+name: SWE5001 M3 gateway and sign-in
+
+on:
+  pull_request:
+    branches: [main, XFY]
+    paths: ['platform/gateway/**', 'frontend/**', '.github/workflows/swe5001-m3.yml']
+  push:
+    branches: [main, XFY]
+    paths: ['platform/gateway/**', 'frontend/**', '.github/workflows/swe5001-m3.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: mvn -B -ntp -f platform/gateway/pom.xml verify
+      - name: Validate merged local Gateway and service identity configuration
+        run: python3 platform/gateway/check-compose.py
+      - name: Verify the Java 21 gateway container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -t spectrace-gateway:check platform/gateway
+          docker run -d --name m3-gateway-check -p 127.0.0.1:18080:8080 spectrace-gateway:check --spring.profiles.active=local
+          trap 'docker logs m3-gateway-check; docker rm -f m3-gateway-check' EXIT
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18080/actuator/health/readiness; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:18080/actuator/health/readiness
+          status=$(curl -sS -o /tmp/m3-gateway-unauth.json -w '%{http_code}' http://127.0.0.1:18080/api/labels/test)
+          test "$status" = 401
+          grep -q AUTHENTICATION_REQUIRED /tmp/m3-gateway-unauth.json
+      - name: Scan the tested Gateway image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: spectrace-gateway:check
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Preserve the tested image for publication
+        if: github.event_name == 'push' && github.ref == 'refs/heads/XFY'
+        run: docker save spectrace-gateway:check | gzip > gateway-tested.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/XFY'
+        with:
+          name: m3-gateway-tested-image
+          path: gateway-tested.tar.gz
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m3-gateway-evidence
+          path: |
+            platform/gateway/target/surefire-reports/**
+            platform/gateway/target/site/jacoco/**
+          retention-days: 14
+  publish-gateway:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/XFY'
+    needs: [gateway, frontend, real-keycloak]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: m3-gateway-tested-image
+      - run: docker load -i gateway-tested.tar.gz
+      - name: Name the tested revision
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/gateway:${GITHUB_SHA}"
+          docker tag spectrace-gateway:check "$image"
+          echo "GATEWAY_IMAGE=$image" >> "$GITHUB_ENV"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: docker push "$GATEWAY_IMAGE"
+      - name: Record the actual registry digest
+        run: python3 platform/gateway/record-image.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m3-gateway-release
+          path: gateway-release.json
+          retention-days: 14
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npx playwright test --config playwright.signin.config.ts
+        working-directory: frontend
+      - name: Record the G2 draft-validation-submit reference flow
+        working-directory: frontend
+        env:
+          G2_RECORD_VIDEO: 'true'
+        run: npx playwright test --config playwright.signin.config.ts --grep 'STCN-74 creates' --output test-results/label-demo
+      - run: npm run test:pages
+        working-directory: frontend
+      - run: npm run test:deployed-config
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m3-signin-evidence
+          path: frontend/test-results/**
+          retention-days: 14
+  real-keycloak:
+    needs: [gateway, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build the real Specification/Formulation services and Gateway
+        run: |
+          mvn -B -ntp -pl services/specification,services/formulation -am -DskipTests -Djackson-bom.version=3.1.7 package
+          mvn -B -ntp -f platform/gateway/pom.xml -DskipTests package
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Real browser Keycloak / Gateway / seeded service verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$PWD/frontend/test-results/real-services"
+          mkdir -p "$evidence"
+          issuer=http://localhost:18080/auth/realms/spectrace
+          jwks=http://localhost:18180/auth/realms/spectrace/protocol/openid-connect/certs
+          realm="$PWD/deploy/keycloak/realm/spectrace-realm.json"
+          compose="$PWD/deploy/local/compose.yaml"
+          docker compose -p m3-real-services -f "$compose" up -d --wait mysql rabbitmq
+          docker run -d --name m3-real-keycloak -p 127.0.0.1:18180:8080 \
+            -e KC_HTTP_RELATIVE_PATH=/auth -e KC_HOSTNAME=http://localhost:18080/auth \
+            -v "$realm:/opt/keycloak/data/import/spectrace-realm.json:ro" \
+            quay.io/keycloak/keycloak:26.0.7 start-dev --import-realm --hostname-strict=false
+          trap 'kill ${gateway_pid:-} ${caller_pid:-} ${formulation_pid:-} 2>/dev/null || true; docker logs m3-real-keycloak > "$evidence/keycloak.log" 2>&1; docker compose -p m3-real-services -f "$compose" logs > "$evidence/infrastructure.log" 2>&1; docker rm -f m3-real-keycloak; docker compose -p m3-real-services -f "$compose" down -v' EXIT
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://localhost:18180/auth/realms/spectrace/.well-known/openid-configuration > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS "$jwks" > /dev/null
+          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
+          SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
+          SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/specification?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
+          RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
+            java -jar services/specification/target/app.jar --server.port=18084 > "$evidence/specification.log" 2>&1 &
+          caller_pid=$!
+          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
+          SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
+          SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/formulation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
+          RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
+            java -jar services/formulation/target/app.jar --server.port=18085 > "$evidence/formulation.log" 2>&1 &
+          formulation_pid=$!
+          GATEWAY_PORT=18080 GATEWAY_REALM=spectrace GATEWAY_ISSUER="$issuer" GATEWAY_JWK_SET_URI="$jwks" GATEWAY_AUDIENCE=spectrace-api \
+          GATEWAY_KEYCLOAK=http://localhost:18180 GATEWAY_SPECIFICATION=http://localhost:18084 GATEWAY_FORMULATION=http://localhost:18085 \
+          GATEWAY_COMPLIANCE=http://localhost:18084 GATEWAY_LABEL_WORKFLOW=http://localhost:18084 \
+          GATEWAY_ALLOWED_ORIGINS=http://localhost:5173 GATEWAY_SPECIFICATION_WRITE_ROLES=ADMIN_DATA_MAINTENANCE \
+          GATEWAY_FORMULATION_WRITE_ROLES=ADMIN_DATA_MAINTENANCE GATEWAY_COMPLIANCE_WRITE_ROLES=CHANGE_MANAGER GATEWAY_LABEL_WRITE_ROLES=LABEL_OFFICER,APPROVER,PUBLISHER \
+            java -jar platform/gateway/target/spectrace-gateway-0.1.0-SNAPSHOT.jar > "$evidence/gateway.log" 2>&1 &
+          gateway_pid=$!
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:18084/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18085/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18080/actuator/health/readiness > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:18084/actuator/health/readiness
+          curl -fsS http://localhost:18085/actuator/health/readiness
+          curl -fsS http://localhost:18080/actuator/health/readiness
+          cd frontend
+          npx playwright test --config playwright.real-signin.config.ts
+      - name: Redact local login secrets before evidence upload
+        if: always()
+        run: |
+          python3 frontend/scripts/redact-traces.py --self-check
+          python3 frontend/scripts/redact-traces.py frontend/test-results/real-signin
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m3-real-keycloak-evidence
+          path: |
+            frontend/test-results/real-signin/**
+            frontend/test-results/real-services/**
+          retention-days: 14
+  pages:
+    # Repository owner enables this only after M4/M5 confirm URLs and Pages uses Actions.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.FRONTEND_PAGES_ENABLED == 'true'
+    needs: [gateway, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build reference consumer at the repository Pages base path
+        working-directory: frontend
+        env:
+          VITE_AUTH_ENABLED: 'true'
+          VITE_SITE_BASE: /${{ github.event.repository.name }}/
+          VITE_OIDC_AUTHORITY: ${{ vars.VITE_OIDC_AUTHORITY }}
+          VITE_OIDC_AUDIENCE: ${{ vars.VITE_OIDC_AUDIENCE }}
+          VITE_GATEWAY_ORIGIN: ${{ vars.VITE_GATEWAY_ORIGIN }}
+          VITE_CALLER_CLAIMS_PATH: ${{ vars.VITE_CALLER_CLAIMS_PATH }}
+        run: |
+          node scripts/check-pages-config.mjs
+          npm ci
+          npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: frontend/dist
+      - uses: actions/deploy-pages@v4
+        id: deployment

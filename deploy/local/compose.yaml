@@ -4,6 +4,13 @@
 # Credentials below are local-only defaults; staging gets real secrets from the pipeline.
 name: spectrace-local
 
+x-identity: &identity
+  OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://localhost:8180/auth/realms/spectrace}
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
+  SPECTRACE_SECURITY_ISSUERURI: ${OIDC_ISSUER_URI:-http://localhost:8180/auth/realms/spectrace}
+  SPECTRACE_SECURITY_JWKSETURI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
+  SPECTRACE_SECURITY_AUDIENCE: spectrace-api
+
 x-service: &service
   environment: &service-security
     # Starter security module (G1-M4.2). Tokens are issued to the browser at localhost:8180, so iss stays
@@ -84,9 +91,11 @@ services:
       context: ../..
       dockerfile: services/specification/Dockerfile
     environment:
-      <<: *service-security
+      <<: *identity
       SPECTRACE_SEED_REPLAY_ENABLED: ${SEED_REPLAY:-false}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/specification?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      # Tokens are issued to the browser at localhost:8180, so iss stays that URL, but inside this network the
+      # keys must be fetched from the keycloak container. With a JWK set URI, Spring still validates iss.
       RABBITMQ_HOST: rabbitmq
       SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:
@@ -98,8 +107,10 @@ services:
       context: ../..
       dockerfile: services/formulation/Dockerfile
     environment:
-      <<: *service-security
+      <<: *identity
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/formulation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      # Tokens are issued to the browser at localhost:8180, so iss stays that URL, but inside this network the
+      # keys must be fetched from the keycloak container. With a JWK set URI, Spring still validates iss.
       RABBITMQ_HOST: rabbitmq
       SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
     ports:
@@ -111,7 +122,7 @@ services:
       context: ../..
       dockerfile: services/compliance/Dockerfile
     environment:
-      <<: *service-security
+      <<: *identity
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/compliance?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       RABBITMQ_HOST: rabbitmq
       SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
@@ -124,7 +135,7 @@ services:
       context: ../..
       dockerfile: services/label-workflow/Dockerfile
     environment:
-      <<: *service-security
+      <<: *identity
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/label_workflow?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       RABBITMQ_HOST: rabbitmq
       SPECTRACE_MESSAGING_DECLARE_TOPOLOGY: "true"
