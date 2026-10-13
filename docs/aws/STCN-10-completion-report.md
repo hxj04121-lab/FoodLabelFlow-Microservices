@@ -54,3 +54,20 @@ This is a live-source recheck for the current PR heads; GitHub CI and the releas
 - **Remaining CI integration blocker:** the reusable workflow now accepts validated, optional `kind_node_labels` and `kind_node_taints`, and applies them only to the ephemeral kind node. A Compliance caller can request `eks.amazonaws.com/nodegroup=compliance,node.kubernetes.io/instance-type=c6i.large` plus `dedicated=compliance:NoSchedule` while retaining the reviewed staging values. This M5 branch still has no Compliance service caller/chart values, local runtime dependency setup, or caller-level readiness regression, so the scheduling path is prepared but not yet exercised end to end.
 
 No staging deployment or browser-to-Gateway-to-Keycloak-to-service acceptance is claimed by this refresh.
+
+## 13 October 2026 live access and deployment recheck
+
+This section supersedes the earlier AWS credential/access observations above.
+
+| Item | Current evidence | Boundary |
+|---|---|---|
+| AWS identity | `foodlabelflow-staging-deploy` assumed `FoodLabelFlowStagingDeploy` in account `679857346122`. | Authenticated identity is available; this alone does not authorize an apply or prove application health. |
+| EKS | `spectrace-staging` is `ACTIVE`, Kubernetes 1.36, private endpoint only. The `general` node group is `ACTIVE`, desired 1 `t3.medium`; `aws eks list-addons` returned none. | Local kubectl cannot reach the private endpoint. Use an approved VPC-connected runner/CloudShell. |
+| Network | Existing cluster VPC is `10.40.0.0/16`; its two node subnets are `10.40.64.0/20` and `10.40.80.0/20`. | The chart's sample CIDRs must not be treated as live inputs; Terraform add-on values must come from the reviewed target configuration. |
+| ALB / ACM | `spectrace-staging-alb` is active and internal; no listener was present in the CloudShell check. ACM list access is denied to the deploy role. | No HTTPS endpoint, domain, or issued ACM certificate has been confirmed. |
+| Budget | AWS Budget `FoodLabelFlow-Staging-Monthly-USD-120`: limit USD 120, actual USD 0, forecast USD 4.508. | Budget forecast is not remaining credit, payment readiness, a hard cap, or approval for a staging window. Service Quotas and ACM reads were denied. |
+| GitHub deployment controls | The repository's Environment API returned an empty environment list. Repository variables currently contain no AWS deploy-role or staging URL configuration. | The protected `staging` Environment, reviewers/secrets/vars, and a VPC-connected `staging-vpc` runner are still unconfigured or unverified. |
+| Terraform lifecycle | `infra/terraform/backend.hcl` is absent, and the STCN-37 fail-closed budget gate is not on this branch. | No current account-backed plan can be generated; `staging.sh up/down` must remain blocked. |
+| Application | The previously verified CloudShell query found no resources in namespace `staging`. | No deployment, revision, ingress route, or live smoke test is claimed. |
+
+The reusable workflow now captures the registry digest after push, requires the deploy job to run on a VPC-connected self-hosted runner, and checks that the service chart renders the exact digest before applying it. Service callers/charts remain a dependency of the M2/M3 work. No AWS resource was created or destroyed during this recheck.

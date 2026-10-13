@@ -226,19 +226,25 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Push immutable SHA image tag
-        env:
-          SERVICE_NAME: ${{ inputs.service_name }}
-        run: docker push "ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}"
       - id: image
+        name: Push image and capture registry digest
         env:
           SERVICE_NAME: ${{ inputs.service_name }}
-        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}"
+          push_log="$RUNNER_TEMP/image-push.log"
+          docker push "$image" 2>&1 | tee "$push_log"
+          digest="$(sed -nE 's/.*digest: (sha256:[0-9a-f]{64})([[:space:]].*)?$/\1/p' "$push_log" | tail -n 1)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "Registry push did not return a valid image digest." >&2
+            exit 1
+          }
+          echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}@${digest}" >> "$GITHUB_OUTPUT"
 
   deploy:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.STAGING_WINDOW_OPEN == 'true' }}
     needs: [publish]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, staging-vpc]
     environment: staging
     permissions:
       contents: read
@@ -274,13 +280,28 @@ jobs:
           ENVIRONMENT_VALUES_FILE: ${{ inputs.environment_values_file }}
         run: |
           test -n "$CLUSTER_NAME" && test -n "$IMAGE"
+          IMAGE_REPOSITORY="${IMAGE%@*}"
+          IMAGE_DIGEST="${IMAGE#*@}"
+          [[ "$IMAGE_REPOSITORY" == ghcr.io/* && "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "Published image must be a GHCR repository pinned by sha256 digest." >&2
+            exit 1
+          }
           aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
           values_args=()
           [[ -z "$VALUES_FILE" ]] || values_args+=(--values "$VALUES_FILE")
           [[ -z "$ENVIRONMENT_VALUES_FILE" ]] || values_args+=(--values "$ENVIRONMENT_VALUES_FILE")
+          helm template "$RELEASE" "$CHART" --namespace "$NAMESPACE" \
+            "${values_args[@]}" \
+            --set-string image.repository="$IMAGE_REPOSITORY" \
+            --set-string image.digest="$IMAGE_DIGEST" > "$RUNNER_TEMP/staging-rendered.yaml"
+          grep -Fq -- "$IMAGE_REPOSITORY@$IMAGE_DIGEST" "$RUNNER_TEMP/staging-rendered.yaml" || {
+            echo "Service chart did not render the requested immutable image digest." >&2
+            exit 1
+          }
           helm upgrade --install "$RELEASE" "$CHART" --namespace "$NAMESPACE" \
             "${values_args[@]}" \
-            --set image.repository="${IMAGE%:*}" --set image.tag="${IMAGE##*:}" --wait --timeout 10m
+            --set-string image.repository="$IMAGE_REPOSITORY" \
+            --set-string image.digest="$IMAGE_DIGEST" --wait --timeout 10m
       - name: Gateway smoke test and organisation claim check
         env:
           GATEWAY_URL: ${{ vars.STAGING_GATEWAY_URL }}

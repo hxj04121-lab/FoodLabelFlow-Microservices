@@ -113,6 +113,16 @@ for job, step_name in (("kind", "Deploy service chart to kind"), ("deploy", "Con
     helm_run = steps[job][step_name]
     assert 'values_args+=(--values "$VALUES_FILE")' in helm_run
     assert 'values_args+=(--values "$ENVIRONMENT_VALUES_FILE")' in helm_run
+publish = steps["publish"]["Push image and capture registry digest"]
+assert 'docker push "$image"' in publish
+assert 'ref=ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}@${digest}' in publish
+deploy = steps["deploy"]["Configure EKS context and deploy commit-pinned image"]
+assert 'IMAGE_DIGEST="${IMAGE#*@}"' in deploy
+assert '--set-string image.digest="$IMAGE_DIGEST"' in deploy
+assert 'helm template "$RELEASE" "$CHART"' in deploy
+assert 'grep -Fq -- "$IMAGE_REPOSITORY@$IMAGE_DIGEST"' in deploy
+assert '--set image.tag=' not in deploy
+assert service_workflow["jobs"]["deploy"]["runs-on"] == ["self-hosted", "linux", "staging-vpc"]
 for job in service_workflow["jobs"].values():
     for step in job.get("steps", []):
         if step.get("run"):
