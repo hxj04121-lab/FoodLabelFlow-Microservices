@@ -52,7 +52,8 @@ test('real PKCE login reaches the Specification caller-claims endpoint', async (
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Sign in to your organisation', exact: true })).toBeVisible({ timeout: 30000 })
   await expect(page.getByRole('button', { name: 'Continue with Keycloak', exact: true })).toBeEnabled()
-  await expect(page).toHaveURL(new URL(testInfo.project.use.baseURL!).href)
+  // Compare as a boolean so a failed logout cannot print a URL containing an id_token_hint.
+  await expect.poll(() => page.url() === new URL(testInfo.project.use.baseURL!).href).toBe(true)
   if (deployed) {
     await page.goto(`${testInfo.project.use.baseURL}#/overview`)
     await page.reload()
