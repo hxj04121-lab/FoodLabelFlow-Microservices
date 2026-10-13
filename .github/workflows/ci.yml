@@ -97,6 +97,7 @@ jobs:
           const compose = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
           const expectedIssuer = process.env.OIDC_ISSUER_URI || 'http://localhost:8180/auth/realms/spectrace';
           const expectedJwks = 'http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs';
+          const expectedAudience = 'spectrace-api';
           const expectedHostname = process.env.KEYCLOAK_EXTERNAL_URL || 'http://localhost:8180/auth';
           assert.ok(expectedIssuer.endsWith('/auth/realms/spectrace'), `issuer must use the /auth realm path: ${expectedIssuer}`);
           for (const name of ['specification', 'formulation', 'compliance', 'label-workflow']) {
@@ -104,10 +105,11 @@ jobs:
             assert.ok(env, `missing Compose service ${name}`);
             assert.equal(env.SPECTRACE_SECURITY_ISSUERURI, expectedIssuer, `${name} issuer mismatch`);
             assert.equal(env.SPECTRACE_SECURITY_JWKSETURI, expectedJwks, `${name} JWKS mismatch`);
+            assert.equal(env.SPECTRACE_SECURITY_AUDIENCE, expectedAudience, `${name} audience mismatch`);
           }
           assert.equal(compose.services.keycloak.environment.KC_HTTP_RELATIVE_PATH, '/auth');
           assert.equal(compose.services.keycloak.environment.KC_HOSTNAME, expectedHostname);
-          console.log('PASS: all services use the shared /auth issuer/JWKS configuration');
+          console.log('PASS: all services use the shared /auth issuer/JWKS and spectrace-api audience');
           NODE
       - name: Build application images
         run: docker compose build

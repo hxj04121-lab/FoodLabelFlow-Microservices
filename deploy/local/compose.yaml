@@ -10,6 +10,7 @@ x-service: &service
     # that URL, but inside this network the keys come from the keycloak container; iss is still validated.
     SPECTRACE_SECURITY_ISSUERURI: ${OIDC_ISSUER_URI:-http://localhost:8180/auth/realms/spectrace}
     SPECTRACE_SECURITY_JWKSETURI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
+    SPECTRACE_SECURITY_AUDIENCE: spectrace-api
   depends_on:
     mysql:
       condition: service_healthy
