@@ -68,7 +68,7 @@ different policy defines its own `SecurityFilterChain` and the starter's chain b
 |---|---|
 | `spectrace.security.issuer-uri` | Issuer every accepted token must carry. The decoder is built from the JWKS URL, never from discovery, so a service still starts while Keycloak is unavailable. |
 | `spectrace.security.jwk-set-uri` | Optional override; derived from the issuer when empty. |
-| `spectrace.security.audience` | Empty by default. Set it as soon as the realm mints an `aud` claim, otherwise a token for another resource is accepted. |
+| `spectrace.security.audience` | Empty by default. The current realm mints `spectrace-api`; every deployed service must set it, or a token for another resource is accepted. |
 | subject | The immutable `sub`. A token without it is 401 — `preferred_username` is never used as a substitute, because renaming an account must not create a new identity. |
 | `spectrace.security.legacy-header-auth.enabled` | Bridges the pre-Keycloak `X-Auth-*` headers for local development. Every active profile must be `local` or `test`; the start-up fails otherwise, including a mixed set such as `local,staging`. |
 

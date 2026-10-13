@@ -17,9 +17,8 @@ public class SecurityProperties {
     private String jwkSetUri;
 
     /**
-     * Accepted audiences. Empty means {@code aud} is not verified, which is the current state of
-     * the realm: it issues no audience claim yet, so requiring one would reject every real token.
-     * Set this as soon as the realm gains an audience mapper.
+     * Accepted audiences. Empty means {@code aud} is not verified. The current realm issues
+     * {@code spectrace-api}; every deployed service must configure that audience explicitly.
      */
     private List<String> audience = List.of();
 
