@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "chore/**", "feature/**"]
   pull_request:
-    branches: [main, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-1-g0-m1-contracts', 'g0-m4-label-workflow-contracts', 'feature/stcn-45-outbox-consumer', 'feature/stcn-64-*']
+    branches: [main, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-1-g0-m1-contracts', 'g0-m4-label-workflow-contracts', 'feature/stcn-45-outbox-consumer', 'feature/stcn-64-*', 'feature/g3-m2-mainline', 'feature/g3-m2-experiments']
 
 permissions:
   contents: read
@@ -49,6 +49,13 @@ jobs:
           cache: maven
       - name: Verify starter and service skeletons with MySQL Testcontainers
         run: mvn -B -ntp verify
+      - name: Verify the production matcher from a source archive without Git metadata
+        run: |
+          archive_dir="$(mktemp -d "$RUNNER_TEMP/compliance-source.XXXXXX")"
+          git archive --format=tar HEAD | tar -x -C "$archive_dir"
+          test ! -e "$archive_dir/.git"
+          mvn -B -ntp -f "$archive_dir/pom.xml" -pl services/compliance -am \
+            -Dtest=PerformanceDatasetContractTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Upload platform and service coverage
         uses: actions/upload-artifact@v4
         with:
