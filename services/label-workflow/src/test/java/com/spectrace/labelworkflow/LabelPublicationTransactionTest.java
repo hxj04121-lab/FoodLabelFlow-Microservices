@@ -68,9 +68,10 @@ class LabelPublicationTransactionTest {
         seedLabel("lbl_pub_1", 1, "APPROVED");
         seedDecision("lbl_pub_1", "APPROVE");
 
-        String publicationId = service.publish(ORG, "lbl_pub_1", "publisher");
+        var outcome = service.publish(ORG, "lbl_pub_1", "publisher");
 
-        assertThat(publicationId).startsWith("pub_");
+        assertThat(outcome.publicationRecordId()).startsWith("pub_");
+        assertThat(outcome.publishedAt()).isNotNull();
         assertThat(jdbc.queryForObject("SELECT lifecycle_status FROM label_version WHERE label_version_id = 'lbl_pub_1'",
                 String.class)).isEqualTo("PUBLISHED");
         assertThat(jdbc.queryForObject("SELECT version_number FROM label_publication WHERE label_version_id = 'lbl_pub_1'",
