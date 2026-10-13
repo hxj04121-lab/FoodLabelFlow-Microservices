@@ -13,6 +13,7 @@ const fixture = {
   M3_TEST_USERNAME: 'fixture-maker', M3_TEST_PASSWORD: 'fixture-only-password',
   M3_EXPECTED_SUBJECT: 'fixture-native-id', M3_EXPECTED_ORG_ID: 'org-fixture',
   M3_EXPECTED_ORG_TYPE: 'MANUFACTURER', M3_EXPECTED_ROLES: 'LABEL_OFFICER',
+  M3_OWN_PRODUCT_ID: 'prod-fixture-own', M3_FOREIGN_PRODUCT_ID: 'prod-fixture-foreign',
 }
 function list(overrides = {}) {
   return spawnSync(process.execPath, ['node_modules/@playwright/test/cli.js', 'test',
@@ -24,6 +25,7 @@ test('the deployed profile reuses the real login test', () => {
   const result = list()
   assert.equal(result.status, 0, result.stderr)
   assert.match(result.stdout, /real PKCE login reaches the Specification caller-claims endpoint/)
+  assert.doesNotMatch(result.stdout, /seeded-access/)
 })
 
 test('missing secrets, insecure URLs, internal routes and wrong callbacks fail before browser execution', () => {
@@ -32,6 +34,9 @@ test('missing secrets, insecure URLs, internal routes and wrong callbacks fail b
     { VITE_GATEWAY_ORIGIN: 'http://localhost:18080' },
     { VITE_CALLER_CLAIMS_PATH: '/api/specifications/internal/caller' },
     { M3_DEPLOYED_BASE_URL: 'https://hxj04121-lab.github.io/' },
+    { M3_OWN_PRODUCT_ID: '' }, { M3_FOREIGN_PRODUCT_ID: '../private' },
+    { M3_FOREIGN_PRODUCT_ID: 'prod-fixture-own' }, { M3_EXPECTED_ORG_TYPE: 'SUPPLIER' },
+    { VITE_OIDC_AUTHORITY: 'https://identity.example.test/auth/realms/spectrace/' },
   ]) {
     const result = list(overrides)
     assert.equal(result.status, 1, result.stderr)

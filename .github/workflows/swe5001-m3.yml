@@ -243,6 +243,7 @@ jobs:
           node scripts/check-pages-config.mjs
           npm ci
           npm run build
+          node scripts/write-pages-release.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

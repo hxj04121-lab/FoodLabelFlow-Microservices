@@ -118,6 +118,12 @@ required public values, approved test account, expected identity and remaining
 cross-organisation/security/Pages acceptance rows. No deployed success is claimed
 by adding this profile or by passing its offline configuration tests.
 
+The deployed smoke now verifies the published `g1-release.json` build settings,
+OIDC discovery and manufacturer-owned/foreign products before recording evidence.
+Use the [M5 inputs and Pages administrator checklist](../docs/swe5001/G1-M3-M5-inputs.md)
+and `g1-deployed.env.example`; its ignored local copy can be loaded with Node's
+`--env-file` flag. Local seed credentials are excluded from deployed execution.
+
 ## G2 label workspace
 
 After signing in, open **Labels** for the independent draft, validation, review
