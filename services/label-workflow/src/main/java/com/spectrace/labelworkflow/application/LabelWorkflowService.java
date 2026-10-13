@@ -39,7 +39,8 @@ public class LabelWorkflowService {
     }
 
     /** Frozen success shape for a validation run. */
-    public record ValidationOutcome(String validationRunId, String status) {
+    public record ValidationOutcome(String validationRunId, String status,
+                                    java.util.List<ValidationClient.ValidationFinding> findings) {
     }
 
     /** Frozen success shape for a publication (contracts/openapi/label-workflow-v1.yaml). */
@@ -222,9 +223,21 @@ public class LabelWorkflowService {
                 labelVersionId + ":" + draftRevision, request, authorization, correlationId);
         String validationRunId = result.validationRunId() == null
                 ? "run_" + UUID.randomUUID().toString().replace("-", "") : result.validationRunId();
+        // Normalise to the shape the reference client validates: blocking implies ERROR and not passed,
+        // a PASSED run carries no blocking finding, and a FAILED run must produce at least one.
+        java.util.List<ValidationClient.ValidationFinding> findings =
+                new ArrayList<>(result.findings() == null ? java.util.List.<ValidationClient.ValidationFinding>of()
+                        : result.findings());
+        boolean blocking = findings.stream().anyMatch(ValidationClient.ValidationFinding::blocking);
+        boolean passed = result.passed() && !blocking;
+        if (!passed && !blocking) {
+            findings.add(new ValidationClient.ValidationFinding("VALIDATION_FAILED", "ERROR", false, true,
+                    "The provider reported this draft as failed."));
+        }
+        String status = passed ? "PASSED" : "FAILED";
         store.insertValidationRecord(validationRunId,
                 labelVersionId, label.formulaVersionId(), label.ruleSetVersionId(), label.jurisdictionCode(),
-                result.passed() ? "PASSED" : "FAILED", draftRevision, clock.instant());
-        return new ValidationOutcome(validationRunId, result.passed() ? "PASSED" : "FAILED");
+                status, draftRevision, clock.instant());
+        return new ValidationOutcome(validationRunId, status, findings);
     }
 }
