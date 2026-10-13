@@ -43,8 +43,9 @@ class LabelWorkflowDraftApiTest {
 
         /** Stands in for the Compliance-owned active rule set until that source is agreed. */
         @Bean
+        @org.springframework.context.annotation.Primary
         RuleSetVersionResolver ruleSetVersionResolver() {
-            return (organisationId, productId, jurisdictionCode) -> "ruleset_us_v1";
+            return (organisationId, jurisdictionCode, authorization, correlationId) -> "ruleset_us_v1";
         }
     }
 
