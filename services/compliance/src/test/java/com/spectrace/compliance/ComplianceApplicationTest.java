@@ -225,6 +225,11 @@ class ComplianceApplicationTest {
         assertThat(response.statusCode()).isEqualTo(401);
         assertThat(body(response)).containsEntry("code", "AUTHENTICATION_REQUIRED")
                 .containsEntry("traceId", "g2-auth-deny");
+
+        HttpResponse<String> ruleSet = get("/internal/rule-sets/effective?jurisdiction=US", "g2-rule-set-auth-deny");
+        assertThat(ruleSet.statusCode()).isEqualTo(401);
+        assertThat(body(ruleSet)).containsEntry("code", "AUTHENTICATION_REQUIRED")
+                .containsEntry("traceId", "g2-rule-set-auth-deny");
     }
 
     @Test

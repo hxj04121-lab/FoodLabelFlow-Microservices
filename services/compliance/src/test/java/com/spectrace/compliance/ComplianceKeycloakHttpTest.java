@@ -111,6 +111,28 @@ class ComplianceKeycloakHttpTest {
     }
 
     @Test
+    void effectiveRuleSetLookupUsesTheComplianceVersionAndRequiresLabelCreatePermission() throws Exception {
+        String manufacturer = login("manufacturer.north.maker");
+        var active = getEffectiveRuleSet(manufacturer, "US");
+        assertThat(active.statusCode()).isEqualTo(200);
+        var body = json.readTree(active.body());
+        assertThat(body.get("ruleSetVersionId").asString()).isEqualTo("ruleset_us_falcpa_demo_v1");
+        assertThat(body.get("versionNumber").asInt()).isEqualTo(1);
+        assertThat(body.get("jurisdiction").asString()).isEqualTo("US");
+        assertThat(body.get("effectiveFrom").asString()).isEqualTo("2026-01-01");
+        assertThat(body.get("effectiveTo").isNull()).isTrue();
+        assertThat(active.headers().firstValue("X-Correlation-ID")).hasValue("effective-rule-set-test");
+
+        var missing = getEffectiveRuleSet(manufacturer, "ZZ");
+        assertThat(missing.statusCode()).isEqualTo(422);
+        assertThat(json.readTree(missing.body()).get("code").asString()).isEqualTo("RULE_SET_UNAVAILABLE");
+
+        assertThat(getEffectiveRuleSet(login("manufacturer.north.checker"), "US").statusCode()).isEqualTo(403);
+        assertThat(getEffectiveRuleSet(login("supplier.alpha.maker"), "US").statusCode()).isEqualTo(403);
+        assertThat(getEffectiveRuleSet(null, "US").statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void realSignedTokenStillRequiresTheConfiguredIssuerAndAudienceAndRejectsSpoofedScope() throws Exception {
         String token = login("manufacturer.north.maker");
         // Same authentic signature/JWKS, deliberately incorrect service contract.
@@ -140,6 +162,14 @@ class ComplianceKeycloakHttpTest {
         if (token != null) request.header("Authorization", "Bearer " + token);
         headers.forEach(request::header);
         return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> getEffectiveRuleSet(String token, String jurisdiction) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/internal/rule-sets/effective?jurisdiction=" + URLEncoder.encode(jurisdiction, StandardCharsets.UTF_8)))
+                .timeout(Duration.ofSeconds(20)).header("X-Correlation-ID", "effective-rule-set-test");
+        if (token != null) request.header("Authorization", "Bearer " + token);
+        return client.send(request.GET().build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private String login(String username) throws Exception {

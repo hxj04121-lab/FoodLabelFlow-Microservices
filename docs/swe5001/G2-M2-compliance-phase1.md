@@ -33,6 +33,8 @@ See the evidence note in `docs/swe5001/evidence/` for the completed run and limi
 
 This change implements the Compliance-owned validation and projection slice for STCN-12 / STCN-69–73: seeded allergen and rule data, idempotent validation runs, immutable Specification/Formula/Label projections, duplicate/stale event handling, and the read-only Phase 1 `SpecificationPublished → POTENTIAL` matcher. Unresolved components remain blocking review findings. The matcher does not write Formula state.
 
+The same Compliance-owned slice now exposes `GET /internal/rule-sets/effective?jurisdiction={code}` for Label Workflow draft creation. It requires a verified manufacturer `LABEL_OFFICER` with `LABEL.CREATE`, returns the exact active/effective rule-set ID plus version and effective dates, and never falls back when no unique highest version is available. M4 must pin that returned ID in its draft and add the owner-side client and joint integration test in PR #51.
+
 ## Unresolved-result semantics
 
 The frozen Compliance OpenAPI distinguishes a completed validation run from an impact classification: a completed validation with any blocking ERROR (including an unresolved formula component) is persisted as `FAILED` and returned as the normal idempotent result. Repeating the same tenant-scoped `Idempotency-Key` and snapshot returns that stored `FAILED` run; it is not a transport error. Separately, BR-03/BR-04 classify an ImpactFinding with unresolved evidence as `REVIEW_REQUIRED` (Phase 1 findings remain `POTENTIAL`). These two contracts both fail closed and are covered separately. The unresolved validation integration test asserts the stored-result replay; it requires MySQL/Testcontainers and was not run locally because Docker is unavailable.

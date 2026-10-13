@@ -87,6 +87,12 @@ check('duplicate unresolved evidence rejected', () => { const event = json('exam
 if (mode !== 'events') {
 check('full draft snapshot', () => valid(httpValidator('DraftSnapshot'), json('examples/compliance/validation-request.json')));
 check('partial snapshot rejected', () => { const d = json('examples/compliance/validation-request.json'); delete d.declarations; invalid(httpValidator('DraftSnapshot'), d); });
+check('effective rule-set lookup returns the exact pinned version', () =>
+  valid(httpValidator('EffectiveRuleSet'), json('examples/compliance/effective-rule-set.json')));
+check('effective rule-set version must be positive', () => {
+  const response = json('examples/compliance/effective-rule-set.json'); response.versionNumber = 0;
+  invalid(httpValidator('EffectiveRuleSet'), response);
+});
 for (const status of ['passed', 'failed']) check(`validation ${status}`, () => valid(httpValidator('ValidationRun'), json(`examples/compliance/validation-${status}.json`)));
 check('PASSED cannot contain blocking ERROR', () => { const r = json('examples/compliance/validation-failed.json'); r.status = 'PASSED'; invalid(httpValidator('ValidationRun'), r); });
 check('FAILED must preserve blocking evidence', () => { const r = json('examples/compliance/validation-failed.json'); r.findings = []; invalid(httpValidator('ValidationRun'), r); });
@@ -103,6 +109,12 @@ check('validation requires idempotency header and JWT', () => {
   const operation = api.paths['/internal/validations'].post;
   assert(operation.parameters.some((p) => p.name === 'Idempotency-Key' && p.in === 'header' && p.required));
   assert.deepEqual(api.security, [{ bearerAuth: [] }]);
+});
+check('active rule-set lookup requires the create permission and exact jurisdiction', () => {
+  const operation = api.paths['/internal/rule-sets/effective'].get;
+  assert(operation.parameters.some((p) => p.name === 'jurisdiction' && p.in === 'query' && p.required));
+  assert.match(operation.description, /LABEL\.CREATE/);
+  assert.match(operation.description, /pins[\s\S]*ruleSetVersionId/);
 });
 check('all target operations propagate correlation and canonical errors', () => {
   for (const path of Object.values(api.paths)) for (const operation of Object.values(path)) {

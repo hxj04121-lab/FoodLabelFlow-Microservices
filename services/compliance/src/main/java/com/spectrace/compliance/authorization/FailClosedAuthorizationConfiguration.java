@@ -35,7 +35,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Configuration(proxyBeanMethods = false)
 public class FailClosedAuthorizationConfiguration {
     private static final Map<String, Set<String>> PERMISSIONS = Map.of(
-            "LABEL_OFFICER", Set.of("LABEL.VALIDATE"), "CHANGE_MANAGER", Set.of("IMPACT.RUN"));
+            "LABEL_OFFICER", Set.of("LABEL.CREATE", "LABEL.VALIDATE"), "CHANGE_MANAGER", Set.of("IMPACT.RUN"));
 
     @Bean
     @ConditionalOnMissingBean(ValidationAuthorizationPort.class)
@@ -84,7 +84,8 @@ public class FailClosedAuthorizationConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDenied))
                 .authorizeHttpRequests(request -> {
-                    if (configured) request.requestMatchers("/api/compliance/**", "/internal/validations").authenticated();
+                    if (configured) request.requestMatchers("/api/compliance/**", "/internal/validations",
+                            "/internal/rule-sets/**").authenticated();
                     request.anyRequest().permitAll();
                 })
                 .oauth2ResourceServer(resource -> resource.authenticationEntryPoint(entryPoint)
