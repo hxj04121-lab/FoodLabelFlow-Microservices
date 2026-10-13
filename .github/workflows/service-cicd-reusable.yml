@@ -254,9 +254,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Enforce the merged STCN-37 budget gate
+        env:
+          STAGING_WINDOW_HOURS: ${{ vars.STAGING_WINDOW_HOURS }}
+          STAGING_EXPERIMENT_HOURS: ${{ vars.STAGING_EXPERIMENT_HOURS }}
+          STAGING_K6_HOURS: ${{ vars.STAGING_K6_HOURS }}
+          AVAILABLE_CREDIT_USD: ${{ vars.STAGING_AVAILABLE_CREDIT_USD }}
+          STAGING_AWS_ACCOUNT_ID: ${{ vars.STAGING_AWS_ACCOUNT_ID }}
         run: |
           test -f scripts/aws_staging_budget.py && test -f infra/aws-staging-budget.json || { echo "STCN-37 budget gate is required" >&2; exit 1; }
-          python3 scripts/aws_staging_budget.py budget --input infra/aws-staging-budget.json
+          : "${STAGING_WINDOW_HOURS:?set the approved staging window duration}"
+          : "${STAGING_EXPERIMENT_HOURS:?set the approved compliance experiment duration}"
+          : "${STAGING_K6_HOURS:?set the approved k6 test duration}"
+          : "${AVAILABLE_CREDIT_USD:?set the verified available AWS credit balance}"
+          budget_args=(--hours "$STAGING_WINDOW_HOURS" --experiment-hours "$STAGING_EXPERIMENT_HOURS" --k6-hours "$STAGING_K6_HOURS")
+          python3 scripts/aws_staging_budget.py "${budget_args[@]}"
+          python3 scripts/aws_staging_budget.py --require-gate "${budget_args[@]}"
       - name: Require the separate staging deploy role
         env:
           AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
@@ -266,6 +278,10 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Verify the applied EC2 On-Demand quota
+        env:
+          STAGING_AWS_ACCOUNT_ID: ${{ vars.STAGING_AWS_ACCOUNT_ID }}
+        run: python3 scripts/aws_staging_budget.py quota
       - uses: azure/setup-kubectl@v4
       - uses: azure/setup-helm@v4
         with: {version: v4.3.0}

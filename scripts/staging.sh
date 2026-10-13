@@ -29,7 +29,14 @@ check_identity() {
 
 check_budget() {
   [[ -f "$ROOT/scripts/aws_staging_budget.py" && -f "$ROOT/infra/aws-staging-budget.json" ]] || die "the reviewed STCN-37 fail-closed budget gate is not present on this branch"
-  python3 "$ROOT/scripts/aws_staging_budget.py" budget --input "$ROOT/infra/aws-staging-budget.json"
+  : "${STAGING_WINDOW_HOURS:?set the approved deployment-window duration}"
+  : "${STAGING_EXPERIMENT_HOURS:?set the approved compliance experiment duration}"
+  : "${STAGING_K6_HOURS:?set the approved k6 test duration}"
+  : "${AVAILABLE_CREDIT_USD:?set the verified available AWS credit balance}"
+  local args=(--hours "$STAGING_WINDOW_HOURS" --experiment-hours "$STAGING_EXPERIMENT_HOURS" --k6-hours "$STAGING_K6_HOURS")
+  python3 "$ROOT/scripts/aws_staging_budget.py" "${args[@]}"
+  python3 "$ROOT/scripts/aws_staging_budget.py" --require-gate "${args[@]}"
+  python3 "$ROOT/scripts/aws_staging_budget.py" quota
 }
 
 init_state() {
