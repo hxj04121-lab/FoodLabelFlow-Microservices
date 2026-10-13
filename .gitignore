@@ -6,6 +6,8 @@ bootstrap_inputs/
 target/
 node_modules/
 dist/
+__pycache__/
+*.pyc
 *.log
 frontend/test-results/
 frontend/playwright-report/
