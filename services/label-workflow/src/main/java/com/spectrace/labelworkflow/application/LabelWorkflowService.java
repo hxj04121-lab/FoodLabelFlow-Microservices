@@ -1,6 +1,7 @@
 package com.spectrace.labelworkflow.application;
 
 import com.spectrace.labelworkflow.persistence.LabelWorkflowStore;
+import com.spectrace.labelworkflow.validation.ValidationClient;
 import com.spectrace.platform.starter.error.ApiException;
 import com.spectrace.platform.starter.messaging.Outbox;
 import java.time.Clock;
@@ -12,6 +13,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.LinkedHashMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,11 +31,13 @@ public class LabelWorkflowService {
 
     private final LabelWorkflowStore store;
     private final Outbox outbox;
+    private final ValidationClient validations;
     private final Clock clock;
 
-    public LabelWorkflowService(LabelWorkflowStore store, Outbox outbox, Clock clock) {
+    public LabelWorkflowService(LabelWorkflowStore store, Outbox outbox, ValidationClient validations, Clock clock) {
         this.store = store;
         this.outbox = outbox;
+        this.validations = validations;
         this.clock = clock;
     }
 
@@ -162,5 +166,37 @@ public class LabelWorkflowService {
             throw ApiException.notFound("Label version " + labelVersionId + " does not exist");
         }
         return label;
+    }
+
+    /**
+     * Asks Compliance to validate the exact label/formula/rule-set tuple and stores the answer locally.
+     * The idempotency key is derived from the label version and draft revision, so a retry or a repeated
+     * call resolves to the same stored run. An unavailable validation fails closed (the caller sees an
+     * error, never a pass).
+     */
+    @Transactional
+    public ValidationClient.ValidationResult validate(String organisationId, String labelVersionId,
+                                                      int draftRevision) {
+        LabelWorkflowStore.LabelVersionRow label = requireLabel(organisationId, labelVersionId);
+        if (!"DRAFT".equals(label.lifecycleStatus())) {
+            throw ApiException.conflict("Only a DRAFT label version can be validated");
+        }
+        if (draftRevision < 1) {
+            throw ApiException.invalid("draftRevision must be positive");
+        }
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("organisationId", organisationId);
+        request.put("labelVersionId", labelVersionId);
+        request.put("formulaVersionId", label.formulaVersionId());
+        request.put("ruleSetVersionId", label.ruleSetVersionId());
+        request.put("jurisdictionCode", label.jurisdictionCode());
+        request.put("draftRevision", draftRevision);
+        ValidationClient.ValidationResult result =
+                validations.validate("label-validation:" + labelVersionId + ":" + draftRevision, request);
+        store.insertValidationRecord(result.validationRunId() == null
+                        ? "run_" + UUID.randomUUID().toString().replace("-", "") : result.validationRunId(),
+                labelVersionId, label.formulaVersionId(), label.ruleSetVersionId(), label.jurisdictionCode(),
+                result.passed() ? "PASSED" : "FAILED", draftRevision, clock.instant());
+        return result;
     }
 }
