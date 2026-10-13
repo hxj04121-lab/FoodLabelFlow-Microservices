@@ -40,8 +40,10 @@ with tempfile.TemporaryDirectory(prefix="m3-compose-check-") as directory:
             assert gateway[f"GATEWAY_{prefix}_WRITE_ROLES"] == "ADMIN_DATA_MAINTENANCE"
         for service in ("specification", "formulation", "compliance", "label-workflow"):
             identity = services[service]["environment"]
-            assert identity["SPECTRACE_SECURITY_ISSUER_URI"] == issuer
-            assert identity["SPECTRACE_SECURITY_JWK_SET_URI"] == jwks
+            assert not {"SPECTRACE_SECURITY_ISSUER_URI", "SPECTRACE_SECURITY_JWK_SET_URI"} & identity.keys(), \
+                "Duplicate starter aliases can retain a different direct-IdP issuer"
+            assert identity["SPECTRACE_SECURITY_ISSUERURI"] == issuer
+            assert identity["SPECTRACE_SECURITY_JWKSETURI"] == jwks
             assert identity["SPECTRACE_SECURITY_AUDIENCE"] == gateway["GATEWAY_AUDIENCE"]
         keycloak = services["keycloak"]
         assert keycloak["environment"]["KC_HOSTNAME"] == f"http://localhost:{port}/auth"
@@ -74,7 +76,8 @@ with tempfile.TemporaryDirectory(prefix="m3-compose-check-") as directory:
         assert direct[service]["environment"]["OIDC_ISSUER_URI"] == default.get(
             "OIDC_ISSUER_URI", "http://localhost:8180/auth/realms/spectrace")
         assert direct[service]["environment"]["SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI"] == jwks
-        assert direct[service]["environment"]["SPECTRACE_SECURITY_ISSUER_URI"] == direct[service]["environment"]["OIDC_ISSUER_URI"]
-        assert direct[service]["environment"]["SPECTRACE_SECURITY_JWK_SET_URI"] == jwks
+        assert not {"SPECTRACE_SECURITY_ISSUER_URI", "SPECTRACE_SECURITY_JWK_SET_URI"} & direct[service]["environment"].keys()
+        assert direct[service]["environment"]["SPECTRACE_SECURITY_ISSUERURI"] == direct[service]["environment"]["OIDC_ISSUER_URI"]
+        assert direct[service]["environment"]["SPECTRACE_SECURITY_JWKSETURI"] == jwks
         assert direct[service]["environment"]["SPECTRACE_SECURITY_AUDIENCE"] == "spectrace-api"
     print("PASS accepted default realm and direct/Gateway /auth bindings; no containers started")

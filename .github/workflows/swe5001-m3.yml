@@ -169,7 +169,7 @@ jobs:
           done
           curl -fsS "$jwks" > /dev/null
           OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
-          SPECTRACE_SECURITY_ISSUER_URI="$issuer" SPECTRACE_SECURITY_JWK_SET_URI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
+          SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
           SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/specification?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
           RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
             java -jar platform/gateway/target/m4-provider/services/specification/target/app.jar --server.port=18084 > "$evidence/specification.log" 2>&1 &

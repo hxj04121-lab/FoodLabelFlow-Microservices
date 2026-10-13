@@ -106,3 +106,33 @@ review, deployed realm/client and final acceptance; M5's reachable HTTPS/LB,
 private JWKS/upstreams/network bindings and agreed test window; repository owner
 Pages/main deployment settings. No peer PR is merged and no placeholder URL is
 enabled by this delivery. Jira Done remains pending final acceptance.
+
+## Afternoon integration follow-up: PR48 191b153
+
+M1's exact `191b15379008e12735edeaebddbfc5f6456d0a15` now includes `/auth`, the
+private JWKS and `spectrace-api` on all four services. Its
+[CI 38346481505](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38346481505)
+passed. Independent source-archive review compiled Specification/Formulation and
+passed 16 focused tests: 1 audience helper, 2 production-JWKS audience HTTP, 10
+security units and 3 binding tests. This is not a full database or Keycloak combined-head run.
+
+Composing that exact base with the old M3 overlay exposed an additional M3
+integration defect: the compact `SPECTRACE_SECURITY_ISSUERURI` retained direct8180,
+while the overlay added `SPECTRACE_SECURITY_ISSUER_URI` for Gateway 8080. Both
+spellings bind independently, but they do not replace each other in Compose.
+An independent ApplicationContextRunner check fed the actual rendered environment
+to real SecurityProperties and failed: expected 8080/auth, actually bound 8180/auth.
+
+M3's base, overlay and CI launch settings now use the same compact issuer/JWKS
+names as M1. `check-compose.py` checks their values and rejects competing aliases.
+The same real Spring check then passed for all four service environments against
+the corrected M3 overlay; the regular 8080/9080/direct 8180 Compose checks passed.
+No M1 source or branch was changed. Review-only source/model/logs remain local.
+
+The #47/#48 resolver file conflict and merged-source caller HTTP + real Keycloak
+regression remain owner integration work. M5's current
+[PR37 review](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/37#pullrequestreview-5498440809)
+finds no code defect but still requires actual Pages, deployed cross-organisation
+rejection and AWS bindings. Those environment/acceptance dependencies are not
+closed by the source review or by marking other owners' Jira implementation tasks
+Done. The immutable release checkpoint above retains its original commit/digest.

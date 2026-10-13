@@ -4,8 +4,9 @@ name: spectrace-m3-g1
 x-service-identity: &service-identity
   OIDC_ISSUER_URI: http://localhost:${G1_GATEWAY_HOST_PORT:-8080}/auth/realms/spectrace
   SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
-  SPECTRACE_SECURITY_ISSUER_URI: http://localhost:${G1_GATEWAY_HOST_PORT:-8080}/auth/realms/spectrace
-  SPECTRACE_SECURITY_JWK_SET_URI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
+  # Match the M1 starter anchor so Compose replaces its direct-IdP value rather than adding an alias.
+  SPECTRACE_SECURITY_ISSUERURI: http://localhost:${G1_GATEWAY_HOST_PORT:-8080}/auth/realms/spectrace
+  SPECTRACE_SECURITY_JWKSETURI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
   SPECTRACE_SECURITY_AUDIENCE: spectrace-api
 
 services:
