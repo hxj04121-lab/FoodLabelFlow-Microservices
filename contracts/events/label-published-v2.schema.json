@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "label-published-v2.schema.json",
   "title": "LabelPublished.v2",
-  "description": "LabelPublished.v2 adds the Label business versionNumber. The canonical event envelope remains v1; aggregateVersion is the event aggregate sequence and is not the business version.",
+  "description": "M2 consumer candidate accepted in ADR-G2-M2-002: carries the authoritative positive Label business version selected by the same Label publication transaction as the outbox event. This payload profile is separate from the frozen v1 profile; envelope schemaVersion remains 1.",
   "allOf": [
     {
       "$ref": "event-envelope.v1.schema.json"
@@ -40,7 +40,8 @@
             "versionNumber": {
               "type": "integer",
               "minimum": 1,
-              "description": "The committed Label business version; distinct from the envelope aggregateVersion."
+              "maximum": 2147483647,
+              "description": "Authoritative Label business version from the committed publication record; never the event aggregateVersion."
             },
             "formulaVersionId": {
               "type": "string",

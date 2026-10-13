@@ -13,6 +13,8 @@ servers:
 tags:
 - name: validation
   description: Service-local synchronous draft validation.
+- name: rule-sets
+  description: Compliance-owned active rule-set version lookup for Label Workflow.
 - name: impact
   description: Manufacturer-owned impact previews and findings.
 security:
@@ -86,6 +88,58 @@ paths:
           $ref: '#/components/responses/IdempotencyConflict'
         '422':
           $ref: '#/components/responses/ProjectionUnavailable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /internal/rule-sets/effective:
+    get:
+      tags:
+      - rule-sets
+      operationId: resolveEffectiveRuleSet
+      summary: Resolve the effective active rule-set version for a jurisdiction.
+      description: >-
+        Label Workflow calls this service-local endpoint when creating a label draft and pins
+        the returned immutable ruleSetVersionId on that draft. Compliance is the sole owner of
+        rule-set lifecycle and effective dates. The authenticated actor must hold the
+        LABEL.CREATE permission; organisation identity comes from the JWT and no organisation or
+        product query field overrides it. Compliance's explicit per-jurisdiction effective rule-set
+        pointer is authoritative; the pointed version must be ACTIVE and include today's UTC date.
+        A missing, inactive, or out-of-date pointer returns 422 with no fallback. Label Workflow
+        must not read Compliance tables or substitute a version later.
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: jurisdiction
+        in: query
+        required: true
+        description: Exact jurisdiction code for the requested label draft.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 16
+      responses:
+        '200':
+          description: Exact effective Compliance rule-set version to pin to the draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveRuleSet'
+          headers:
+            X-Correlation-ID:
+              description: Actual propagated request correlation identifier.
+              required: true
+              schema:
+                $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '422':
+          $ref: '#/components/responses/EffectiveRuleSetUnavailable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '500':
@@ -261,6 +315,32 @@ components:
       schema:
         $ref: ./compliance-types.v1.schema.json#/$defs/Id
   schemas:
+    EffectiveRuleSet:
+      type: object
+      additionalProperties: false
+      required:
+      - ruleSetVersionId
+      - versionNumber
+      - jurisdiction
+      - effectiveFrom
+      - effectiveTo
+      properties:
+        ruleSetVersionId:
+          $ref: ./compliance-types.v1.schema.json#/$defs/Id
+        versionNumber:
+          type: integer
+          minimum: 1
+        jurisdiction:
+          type: string
+          minLength: 1
+        effectiveFrom:
+          type: string
+          format: date
+        effectiveTo:
+          type:
+          - string
+          - 'null'
+          format: date
     DraftSnapshot:
       type: object
       additionalProperties: false
@@ -562,6 +642,18 @@ components:
     ProjectionUnavailable:
       description: Exact version projection or published-label input is unavailable;
         no empty-success fallback.
+      content:
+        application/json:
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/ApiError
+      headers:
+        X-Correlation-ID:
+          description: Actual propagated request correlation identifier.
+          required: true
+          schema:
+            $ref: ./compliance-types.v1.schema.json#/$defs/Id
+    EffectiveRuleSetUnavailable:
+      description: No effective active rule set exists for the requested jurisdiction; Label Workflow must fail closed.
       content:
         application/json:
           schema:

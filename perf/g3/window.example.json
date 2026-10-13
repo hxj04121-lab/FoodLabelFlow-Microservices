@@ -1,0 +1,8 @@
+{
+  "approval": {"owner": "", "budgetApproved": false, "accessConfirmed": false, "podDeleteApproved": false},
+  "windowStartUtc": "", "windowEndUtc": "", "awsAccount": "", "region": "ap-southeast-1",
+  "context": "", "namespace": "", "deployment": "", "podSelector": "",
+  "commit": "", "imageDigest": "", "baseUrl": "https://",
+  "targetsSha256": "", "requestSha256": "", "requestFile": "", "tokenFile": "",
+  "fixtureApprovedBy": "", "loadedDatasetEvidence": "", "utcClockEvidence": ""
+}

@@ -3,6 +3,7 @@ bootstrap_inputs/
 .env
 .env.*
 !.env.example
+!.env.aws-demo.example
 target/
 node_modules/
 dist/

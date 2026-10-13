@@ -37,7 +37,12 @@ function expect(name,validator,value,wanted){assert.equal(Boolean(validator(valu
 const copy=()=>structuredClone(sample);
 expect('published sample satisfies actual M1 Envelope',canonical,sample,true);
 expect('published sample satisfies LabelPublished profile',profile,sample,true);
-expect('LabelPublished.v2 sample satisfies its independent profile',profileV2,sampleV2,true);
+expect('v2 sample satisfies actual M1 Envelope',canonical,sampleV2,true);
+expect('v2 sample satisfies separate LabelPublished profile',profileV2,sampleV2,true);
+assert.notEqual(sampleV2.aggregateVersion,sampleV2.payload.versionNumber,
+  'Example must distinguish event ordering from Label business version');
+expect('v1 rejects v2 event type',profile,sampleV2,false);
+expect('v2 rejects v1 event type',profileV2,sample,false);
 expect('old M4 producer rejected by canonical',canonical,{...sample,producer:'label-workflow'},false);
 expect('old M4 producer rejected by profile',profile,{...sample,producer:'label-workflow'},false);
 expect('other valid service producer is canonical-valid',canonical,{...sample,producer:'compliance-service'},true);
@@ -59,13 +64,21 @@ for(const [name,change] of [
   ['zero aggregate version',{aggregateVersion:0}],
   ['undeclared envelope field',{unexpected:true}],
 ]) expect(name,profile,{...sample,...change},false);
-expect('v1 rejects v2 event type',profile,{...sampleV2},false);
-expect('v2 rejects v1 event type',profileV2,{...sampleV2,eventType:'LabelPublished.v1'},false);
-const missingBusinessVersion=structuredClone(sampleV2);delete missingBusinessVersion.payload.versionNumber;
-expect('v2 requires the Label business version number',profileV2,missingBusinessVersion,false);
-expect('v2 rejects non-positive business version numbers',profileV2,{...sampleV2,payload:{...sampleV2.payload,versionNumber:0}},false);
-expect('v1 remains unchanged and closed to v2 business fields',profile,{...sample,payload:{...sample.payload,versionNumber:2}},false);
-expect('aggregate event sequence remains independent from Label business version',profileV2,{...sampleV2,aggregateVersion:7},true);
+for(const [name,change] of [
+  ['wrong v2 event type',{eventType:'LabelPublished.v1'}],
+  ['missing v2 business version',payload=>{delete payload.versionNumber;}],
+  ['zero v2 business version',payload=>{payload.versionNumber=0;}],
+  ['negative v2 business version',payload=>{payload.versionNumber=-1;}],
+  ['fractional v2 business version',payload=>{payload.versionNumber=1.5;}],
+  ['string v2 business version',payload=>{payload.versionNumber='4';}],
+  ['out-of-range v2 business version',payload=>{payload.versionNumber=2147483648;}],
+  ['unknown v2 payload field',payload=>{payload.unexpected=true;}],
+]) {
+  const value=structuredClone(sampleV2);
+  if(typeof change==='function') change(value.payload);
+  else Object.assign(value,change);
+  expect(name,profileV2,value,false);
+}
 for(const field of ['productId','labelVersionId','formulaVersionId','ruleSetVersionId','jurisdictionCode','declarations']){
   const value=copy();delete value.payload[field];expect(`missing payload ${field}`,profile,value,false);
 }
@@ -79,4 +92,4 @@ for(const [name,change]of [['wrong declaration type',{declarationType:'MAY_CONTA
 }
 const empty=copy();empty.payload.declarations=[];expect('existing empty declarations remain valid',profile,empty,true);
 const nullable=copy();nullable.payload.declarations[0].displayText=null;expect('existing nullable display text remains valid',profile,nullable,true);
-console.log(`${checks} LabelPublished canonical/profile checks passed; pinned provider bytes verified. No runtime or reviewer acceptance is implied.`);
+console.log(`${checks} LabelPublished v1/v2 canonical/profile checks passed; pinned provider bytes verified. No runtime or reviewer acceptance is implied.`);

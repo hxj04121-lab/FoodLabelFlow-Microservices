@@ -1,0 +1,20 @@
+services:
+  mysql:
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in the demo env file}
+      MYSQL_USER: spectrace_app
+      MYSQL_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in the demo env file}
+    ports: !reset []
+    restart: unless-stopped
+
+  backend:
+    environment:
+      SPRING_DATASOURCE_USERNAME: spectrace_app
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in the demo env file}
+    ports: !reset []
+    restart: unless-stopped
+
+  frontend:
+    ports: !override
+      - "${FRONTEND_HOST_IP:-0.0.0.0}:${FRONTEND_HOST_PORT:-80}:80"
+    restart: unless-stopped

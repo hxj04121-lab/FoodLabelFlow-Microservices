@@ -23,7 +23,7 @@ Contracts: `contracts/openapi/specification.v1.yaml`, `formulation.v1.yaml`, `ev
 ### Interim, until G1-M4.2 lands
 
 - Each service has a small JWT resource-server configuration and `CallerResolver`.
-- Missing `org_id`/`org_type` → 401. Any other organisation type → 403.
+- Missing `org_id`/`org_type` or an unsupported organisation type → 401 (unusable identity).
 - Roles map to permissions:
 
 | Role | Permissions |
@@ -63,7 +63,7 @@ The configuration and mapping move into the starter security module when M4 deli
   - Another supplier, a manufacturer or an unknown supplier → 403.
 - **Authentication**
   - `NegativeAuthKit` passes on draft creation: 5 × 401, missing role → 403, other organisation → 403 with no leak.
-  - Unsupported `org_type` → 403. No token → 401.
+  - Unsupported `org_type` → 401. No token → 401.
 - **Seed replay**
   - It appends at least 5 schema-valid events with the seed release time, and nothing on a second run.
 
