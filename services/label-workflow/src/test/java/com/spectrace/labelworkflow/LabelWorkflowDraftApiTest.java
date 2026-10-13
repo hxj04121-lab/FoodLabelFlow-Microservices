@@ -121,4 +121,15 @@ class LabelWorkflowDraftApiTest {
         assertThat(created.statusCode()).isEqualTo(403);
         assertThat(created.body()).contains("AUTHORIZATION_DENIED");
     }
+
+    @Test
+    void theSubmitValidateAndDecisionEndpointsEnforceTheirOwnRoles() throws Exception {
+        String auditor = tokens.token(Caller.of("auditor", "org-maker-1", "MANUFACTURER", "AUDITOR"));
+        assertThat(request("POST", "/api/labels/lbl_x/submit", "", auditor).statusCode()).isEqualTo(403);
+        assertThat(request("POST", "/api/labels/lbl_x/validations", "{\"draftRevision\":1}", auditor).statusCode())
+                .isEqualTo(403);
+        String officer = tokens.token(Caller.of("officer", "org-maker-1", "MANUFACTURER", "LABEL_OFFICER"));
+        assertThat(request("POST", "/api/labels/lbl_x/decisions", "{\"decision\":\"APPROVE\"}", officer).statusCode())
+                .isEqualTo(403);
+    }
 }
