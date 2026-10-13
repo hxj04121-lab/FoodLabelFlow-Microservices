@@ -1,0 +1,22 @@
+{{- range $service, $namespace := .Values.namespaces }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stcn-default-deny-{{ $service }}
+  namespace: {{ $namespace | quote }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+{{- end }}
+{{- range $service, $namespace := .Values.operatorNamespaces }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stcn-default-deny-{{ $service }}-operator
+  namespace: {{ $namespace | quote }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+{{- end }}
