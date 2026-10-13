@@ -42,6 +42,10 @@ public class LabelWorkflowService {
     public record ValidationOutcome(String validationRunId, String status) {
     }
 
+    /** Frozen success shape for a publication (contracts/openapi/label-workflow-v1.yaml). */
+    public record PublicationOutcome(String publicationRecordId, Instant publishedAt) {
+    }
+
     public LabelWorkflowService(LabelWorkflowStore store, Outbox outbox, ValidationClient validations, Clock clock) {
         this.store = store;
         this.outbox = outbox;
@@ -56,7 +60,7 @@ public class LabelWorkflowService {
      *                      version for the same product and jurisdiction exists
      */
     @Transactional
-    public String publish(String organisationId, String labelVersionId, String actorSubject) {
+    public PublicationOutcome publish(String organisationId, String labelVersionId, String actorSubject) {
         LabelWorkflowStore.LabelVersionRow label = store.lockLabelVersion(labelVersionId)
                 .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
         if (!label.organisationId().equals(organisationId)) {
@@ -84,7 +88,7 @@ public class LabelWorkflowService {
                 versionNumber, now, actorSubject);
         outbox.append("LabelPublished.v2", organisationId, labelVersionId, versionNumber,
                 payload(label, versionNumber));
-        return publicationId;
+        return new PublicationOutcome(publicationId, now);
     }
 
     private Map<String, Object> payload(LabelWorkflowStore.LabelVersionRow label, int versionNumber) {
