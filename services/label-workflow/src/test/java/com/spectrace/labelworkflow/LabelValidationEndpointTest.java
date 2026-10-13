@@ -122,6 +122,59 @@ class LabelValidationEndpointTest {
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
     }
 
+    private HttpResponse<String> get(String path, String token) throws Exception {
+        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + path))
+                .header("Accept", "application/json")
+                .header("X-Correlation-ID", "corr-label-workflow")
+                .header("Authorization", "Bearer " + token)
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void privateLabelReadsReturnForbiddenAcrossOrganisationsAndDeclarationsFollowTheExactVersion() throws Exception {
+        String owner = tokens.token(Caller.of("officer", "org-maker-1", "MANUFACTURER", "LABEL_OFFICER"));
+        String other = tokens.token(Caller.of("other", "org-maker-2", "MANUFACTURER", "LABEL_OFFICER"));
+
+        HttpResponse<String> declarations = get("/api/labels/lbl_v1/declarations", owner);
+        assertThat(declarations.statusCode()).isEqualTo(200);
+        assertThat(declarations.body()).contains("\"labelVersionId\":\"lbl_v1\"")
+                .contains("\"formulaVersionId\":\"formula_demo_v1\"")
+                .contains("\"ruleSetVersionId\":\"ruleset_us_v1\"")
+                .contains("\"jurisdictionCode\":\"US\"")
+                .contains("\"declarations\":[]");
+
+        HttpResponse<String> versionDenied = get("/api/labels/lbl_v1", other);
+        assertThat(versionDenied.statusCode()).isEqualTo(403);
+        assertThat(versionDenied.body()).contains("AUTHORIZATION_DENIED");
+        HttpResponse<String> declarationsDenied = get("/api/labels/lbl_v1/declarations", other);
+        assertThat(declarationsDenied.statusCode()).isEqualTo(403);
+        assertThat(declarationsDenied.body()).contains("AUTHORIZATION_DENIED");
+
+        String priorProviderToken = PROVIDER_AUTHORIZATION.get();
+        HttpResponse<String> validationDenied = post("/api/labels/lbl_v1/validations", "", other);
+        assertThat(validationDenied.statusCode()).isEqualTo(403);
+        assertThat(validationDenied.body()).contains("AUTHORIZATION_DENIED");
+
+        String otherApprover = tokens.token(Caller.of("other-approver", "org-maker-2", "MANUFACTURER", "APPROVER"));
+        HttpResponse<String> decisionDenied = post("/api/labels/lbl_v1/decisions", "{\"decision\":\"APPROVE\"}",
+                otherApprover);
+        assertThat(decisionDenied.statusCode()).isEqualTo(403);
+        assertThat(decisionDenied.body()).contains("AUTHORIZATION_DENIED");
+
+        String otherPublisher = tokens.token(Caller.of("other-publisher", "org-maker-2", "MANUFACTURER", "PUBLISHER"));
+        HttpResponse<String> publishDenied = post("/api/labels/lbl_v1/publish", "", otherPublisher);
+        assertThat(publishDenied.statusCode()).isEqualTo(403);
+        assertThat(publishDenied.body()).contains("AUTHORIZATION_DENIED");
+
+        HttpResponse<String> submitDenied = post("/api/labels/lbl_v1/submit", "", other);
+        assertThat(submitDenied.statusCode()).isEqualTo(403);
+        assertThat(submitDenied.body()).contains("AUTHORIZATION_DENIED");
+        assertThat(PROVIDER_AUTHORIZATION.get()).isEqualTo(priorProviderToken);
+        assertThat(jdbc.queryForObject("SELECT lifecycle_status FROM label_version WHERE label_version_id = 'lbl_v1'",
+                String.class)).isEqualTo("DRAFT");
+    }
+
     @Test
     void aPassedValidationIsStoredAndUnblocksSubmission() throws Exception {
         String token = tokens.token(Caller.of("officer", "org-maker-1", "MANUFACTURER", "LABEL_OFFICER"));
@@ -161,13 +214,29 @@ class LabelValidationEndpointTest {
                 """, Integer.class)).isEqualTo(1);
 
         String approver = tokens.token(Caller.of("approver", "org-maker-1", "MANUFACTURER", "APPROVER"));
-        HttpResponse<String> decision = post("/api/labels/lbl_v1/decisions", "{\"decision\":\"APPROVE\"}",
+        HttpResponse<String> decision = post("/api/labels/lbl_v1/decisions",
+                "{\"decision\":\"APPROVE\",\"comments\":\"Reviewed against the approved formula\"}",
                 approver);
-        assertThat(decision.statusCode()).isEqualTo(200);
+        assertThat(decision.statusCode()).isEqualTo(201);
         assertThat(decision.body()).contains("\"decisionId\":\"dec_")
                 .contains("\"labelVersionId\":\"lbl_v1\"")
                 .contains("\"decision\":\"APPROVE\"")
                 .contains("\"decidedAt\":\"")
+                .contains("\"comments\":\"Reviewed against the approved formula\"")
                 .doesNotContain("lifecycleStatus");
+        assertThat(jdbc.queryForObject("SELECT comments FROM label_decision WHERE label_version_id = 'lbl_v1'",
+                String.class)).isEqualTo("Reviewed against the approved formula");
+
+        String publisher = tokens.token(Caller.of("publisher", "org-maker-1", "MANUFACTURER", "PUBLISHER"));
+        HttpResponse<String> publication = post("/api/labels/lbl_v1/publish", "", publisher);
+        assertThat(publication.statusCode()).isEqualTo(201);
+        assertThat(publication.body()).contains("\"publicationRecordId\":\"pub_")
+                .contains("\"labelVersionId\":\"lbl_v1\"")
+                .contains("\"lifecycleStatus\":\"PUBLISHED\"")
+                .contains("\"publishedAt\":\"");
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM outbox
+                WHERE event_type = 'LabelPublished.v2' AND aggregate_id = 'lbl_v1'
+                """, Integer.class)).isEqualTo(1);
     }
 }

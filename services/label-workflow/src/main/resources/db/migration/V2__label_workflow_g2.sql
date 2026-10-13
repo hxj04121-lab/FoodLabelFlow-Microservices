@@ -68,6 +68,7 @@ CREATE TABLE label_decision (
     label_decision_id VARCHAR(140) NOT NULL,
     label_version_id  VARCHAR(120) NOT NULL,
     decision          VARCHAR(30)  NOT NULL,
+    comments          VARCHAR(1000) NULL,
     actor_subject     VARCHAR(255) NOT NULL,
     decided_at        DATETIME(3)  NOT NULL,
     PRIMARY KEY (label_decision_id),

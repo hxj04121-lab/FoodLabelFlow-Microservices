@@ -28,7 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class LabelWorkflowService {
 
-    public record DecisionResult(String decisionId, String labelVersionId, String decision, Instant decidedAt) {
+    public record DecisionResult(String decisionId, String labelVersionId, String decision, Instant decidedAt,
+                                 String comments) {
     }
 
     private final LabelWorkflowStore store;
@@ -45,7 +46,7 @@ public class LabelWorkflowService {
 
     /**
      * @return the immutable id of the publication record
-     * @throws ApiException notFound when the label does not exist or belongs to another organisation (BR-11)
+     * @throws ApiException when the label does not exist or belongs to another organisation (BR-11)
      * @throws ApiException conflict when the label is not APPROVED, has no APPROVE decision, or a newer
      *                      version for the same product and jurisdiction exists
      */
@@ -54,7 +55,7 @@ public class LabelWorkflowService {
         LabelWorkflowStore.LabelVersionRow label = store.lockLabelVersion(labelVersionId)
                 .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
         if (!label.organisationId().equals(organisationId)) {
-            throw ApiException.notFound("Label version " + labelVersionId + " does not exist");
+            throw ApiException.forbidden();
         }
         if (!"APPROVED".equals(label.lifecycleStatus())) {
             throw ApiException.conflict("Only an APPROVED label version can be published");
@@ -133,6 +134,12 @@ public class LabelWorkflowService {
      */
     @Transactional
     public DecisionResult decide(String organisationId, String labelVersionId, String decision, String actorSubject) {
+        return decide(organisationId, labelVersionId, decision, actorSubject, null);
+    }
+
+    @Transactional
+    public DecisionResult decide(String organisationId, String labelVersionId, String decision, String actorSubject,
+                                 String comments) {
         LabelWorkflowStore.LabelVersionRow label = requireLabel(organisationId, labelVersionId);
         if (!"PENDING_REVIEW".equals(label.lifecycleStatus())) {
             throw ApiException.conflict("Only a label version pending review can receive a decision");
@@ -143,12 +150,16 @@ public class LabelWorkflowService {
         if (!Set.of("APPROVE", "REQUEST_CHANGES", "REJECT").contains(normalized)) {
             throw ApiException.invalid("decision must be APPROVE, REQUEST_CHANGES or REJECT");
         }
+        String normalizedComments = comments == null ? null : comments.trim();
+        if (normalizedComments != null && normalizedComments.length() > 1000) {
+            throw ApiException.invalid("comments cannot exceed 1000 characters");
+        }
         if ("APPROVE".equals(normalized) && actorSubject.equals(label.createdBySubject())) {
             throw ApiException.conflict("The creator of a label version cannot approve it");
         }
         Instant now = clock.instant();
         String decisionId = "dec_" + UUID.randomUUID().toString().replace("-", "");
-        store.insertDecision(decisionId, labelVersionId, normalized, actorSubject, now);
+        store.insertDecision(decisionId, labelVersionId, normalized, normalizedComments, actorSubject, now);
         String target = switch (normalized) {
             case "APPROVE" -> "APPROVED";
             case "REJECT" -> "REJECTED";
@@ -158,14 +169,14 @@ public class LabelWorkflowService {
             throw ApiException.conflict("Label version " + labelVersionId + " is no longer pending review");
         }
         store.resolveReviewTask(reviewTaskId, now);
-        return new DecisionResult(decisionId, labelVersionId, normalized, now);
+        return new DecisionResult(decisionId, labelVersionId, normalized, now, normalizedComments);
     }
 
     private LabelWorkflowStore.LabelVersionRow requireLabel(String organisationId, String labelVersionId) {
         LabelWorkflowStore.LabelVersionRow label = store.lockLabelVersion(labelVersionId)
                 .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
         if (!label.organisationId().equals(organisationId)) {
-            throw ApiException.notFound("Label version " + labelVersionId + " does not exist");
+            throw ApiException.forbidden();
         }
         return label;
     }

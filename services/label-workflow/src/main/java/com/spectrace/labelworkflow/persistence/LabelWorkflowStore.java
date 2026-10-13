@@ -108,6 +108,9 @@ public class LabelWorkflowStore {
                                  String displayText) {
     }
 
+    public record PublicationRow(String publicationRecordId, String labelVersionId, Instant publishedAt) {
+    }
+
     /** Locks the label row for the publication transaction so concurrent publishes serialise here. */
     public Optional<LabelVersionRow> lockLabelVersion(String labelVersionId) {
         return jdbc.query("""
@@ -171,6 +174,15 @@ public class LabelWorkflowStore {
                     version_number, published_at, published_by_subject) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, publicationId, labelVersionId, productId, jurisdictionCode, versionNumber,
                 Timestamp.from(publishedAt), publishedBySubject);
+    }
+
+    public Optional<PublicationRow> publication(String publicationRecordId) {
+        return jdbc.query("""
+                SELECT label_publication_id, label_version_id, published_at
+                FROM label_publication WHERE label_publication_id = ?
+                """, (rs, row) -> new PublicationRow(rs.getString("label_publication_id"),
+                rs.getString("label_version_id"), rs.getTimestamp("published_at").toInstant()),
+                publicationRecordId).stream().findFirst();
     }
 
     public List<DeclarationRow> declarations(String labelVersionId) {
@@ -241,12 +253,13 @@ public class LabelWorkflowStore {
                 """, Timestamp.from(now), reviewTaskId);
     }
 
-    public void insertDecision(String decisionId, String labelVersionId, String decision, String actorSubject,
-                               Instant now) {
+    public void insertDecision(String decisionId, String labelVersionId, String decision, String comments,
+                               String actorSubject, Instant now) {
         jdbc.update("""
-                INSERT INTO label_decision (label_decision_id, label_version_id, decision, actor_subject, decided_at)
-                VALUES (?, ?, ?, ?, ?)
-                """, decisionId, labelVersionId, decision, actorSubject, Timestamp.from(now));
+                INSERT INTO label_decision (label_decision_id, label_version_id, decision, comments, actor_subject,
+                    decided_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """, decisionId, labelVersionId, decision, comments, actorSubject, Timestamp.from(now));
     }
 
     public void insertValidationRecord(String validationRunId, String labelVersionId, String formulaVersionId,

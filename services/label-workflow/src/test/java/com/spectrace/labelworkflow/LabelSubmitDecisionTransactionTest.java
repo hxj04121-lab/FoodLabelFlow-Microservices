@@ -141,7 +141,7 @@ class LabelSubmitDecisionTransactionTest {
         service.decide(ORG, "lbl_s7", "REQUEST_CHANGES", "checker");
 
         jdbc.update("UPDATE label_version SET draft_revision = 2 WHERE label_version_id = 'lbl_s7'");
-        seedValidation("lbl_s7", "PASSED");
+        seedValidation("lbl_s7", "PASSED", 2);
         String secondTask = service.submit(ORG, "lbl_s7", "maker");
 
         assertThat(secondTask).startsWith("task_").isNotEqualTo(firstTask);

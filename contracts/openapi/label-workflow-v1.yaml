@@ -301,12 +301,14 @@ paths:
         Label Workflow transaction supersedes the current publication for the
         same product and jurisdiction, publishes the label, records the
         PublicationRecord, resolves the review task, and commits local audit
-        and the LabelPublished.v1 outbox event together. The retired
+        and the LabelPublished.v2 outbox event together. Its payload carries
+        the authoritative business versionNumber while retaining labelVersionId.
+        The retired
         product.current_published_label_version_id is not used.
       x-required-permission: LABEL.PUBLISH
       responses:
         '201':
-          description: Publication committed and LabelPublished.v1 queued in the outbox.
+          description: Publication committed and LabelPublished.v2 queued in the outbox.
           headers:
             X-Correlation-ID:
               required: true
