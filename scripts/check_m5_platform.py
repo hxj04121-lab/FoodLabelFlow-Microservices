@@ -27,7 +27,8 @@ expected = {
     "label-workflow": {"formula-published", "impact-finding"},
 }
 assert len(queues) == 12, "each of six consumer queues needs one durable queue and one DLQ"
-assert len(bindings) == 12 and len(policies) == 6
+assert len(bindings) == 13 and len(policies) == 6, \
+    "six queues need six event and six DLQ bindings, plus the second LabelPublished routing key"
 assert not users and not permissions, "service users are owned by deploy/operators/rabbitmq/users.yaml"
 assert {x["metadata"]["name"] for x in policies} == {
     f"{service}-{queue}-delivery-policy" for service, names in expected.items() for queue in names
@@ -35,6 +36,14 @@ assert {x["metadata"]["name"] for x in policies} == {
 for service, names in expected.items():
     entries = [q for q in queues if q["metadata"]["namespace"] == service]
     assert {q["spec"]["name"].split(".", 1)[1].removesuffix(".dlq") for q in entries} == names
+
+label_bindings = [item["spec"] for item in bindings
+                  if item["metadata"]["namespace"] == "compliance"
+                  and item["spec"]["source"] == "spectrace.events"
+                  and item["spec"]["destination"] == "compliance.label-published"]
+assert len(label_bindings) == 2 and {binding["routingKey"] for binding in label_bindings} == {
+    "label.published.v1", "label.published.v2"
+}, "the Compliance projection must accept both frozen v1 and business-version v2 events"
 
 # Frozen ImpactFinding.v1 uses M1 EventEnvelope's CamelCase -> dotted routing.
 # Assert the rendered event binding, independently of the chart's input value.
