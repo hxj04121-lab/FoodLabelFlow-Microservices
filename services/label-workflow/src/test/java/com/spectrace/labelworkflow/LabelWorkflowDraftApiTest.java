@@ -131,5 +131,6 @@ class LabelWorkflowDraftApiTest {
         String officer = tokens.token(Caller.of("officer", "org-maker-1", "MANUFACTURER", "LABEL_OFFICER"));
         assertThat(request("POST", "/api/labels/lbl_x/decisions", "{\"decision\":\"APPROVE\"}", officer).statusCode())
                 .isEqualTo(403);
+        assertThat(request("POST", "/api/labels/lbl_x/publish", "", officer).statusCode()).isEqualTo(403);
     }
 }
