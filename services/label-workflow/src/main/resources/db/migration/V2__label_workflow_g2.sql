@@ -90,6 +90,19 @@ CREATE TABLE label_publication (
     CONSTRAINT fk_publication_label FOREIGN KEY (label_version_id) REFERENCES label_version (label_version_id)
 );
 
+-- Exactly one open review task per label version (BR-05, BR-06, BR-09).
+CREATE TABLE label_review_task (
+    label_review_task_id VARCHAR(140) NOT NULL,
+    label_version_id     VARCHAR(120) NOT NULL,
+    status               VARCHAR(20)  NOT NULL,
+    created_at           DATETIME(3)  NOT NULL,
+    resolved_at          DATETIME(3)  NULL,
+    PRIMARY KEY (label_review_task_id),
+    UNIQUE KEY uk_review_task_label (label_version_id),
+    CONSTRAINT ck_review_task_status CHECK (status IN ('OPEN', 'RESOLVED')),
+    CONSTRAINT fk_review_task_label FOREIGN KEY (label_version_id) REFERENCES label_version (label_version_id)
+);
+
 CREATE TABLE label_allergen_declaration (
     label_version_id   VARCHAR(120) NOT NULL,
     allergen_id        VARCHAR(80)  NOT NULL,
