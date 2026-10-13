@@ -1,0 +1,27 @@
+{
+  "eventId": "b2c2fd0f-96f1-4c9e-a560-a29b000f4202",
+  "eventType": "LabelPublished.v2",
+  "schemaVersion": 1,
+  "occurredAt": "2026-10-12T10:00:00Z",
+  "producer": "label-workflow-service",
+  "organisationId": "org-manufacturer-001",
+  "correlationId": "corr-publish-002",
+  "aggregateId": "label-001-v2",
+  "aggregateVersion": 9,
+  "payload": {
+    "productId": "product-001",
+    "labelVersionId": "label-001-v2",
+    "versionNumber": 4,
+    "formulaVersionId": "formula-001-v3",
+    "ruleSetVersionId": "ruleset-us-v1",
+    "jurisdictionCode": "US",
+    "declarations": [
+      {
+        "allergenId": "allergen-milk",
+        "declarationType": "CONTAINS",
+        "declarationSource": "FORMULA_DERIVED",
+        "displayText": "Contains: Milk"
+      }
+    ]
+  }
+}

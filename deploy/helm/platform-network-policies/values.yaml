@@ -1,0 +1,17 @@
+namespaces:
+  gateway: gateway
+  keycloak: keycloak
+  rabbitmq: rabbitmq
+  observability: observability
+  specification: specification
+  formulation: formulation
+  compliance: compliance
+  label-workflow: label-workflow
+operatorNamespaces:
+  rabbitmq: rabbitmq-system
+  keycloak: keycloak-system
+cidrs:
+  vpc: 10.0.0.0/16
+  alb: [10.0.0.0/24, 10.0.1.0/24]
+  nodes: [10.0.16.0/20, 10.0.32.0/20]
+  database: [10.0.48.0/24, 10.0.49.0/24]

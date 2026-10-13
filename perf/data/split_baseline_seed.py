@@ -92,6 +92,25 @@ def insert(table, columns, records):
     return "\n".join(lines) + "\n"
 
 
+def assign_organisations(suppliers, products):
+    """Set organisation_id on every supplier and product row; returns {org_id: (type, name, supplier_id)}."""
+    organisations = {}
+    for s in suppliers:
+        if s["supplier_id"] not in SUPPLIER_ORGANISATIONS:
+            raise SystemExit(f"no realm organisation for baseline supplier {s['supplier_id']}")
+        org_id, name = SUPPLIER_ORGANISATIONS[s["supplier_id"]]
+        s["organisation_id"] = org_id
+        organisations[org_id] = ("SUPPLIER", name, s["supplier_id"])
+    position = {}
+    for p in sorted(products, key=lambda p: p["product_id"]):
+        index = position.get(p["fixture_group"], 0)
+        position[p["fixture_group"]] = index + 1
+        org_id, name = MANUFACTURER_ORGANISATIONS[index % len(MANUFACTURER_ORGANISATIONS)]
+        p["organisation_id"] = org_id
+        organisations[org_id] = ("MANUFACTURER", name, None)
+    return organisations
+
+
 def main():
     sql = BASELINE.read_text(encoding="utf-8")
     provenance = rows(sql, "data_provenance")
@@ -109,20 +128,7 @@ def main():
     for p in products:
         p["current_formula_version_id"] = pointers.get(p["product_id"], p.get("current_formula_version_id"))
 
-    organisations = {}
-    for s in suppliers:
-        if s["supplier_id"] not in SUPPLIER_ORGANISATIONS:
-            raise SystemExit(f"no realm organisation for baseline supplier {s['supplier_id']}")
-        org_id, name = SUPPLIER_ORGANISATIONS[s["supplier_id"]]
-        s["organisation_id"] = org_id
-        organisations[org_id] = ("SUPPLIER", name, s["supplier_id"])
-    position = {}
-    for p in sorted(products, key=lambda p: p["product_id"]):
-        index = position.get(p["fixture_group"], 0)
-        position[p["fixture_group"]] = index + 1
-        org_id, name = MANUFACTURER_ORGANISATIONS[index % len(MANUFACTURER_ORGANISATIONS)]
-        p["organisation_id"] = org_id
-        organisations[org_id] = ("MANUFACTURER", name, None)
+    organisations = assign_organisations(suppliers, products)
 
     used_provenance = {r["data_provenance_id"] for r in suppliers + ingredients + materials + specs + products + formulas}
     prov_columns = ["provenance_id", "source_type", "source_dataset", "source_record_id", "source_url",

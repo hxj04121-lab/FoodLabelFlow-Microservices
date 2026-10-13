@@ -16,6 +16,23 @@ docker-compose up --build
 Then open <http://localhost:5173>. The local database is exposed on port 3307;
 the application API is exposed on port 8080.
 
+## AWS Compose demo alternative
+
+This is a temporary Stage 0 modular-monolith demo; it does not satisfy the EKS/RDS/ALB course acceptance. The override keeps MySQL and the backend off host ports, uses a separate MySQL application user, and publishes only the frontend. Copy `.env.aws-demo.example` to an ignored `.env.aws-demo`, set two strong passwords, and limit the EC2 security-group ingress for port 80 to the team-approved CIDR before starting it. Local Compose defaults bind every host port to loopback; the AWS demo env sets only the frontend bind address to all interfaces behind that restricted security group:
+
+```bash
+cp .env.aws-demo.example .env.aws-demo
+chmod 600 .env.aws-demo
+# Fill the two password fields before continuing.
+docker compose --env-file .env.aws-demo -f docker-compose.yml -f docker-compose.aws-demo.yml config --quiet
+docker compose --env-file .env.aws-demo -f docker-compose.yml -f docker-compose.aws-demo.yml up --build -d
+docker compose --env-file .env.aws-demo -f docker-compose.yml -f docker-compose.aws-demo.yml logs --tail=200 -f
+```
+
+The backend currently has unauthenticated write endpoints, so do not expose this demo to `0.0.0.0/0`; HTTP also remains until a team-owned domain and TLS termination are configured. Back up data before destroying the EC2 instance. Use Docker Compose `down` to remove containers, then terminate the approved EC2 resource separately; do not use `down -v` unless deleting the database volume is intended.
+
+The preferred cloud acceptance remains EKS + private Multi-AZ RDS + ALB. Its service chart still uses placeholder images until service owners publish commit-tagged images and confirm the runtime health/auth contracts.
+
 For a backend-only build, use `mvn -B -ntp -f backend/pom.xml verify`. For the
 frontend, run `npm ci && npm run build` from `frontend/`.
 

@@ -5,7 +5,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-stage0-local-only}
       MYSQL_DATABASE: spectrace
     ports:
-      - "${MYSQL_HOST_PORT:-3307}:3306"
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3307}:3306"
     volumes:
       - spectrace_mysql_data:/var/lib/mysql
     healthcheck:
@@ -21,12 +21,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/spectrace?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-stage0-local-only}
-      SPECTRACE_DEV_EXTERNAL_AUTH_ENABLED: "true"
     depends_on:
       mysql:
         condition: service_healthy
     ports:
-      - "${BACKEND_HOST_PORT:-8080}:8080"
+      - "127.0.0.1:${BACKEND_HOST_PORT:-8080}:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health | grep -q '\"status\":\"ok\"'"]
       interval: 10s
@@ -40,7 +39,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "${FRONTEND_HOST_PORT:-5173}:80"
+      - "${FRONTEND_HOST_IP:-127.0.0.1}:${FRONTEND_HOST_PORT:-5173}:80"
 
 volumes:
   spectrace_mysql_data:
