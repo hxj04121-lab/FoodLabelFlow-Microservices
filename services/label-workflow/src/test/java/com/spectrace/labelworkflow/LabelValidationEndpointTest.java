@@ -36,6 +36,7 @@ class LabelValidationEndpointTest {
 
     private static final HttpServer COMPLIANCE = startCompliance();
     private static volatile boolean failing;
+    private static volatile boolean blockingPassed;
 
     @TestConfiguration(proxyBeanMethods = false)
     static class SignedTokens {
@@ -64,8 +65,11 @@ class LabelValidationEndpointTest {
                     + "\"blockingFindings\":false}").getBytes(StandardCharsets.UTF_8);
             byte[] failed = ("{\"validationRunId\":\"run_endpoint_2\",\"resultStatus\":\"FAILED\","
                     + "\"blockingFindings\":true}").getBytes(StandardCharsets.UTF_8);
+            byte[] passedWithBlocking = ("{\"validationRunId\":\"run_endpoint_3\",\"resultStatus\":\"PASSED\","
+                    + "\"blockingFindings\":true,\"findings\":[{\"resultCode\":\"ODD\",\"blocking\":true,"
+                    + "\"message\":\"inconsistent provider answer\"}]}").getBytes(StandardCharsets.UTF_8);
             server.createContext("/internal/validations", exchange -> {
-                byte[] answer = failing ? failed : body;
+                byte[] answer = blockingPassed ? passedWithBlocking : failing ? failed : body;
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(200, answer.length);
                 try (var out = exchange.getResponseBody()) {
@@ -88,6 +92,7 @@ class LabelValidationEndpointTest {
     @BeforeEach
     void seedDraft() {
         failing = false;
+        blockingPassed = false;
         jdbc.update("DELETE FROM label_review_task");
         jdbc.update("DELETE FROM label_decision");
         jdbc.update("DELETE FROM label_publication");
@@ -139,6 +144,18 @@ class LabelValidationEndpointTest {
 
         assertThat(published.statusCode()).isEqualTo(201);
         assertThat(published.body()).contains("\"publicationRecordId\"").contains("\"lifecycleStatus\":\"PUBLISHED\"");
+    }
+
+    @Test
+    void aPassedProviderAnswerThatCarriesABlockingFindingIsDowngradedToFailed() throws Exception {
+        blockingPassed = true;
+        String token = tokens.token(Caller.of("officer", "org-maker-1", "MANUFACTURER", "LABEL_OFFICER"));
+
+        HttpResponse<String> validated = post("/api/labels/lbl_v1/validations", "", token);
+
+        assertThat(validated.statusCode()).isEqualTo(201);
+        assertThat(validated.body()).contains("\"status\":\"FAILED\"").contains("\"blocking\":true");
+        assertThat(post("/api/labels/lbl_v1/submit", "", token).statusCode()).isEqualTo(409);
     }
 
     private HttpResponse<String> post(String path, String body, String token) throws Exception {
