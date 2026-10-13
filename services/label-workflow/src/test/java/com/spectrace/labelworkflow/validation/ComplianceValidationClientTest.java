@@ -85,7 +85,8 @@ class ComplianceValidationClientTest {
         ComplianceValidationClient client = clientResponding(new int[] {503}, "{}");
 
         for (int call = 0; call < 3; call++) {
-            assertThatThrownBy(() -> client.validate("key-b" + call, Map.of()))
+            final String key = "key-b" + call;
+            assertThatThrownBy(() -> client.validate(key, Map.of()))
                     .isInstanceOf(ValidationClient.ValidationUnavailableException.class);
         }
         int attemptsBeforeOpen = requests.get();
