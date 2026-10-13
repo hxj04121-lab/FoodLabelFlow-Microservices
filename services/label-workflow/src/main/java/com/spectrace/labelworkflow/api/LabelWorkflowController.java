@@ -7,6 +7,7 @@ import com.spectrace.platform.starter.security.OrganisationContext;
 import com.spectrace.platform.starter.security.OrganisationContexts;
 import java.time.Clock;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,7 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>The actor and organisation always come from the validated token (never the request body), and a
  * label of another organisation is reported as absent (BR-11). Draft creation pins the current released
- * formula from the local projection and the active rule set through {@link RuleSetVersionResolver}.</p>
+ * formula from the local projection and the active rule set through {@link RuleSetVersionResolver};
+ * when no resolver is configured the draft fails closed instead of guessing a rule set.</p>
  */
 @RestController
 @RequestMapping("/api/labels")
@@ -31,10 +33,11 @@ public class LabelWorkflowController {
     private static final String LABEL_OFFICER = "LABEL_OFFICER";
 
     private final LabelWorkflowStore store;
-    private final RuleSetVersionResolver ruleSets;
+    private final ObjectProvider<RuleSetVersionResolver> ruleSets;
     private final Clock clock;
 
-    public LabelWorkflowController(LabelWorkflowStore store, RuleSetVersionResolver ruleSets, Clock clock) {
+    public LabelWorkflowController(LabelWorkflowStore store, ObjectProvider<RuleSetVersionResolver> ruleSets,
+                                   Clock clock) {
         this.store = store;
         this.ruleSets = ruleSets;
         this.clock = clock;
@@ -63,8 +66,13 @@ public class LabelWorkflowController {
                 .orElseThrow(() -> ApiException.conflict(
                         "No released formula is known for product " + request.productId()))
                 .formulaVersionId();
-        String ruleSetVersionId = ruleSets.resolve(caller.organisationId(), request.productId(),
-                request.jurisdictionCode());
+        String ruleSetVersionId = ruleSets
+                .getIfAvailable(() -> (organisationId, productId, jurisdictionCode) -> {
+                    throw new IllegalStateException("No active rule-set source is configured for product "
+                            + productId + " in jurisdiction " + jurisdictionCode
+                            + " (organisation " + organisationId + ")");
+                })
+                .resolve(caller.organisationId(), request.productId(), request.jurisdictionCode());
         String labelVersionId = "lbl_" + UUID.randomUUID().toString().replace("-", "");
         int versionNumber = store.nextVersionNumber(request.productId(), request.jurisdictionCode());
         try {
