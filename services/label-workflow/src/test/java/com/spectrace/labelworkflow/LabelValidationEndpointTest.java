@@ -15,6 +15,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +36,10 @@ import org.springframework.test.context.DynamicPropertySource;
 class LabelValidationEndpointTest {
 
     private static final HttpServer COMPLIANCE = startCompliance();
+    private static final AtomicReference<String> PROVIDER_AUTHORIZATION = new AtomicReference<>();
+    private static final AtomicReference<String> PROVIDER_CORRELATION = new AtomicReference<>();
+    private static final AtomicReference<String> PROVIDER_IDEMPOTENCY_KEY = new AtomicReference<>();
+    private static final AtomicReference<String> PROVIDER_REQUEST = new AtomicReference<>();
 
     @TestConfiguration(proxyBeanMethods = false)
     static class SignedTokens {
@@ -59,11 +64,20 @@ class LabelValidationEndpointTest {
     private static HttpServer startCompliance() {
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-            byte[] body = ("{\"validationRunId\":\"run_endpoint_1\",\"resultStatus\":\"PASSED\","
-                    + "\"blockingFindings\":false}").getBytes(StandardCharsets.UTF_8);
             server.createContext("/internal/validations", exchange -> {
+                PROVIDER_AUTHORIZATION.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                PROVIDER_CORRELATION.set(exchange.getRequestHeaders().getFirst("X-Correlation-ID"));
+                PROVIDER_IDEMPOTENCY_KEY.set(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
+                PROVIDER_REQUEST.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                String correlationId = exchange.getRequestHeaders().getFirst("X-Correlation-ID");
+                byte[] body = ("{\"validationRunId\":\"run_endpoint_1\",\"organisationId\":\"org-maker-1\","
+                        + "\"correlationId\":\"" + correlationId + "\",\"labelVersionId\":\"lbl_v1\","
+                        + "\"versionNumber\":1,\"draftRevision\":1,\"formulaVersionId\":\"formula_demo_v1\","
+                        + "\"jurisdiction\":\"US\",\"ruleSetVersionId\":\"ruleset_us_v1\","
+                        + "\"status\":\"PASSED\",\"ranAt\":\"2026-10-13T10:00:00Z\",\"findings\":[]}")
+                        .getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
-                exchange.sendResponseHeaders(200, body.length);
+                exchange.sendResponseHeaders(201, body.length);
                 try (var out = exchange.getResponseBody()) {
                     out.write(body);
                 }
@@ -84,6 +98,8 @@ class LabelValidationEndpointTest {
     @BeforeEach
     void seedDraft() {
         jdbc.update("DELETE FROM label_review_task");
+        jdbc.update("DELETE FROM label_decision");
+        jdbc.update("DELETE FROM label_publication");
         jdbc.update("DELETE FROM label_validation_record");
         jdbc.update("DELETE FROM label_allergen_declaration");
         jdbc.update("DELETE FROM label_version");
@@ -101,6 +117,7 @@ class LabelValidationEndpointTest {
         return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
                         URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json").header("Accept", "application/json")
+                .header("X-Correlation-ID", "corr-label-workflow")
                 .header("Authorization", "Bearer " + token)
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
     }
@@ -109,10 +126,22 @@ class LabelValidationEndpointTest {
     void aPassedValidationIsStoredAndUnblocksSubmission() throws Exception {
         String token = tokens.token(Caller.of("officer", "org-maker-1", "MANUFACTURER", "LABEL_OFFICER"));
 
-        HttpResponse<String> validated = post("/api/labels/lbl_v1/validations", "{\"draftRevision\":1}", token);
+        HttpResponse<String> validated = post("/api/labels/lbl_v1/validations", "", token);
 
-        assertThat(validated.statusCode()).isEqualTo(200);
-        assertThat(validated.body()).contains("\"resultStatus\":\"PASSED\"");
+        assertThat(validated.statusCode()).isEqualTo(201);
+        assertThat(validated.body()).contains("\"status\":\"PASSED\"")
+                .contains("\"labelVersionId\":\"lbl_v1\"")
+                .contains("\"formulaVersionId\":\"formula_demo_v1\"")
+                .contains("\"ruleSetVersionId\":\"ruleset_us_v1\"")
+                .contains("\"jurisdictionCode\":\"US\"")
+                .contains("\"findings\":[]");
+        assertThat(validated.body()).doesNotContain("resultStatus", "draftRevision");
+        assertThat(PROVIDER_AUTHORIZATION.get()).isEqualTo("Bearer " + token);
+        assertThat(PROVIDER_CORRELATION.get()).isEqualTo("corr-label-workflow");
+        assertThat(PROVIDER_IDEMPOTENCY_KEY.get()).isEqualTo("lbl_v1:1");
+        assertThat(PROVIDER_REQUEST.get()).contains("\"versionNumber\":1", "\"draftRevision\":1",
+                "\"jurisdiction\":\"US\"", "\"declarations\":[]")
+                .doesNotContain("jurisdictionCode", "label-validation:");
         assertThat(jdbc.queryForObject("""
                 SELECT result_status FROM label_validation_record WHERE label_version_id = 'lbl_v1'
                 """, String.class)).isEqualTo("PASSED");
@@ -120,9 +149,25 @@ class LabelValidationEndpointTest {
         HttpResponse<String> submitted = post("/api/labels/lbl_v1/submit", "", token);
 
         assertThat(submitted.statusCode()).isEqualTo(200);
-        assertThat(submitted.body()).contains("PENDING_REVIEW");
+        assertThat(submitted.body()).contains("\"labelVersionId\":\"lbl_v1\"")
+                .contains("\"productId\":\"product_demo_1\"")
+                .contains("\"formulaVersionId\":\"formula_demo_v1\"")
+                .contains("\"ruleSetVersionId\":\"ruleset_us_v1\"")
+                .contains("\"jurisdictionCode\":\"US\"")
+                .contains("\"versionNumber\":1", "\"lifecycleStatus\":\"PENDING_REVIEW\"")
+                .doesNotContain("reviewTaskId");
         assertThat(jdbc.queryForObject("""
                 SELECT COUNT(*) FROM label_review_task WHERE label_version_id = 'lbl_v1' AND status = 'OPEN'
                 """, Integer.class)).isEqualTo(1);
+
+        String approver = tokens.token(Caller.of("approver", "org-maker-1", "MANUFACTURER", "APPROVER"));
+        HttpResponse<String> decision = post("/api/labels/lbl_v1/decisions", "{\"decision\":\"APPROVE\"}",
+                approver);
+        assertThat(decision.statusCode()).isEqualTo(200);
+        assertThat(decision.body()).contains("\"decisionId\":\"dec_")
+                .contains("\"labelVersionId\":\"lbl_v1\"")
+                .contains("\"decision\":\"APPROVE\"")
+                .contains("\"decidedAt\":\"")
+                .doesNotContain("lifecycleStatus");
     }
 }

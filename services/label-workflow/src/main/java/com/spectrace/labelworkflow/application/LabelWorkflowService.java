@@ -13,7 +13,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.LinkedHashMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class LabelWorkflowService {
+
+    public record DecisionResult(String decisionId, String labelVersionId, String decision, Instant decidedAt) {
+    }
 
     private final LabelWorkflowStore store;
     private final Outbox outbox;
@@ -112,7 +114,7 @@ public class LabelWorkflowService {
         if (!"DRAFT".equals(label.lifecycleStatus())) {
             throw ApiException.conflict("Only a DRAFT label version can be submitted for review");
         }
-        if (!store.hasPassedValidation(labelVersionId)) {
+        if (!store.hasPassedValidation(label)) {
             throw ApiException.conflict("A PASSED validation record is required before submitting");
         }
         Instant now = clock.instant();
@@ -130,7 +132,7 @@ public class LabelWorkflowService {
      * creator from approving - the wider baseline "creator may never decide" rule is not carried over.
      */
     @Transactional
-    public String decide(String organisationId, String labelVersionId, String decision, String actorSubject) {
+    public DecisionResult decide(String organisationId, String labelVersionId, String decision, String actorSubject) {
         LabelWorkflowStore.LabelVersionRow label = requireLabel(organisationId, labelVersionId);
         if (!"PENDING_REVIEW".equals(label.lifecycleStatus())) {
             throw ApiException.conflict("Only a label version pending review can receive a decision");
@@ -145,8 +147,8 @@ public class LabelWorkflowService {
             throw ApiException.conflict("The creator of a label version cannot approve it");
         }
         Instant now = clock.instant();
-        store.insertDecision("dec_" + UUID.randomUUID().toString().replace("-", ""), labelVersionId, normalized,
-                actorSubject, now);
+        String decisionId = "dec_" + UUID.randomUUID().toString().replace("-", "");
+        store.insertDecision(decisionId, labelVersionId, normalized, actorSubject, now);
         String target = switch (normalized) {
             case "APPROVE" -> "APPROVED";
             case "REJECT" -> "REJECTED";
@@ -156,7 +158,7 @@ public class LabelWorkflowService {
             throw ApiException.conflict("Label version " + labelVersionId + " is no longer pending review");
         }
         store.resolveReviewTask(reviewTaskId, now);
-        return target;
+        return new DecisionResult(decisionId, labelVersionId, normalized, now);
     }
 
     private LabelWorkflowStore.LabelVersionRow requireLabel(String organisationId, String labelVersionId) {
@@ -176,27 +178,31 @@ public class LabelWorkflowService {
      */
     @Transactional
     public ValidationClient.ValidationResult validate(String organisationId, String labelVersionId,
-                                                      int draftRevision) {
+                                                      String actorJwt, String correlationId) {
         LabelWorkflowStore.LabelVersionRow label = requireLabel(organisationId, labelVersionId);
         if (!"DRAFT".equals(label.lifecycleStatus())) {
             throw ApiException.conflict("Only a DRAFT label version can be validated");
         }
-        if (draftRevision < 1) {
-            throw ApiException.invalid("draftRevision must be positive");
-        }
+        int draftRevision = label.draftRevision();
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("organisationId", organisationId);
         request.put("labelVersionId", labelVersionId);
-        request.put("formulaVersionId", label.formulaVersionId());
-        request.put("ruleSetVersionId", label.ruleSetVersionId());
-        request.put("jurisdictionCode", label.jurisdictionCode());
+        request.put("versionNumber", label.versionNumber());
         request.put("draftRevision", draftRevision);
+        request.put("formulaVersionId", label.formulaVersionId());
+        request.put("jurisdiction", label.jurisdictionCode());
+        request.put("ruleSetVersionId", label.ruleSetVersionId());
+        request.put("declarations", store.declarations(labelVersionId).stream().map(declaration -> {
+            Map<String, Object> value = new LinkedHashMap<>();
+            value.put("allergenId", declaration.allergenId());
+            value.put("declarationType", declaration.declarationType());
+            return value;
+        }).toList());
         ValidationClient.ValidationResult result =
-                validations.validate("label-validation:" + labelVersionId + ":" + draftRevision, request);
-        store.insertValidationRecord(result.validationRunId() == null
-                        ? "run_" + UUID.randomUUID().toString().replace("-", "") : result.validationRunId(),
+                validations.validate(labelVersionId + ":" + draftRevision, request, actorJwt, correlationId);
+        store.insertValidationRecord(result.validationRunId(),
                 labelVersionId, label.formulaVersionId(), label.ruleSetVersionId(), label.jurisdictionCode(),
-                result.passed() ? "PASSED" : "FAILED", draftRevision, clock.instant());
+                result.status(), draftRevision, clock.instant());
         return result;
     }
 }

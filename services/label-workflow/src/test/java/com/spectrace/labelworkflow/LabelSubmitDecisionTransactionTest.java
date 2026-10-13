@@ -46,11 +46,16 @@ class LabelSubmitDecisionTransactionTest {
     }
 
     private void seedValidation(String labelVersionId, String result) {
+        seedValidation(labelVersionId, result, 1);
+    }
+
+    private void seedValidation(String labelVersionId, String result, int draftRevision) {
         jdbc.update("""
                 INSERT INTO label_validation_record (validation_run_id, label_version_id, formula_version_id,
                     rule_set_version_id, jurisdiction_code, result_status, draft_revision, recorded_at)
-                VALUES (?, ?, 'formula_demo_v1', 'ruleset_us_v1', 'US', ?, 1, ?)
-                """, "run_" + labelVersionId, labelVersionId, result, Timestamp.from(Instant.parse("2026-10-13T09:05:00Z")));
+                VALUES (?, ?, 'formula_demo_v1', 'ruleset_us_v1', 'US', ?, ?, ?)
+                """, "run_" + labelVersionId + "_v" + draftRevision, labelVersionId, result, draftRevision,
+                Timestamp.from(Instant.parse("2026-10-13T09:05:00Z")));
     }
 
     private String status(String labelVersionId) {
@@ -90,9 +95,11 @@ class LabelSubmitDecisionTransactionTest {
         seedValidation("lbl_s3", "PASSED");
         service.submit(ORG, "lbl_s3", "maker");
 
-        String target = service.decide(ORG, "lbl_s3", "APPROVE", "checker");
+        LabelWorkflowService.DecisionResult decision = service.decide(ORG, "lbl_s3", "APPROVE", "checker");
 
-        assertThat(target).isEqualTo("APPROVED");
+        assertThat(decision.decision()).isEqualTo("APPROVE");
+        assertThat(decision.decisionId()).startsWith("dec_");
+        assertThat(decision.labelVersionId()).isEqualTo("lbl_s3");
         assertThat(status("lbl_s3")).isEqualTo("APPROVED");
         assertThat(jdbc.queryForObject("""
                 SELECT COUNT(*) FROM label_review_task WHERE label_version_id = 'lbl_s3' AND status = 'OPEN'
@@ -120,10 +127,35 @@ class LabelSubmitDecisionTransactionTest {
         seedValidation("lbl_s5", "PASSED");
         service.submit(ORG, "lbl_s5", "maker");
 
-        String target = service.decide(ORG, "lbl_s5", "request_changes", "checker");
+        LabelWorkflowService.DecisionResult decision = service.decide(ORG, "lbl_s5", "request_changes", "checker");
 
-        assertThat(target).isEqualTo("DRAFT");
+        assertThat(decision.decision()).isEqualTo("REQUEST_CHANGES");
         assertThat(status("lbl_s5")).isEqualTo("DRAFT");
+    }
+
+    @Test
+    void aDraftCanBeResubmittedAfterChangesWithOnlyOneOpenTaskAndDecisionHistoryKept() {
+        seedDraft("lbl_s7", "maker");
+        seedValidation("lbl_s7", "PASSED", 2);
+        String firstTask = service.submit(ORG, "lbl_s7", "maker");
+        service.decide(ORG, "lbl_s7", "REQUEST_CHANGES", "checker");
+
+        jdbc.update("UPDATE label_version SET draft_revision = 2 WHERE label_version_id = 'lbl_s7'");
+        seedValidation("lbl_s7", "PASSED");
+        String secondTask = service.submit(ORG, "lbl_s7", "maker");
+
+        assertThat(secondTask).startsWith("task_").isNotEqualTo(firstTask);
+        assertThat(status("lbl_s7")).isEqualTo("PENDING_REVIEW");
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM label_review_task WHERE label_version_id = 'lbl_s7' AND status = 'OPEN'
+                """, Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM label_review_task WHERE label_version_id = 'lbl_s7'
+                """, Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM label_decision WHERE label_version_id = 'lbl_s7'
+                    AND decision = 'REQUEST_CHANGES'
+                """, Integer.class)).isEqualTo(1);
     }
 
     @Test

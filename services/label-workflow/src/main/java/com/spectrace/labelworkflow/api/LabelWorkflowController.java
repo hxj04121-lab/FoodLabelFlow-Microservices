@@ -3,11 +3,14 @@ package com.spectrace.labelworkflow.api;
 import com.spectrace.labelworkflow.application.RuleSetVersionResolver;
 import com.spectrace.labelworkflow.application.LabelWorkflowService;
 import com.spectrace.labelworkflow.persistence.LabelWorkflowStore;
+import com.spectrace.labelworkflow.validation.ValidationClient.ValidationFinding;
 import com.spectrace.platform.starter.error.ApiException;
+import com.spectrace.platform.starter.security.OrganisationAuthenticationToken;
 import com.spectrace.platform.starter.security.OrganisationContext;
 import com.spectrace.platform.starter.security.OrganisationContexts;
 import java.time.Clock;
-import java.util.Map;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -54,12 +58,17 @@ public class LabelWorkflowController {
     public record RecordDecision(String decision) {
     }
 
-    public record ValidateDraft(Integer draftRevision) {
-    }
-
     public record LabelDraft(String labelVersionId, String productId, String formulaVersionId,
                              String ruleSetVersionId, String jurisdictionCode, int versionNumber,
                              String lifecycleStatus) {
+    }
+
+    public record LabelValidationRecord(String validationRunId, String labelVersionId, String formulaVersionId,
+                                        String ruleSetVersionId, String jurisdictionCode, String status,
+                                        List<ValidationFinding> findings) {
+    }
+
+    public record LabelDecision(String decisionId, String labelVersionId, String decision, Instant decidedAt) {
     }
 
     @PostMapping("/drafts")
@@ -104,45 +113,58 @@ public class LabelWorkflowController {
         if (!row.organisationId().equals(caller.organisationId())) {
             throw ApiException.notFound("Label version " + labelVersionId + " does not exist");
         }
-        return new LabelDraft(row.labelVersionId(), row.productId(), row.formulaVersionId(), row.ruleSetVersionId(),
-                row.jurisdictionCode(), row.versionNumber(), row.lifecycleStatus());
+        return toDraft(row);
     }
 
     @PostMapping("/{labelVersionId}/submit")
-    public Map<String, Object> submit(@PathVariable String labelVersionId) {
+    public LabelDraft submit(@PathVariable String labelVersionId) {
         OrganisationContext caller = OrganisationContexts.current();
         if (!caller.roles().contains(LABEL_OFFICER)) {
             throw ApiException.forbidden();
         }
-        String reviewTaskId = service.submit(caller.organisationId(), labelVersionId, caller.subject());
-        return Map.of("labelVersionId", labelVersionId, "lifecycleStatus", "PENDING_REVIEW",
-                "reviewTaskId", reviewTaskId);
+        service.submit(caller.organisationId(), labelVersionId, caller.subject());
+        LabelWorkflowStore.LabelVersionRow row = store.labelVersion(labelVersionId)
+                .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
+        return toDraft(row);
     }
 
     @PostMapping("/{labelVersionId}/decisions")
-    public Map<String, Object> recordDecision(@PathVariable String labelVersionId,
-                                              @RequestBody(required = false) RecordDecision request) {
+    public LabelDecision recordDecision(@PathVariable String labelVersionId,
+                                        @RequestBody(required = false) RecordDecision request) {
         OrganisationContext caller = OrganisationContexts.current();
         if (!caller.roles().contains(APPROVER)) {
             throw ApiException.forbidden();
         }
         String decision = request == null ? null : request.decision();
-        String status = service.decide(caller.organisationId(), labelVersionId, decision, caller.subject());
-        return Map.of("labelVersionId", labelVersionId, "decision",
-                decision == null ? "" : decision.trim().toUpperCase(java.util.Locale.ROOT), "lifecycleStatus", status);
+        LabelWorkflowService.DecisionResult result =
+                service.decide(caller.organisationId(), labelVersionId, decision, caller.subject());
+        return new LabelDecision(result.decisionId(), result.labelVersionId(), result.decision(), result.decidedAt());
     }
 
     @PostMapping("/{labelVersionId}/validations")
-    public Map<String, Object> validate(@PathVariable String labelVersionId,
-                                        @RequestBody(required = false) ValidateDraft request) {
+    @ResponseStatus(HttpStatus.CREATED)
+    public LabelValidationRecord validate(@PathVariable String labelVersionId,
+                                          @RequestHeader("X-Correlation-ID") String correlationId) {
         OrganisationContext caller = OrganisationContexts.current();
         if (!caller.roles().contains(LABEL_OFFICER)) {
             throw ApiException.forbidden();
         }
-        int draftRevision = request == null || request.draftRevision() == null ? 0 : request.draftRevision();
-        var result = service.validate(caller.organisationId(), labelVersionId, draftRevision);
-        return java.util.Map.of("labelVersionId", labelVersionId,
-                "validationRunId", result.validationRunId() == null ? "" : result.validationRunId(),
-                "resultStatus", result.passed() ? "PASSED" : "FAILED");
+        var result = service.validate(caller.organisationId(), labelVersionId, currentActorToken(), correlationId);
+        return new LabelValidationRecord(result.validationRunId(), result.labelVersionId(), result.formulaVersionId(),
+                result.ruleSetVersionId(), result.jurisdiction(), result.status(), result.findings());
+    }
+
+    private static LabelDraft toDraft(LabelWorkflowStore.LabelVersionRow row) {
+        return new LabelDraft(row.labelVersionId(), row.productId(), row.formulaVersionId(), row.ruleSetVersionId(),
+                row.jurisdictionCode(), row.versionNumber(), row.lifecycleStatus());
+    }
+
+    private static String currentActorToken() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication();
+        if (authentication instanceof OrganisationAuthenticationToken token && token.jwt() != null) {
+            return token.jwt().getTokenValue();
+        }
+        throw ApiException.unauthenticated();
     }
 }

@@ -45,6 +45,7 @@ CREATE TABLE label_version (
     formula_version_id        VARCHAR(120) NOT NULL,
     rule_set_version_id       VARCHAR(100) NOT NULL,
     jurisdiction_code         VARCHAR(40)  NOT NULL,
+    draft_revision            INT          NOT NULL DEFAULT 1,
     lifecycle_status          VARCHAR(20)  NOT NULL,
     created_by_subject        VARCHAR(255) NOT NULL,
     created_at                DATETIME(3)  NOT NULL,
@@ -56,6 +57,7 @@ CREATE TABLE label_version (
     UNIQUE KEY uk_label_one_current (current_product_id, current_jurisdiction_code),
     KEY ix_label_organisation (organisation_id, label_version_id),
     CONSTRAINT ck_label_version_number CHECK (version_number >= 1),
+    CONSTRAINT ck_label_draft_revision CHECK (draft_revision >= 1),
     CONSTRAINT ck_label_lifecycle CHECK (lifecycle_status IN
         ('DRAFT', 'PENDING_REVIEW', 'APPROVED', 'PUBLISHED', 'SUPERSEDED', 'REJECTED'))
 );
@@ -95,10 +97,12 @@ CREATE TABLE label_review_task (
     label_review_task_id VARCHAR(140) NOT NULL,
     label_version_id     VARCHAR(120) NOT NULL,
     status               VARCHAR(20)  NOT NULL,
+    open_label_version_id VARCHAR(120) GENERATED ALWAYS AS
+        (CASE WHEN status = 'OPEN' THEN label_version_id ELSE NULL END) STORED,
     created_at           DATETIME(3)  NOT NULL,
     resolved_at          DATETIME(3)  NULL,
     PRIMARY KEY (label_review_task_id),
-    UNIQUE KEY uk_review_task_label (label_version_id),
+    UNIQUE KEY uk_review_task_one_open (open_label_version_id),
     CONSTRAINT ck_review_task_status CHECK (status IN ('OPEN', 'RESOLVED')),
     CONSTRAINT fk_review_task_label FOREIGN KEY (label_version_id) REFERENCES label_version (label_version_id)
 );
