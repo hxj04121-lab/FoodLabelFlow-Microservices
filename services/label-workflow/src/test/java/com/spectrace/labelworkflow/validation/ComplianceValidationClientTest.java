@@ -133,4 +133,25 @@ class ComplianceValidationClientTest {
         assertThat(correlations).containsExactly("corr-9");
         assertThat(idempotencyKeys).containsExactly("lbl_9:2");
     }
+
+    @Test
+    void mapsProviderFindingsAndForcesABlockingOneToErrorAndNotPassed() throws IOException {
+        ComplianceValidationClient client = clientResponding(new int[] {200},
+                "{\"validationRunId\":\"run_4\",\"resultStatus\":\"FAILED\",\"blockingFindings\":true,"
+                        + "\"findings\":[{\"resultCode\":\"MILK_UNDECLARED\",\"severity\":\"WARNING\",\"passed\":true,"
+                        + "\"blocking\":true,\"message\":\"Milk must be declared\"},{\"resultCode\":\"INFO_ONLY\","
+                        + "\"severity\":\"INFO\",\"passed\":true,\"blocking\":false,\"message\":\"ok\"},{\"blocking\":false}]}");
+
+        ValidationClient.ValidationResult result = client.validate("key-4", Map.of(), null, null);
+
+        assertThat(result.findings()).hasSize(3);
+        assertThat(result.findings().get(0).blocking()).isTrue();
+        assertThat(result.findings().get(0).severity()).isEqualTo("ERROR");
+        assertThat(result.findings().get(0).passed()).isFalse();
+        assertThat(result.findings().get(0).message()).isEqualTo("Milk must be declared");
+        assertThat(result.findings().get(1).severity()).isEqualTo("INFO");
+        assertThat(result.findings().get(1).blocking()).isFalse();
+        assertThat(result.findings().get(2).resultCode()).isEqualTo("VALIDATION_INFO");
+        assertThat(result.findings().get(2).message()).isEqualTo("");
+    }
 }
