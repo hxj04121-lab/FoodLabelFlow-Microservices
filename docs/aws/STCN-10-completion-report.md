@@ -30,3 +30,26 @@ The default AWS profile has no credentials. The `stcn-staging` SSO profile now a
 This work is based on `feat/stcn-59-eks-addons` (PR #29, still open; its latest observed checks passed and merge state was CLEAN). PR #27 is also open and its latest observed CI checks passed; Terraform plan was skipped and merge state remained BLOCKED. The STCN-10 draft PR is [#39](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39), based on PR #29; the published head at report time is `925c8f5`.
 
 Keep STCN-10 and child Jira issues In Progress until M1 review and the approved staging-window acceptance evidence are recorded. Do not merge automatically when checks pass.
+
+## 13 October 2026 staging handoff refresh
+
+This is a live-source recheck for the current PR heads; GitHub CI and the release artifact are current evidence, while AWS/EKS access is unavailable in this session.
+
+| Item | Verified now | Boundary |
+|---|---|---|
+| PR #39 | Open, Draft, head `b5643da4d2fb8f47c3979097445d99bbeed084a8`, based on `feat/stcn-59-eks-addons` at `eb4a6d00c93f6b4e500e402431236fb80b5cbf02`; #49 is already in this head. | The platform validation, Terraform validation, security, backend, frontend, containers, and Sonar checks passed; Terraform `plan` was skipped. This is not a staging deploy. |
+| Gateway image | The trusted XFY push for current #37 head `12433de78a83723ea3bf28a5910a00a887ad5061` published [`m3-gateway-release`](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38367400015). | `ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway:12433de78a83723ea3bf28a5910a00a887ad5061`; digest `sha256:a392216ec9d25fc82d7e70c2fb5768a5bbc36e5ba48ab807c3b2dc160235f60c`. Port `8080`; readiness `/actuator/health/readiness`; liveness `/actuator/health/liveness`. |
+| Gateway readiness | The exact-head #37 CI run passed Gateway/container and real-Keycloak checks. The uploaded Surefire report records `GET /actuator/health/readiness` → `200`; GatewayHttpTests 35/35 and GatewayPolicyTests 3/3 passed. | This is CI-local container/real-component evidence, not an AWS load balancer, EKS Service, or staging readiness probe. |
+| #48 alignment | Current #48 uses realm path `/auth`, audience `spectrace-api`, and private Compose JWKS `http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs`. #37's Gateway overlay uses the same path/audience/private JWKS and sets the services' issuer to the Gateway origin. | The local protocol/config contracts align. #48 does not supply staging Helm values or prove the deployed Keycloak Service DNS. |
+
+### Required staging values and current blockers
+
+- The required public issuer is `https://<confirmed-Gateway-domain>/auth/realms/spectrace`; audience is `spectrace-api`. The Gateway's `GATEWAY_JWK_SET_URI` and each service's `SPECTRACE_SECURITY_JWKSETURI` must use the private Keycloak Service address at `/auth/realms/spectrace/protocol/openid-connect/certs`. The exact Keycloak Service name and resolvable cluster DNS were not queryable here.
+- PR #39 defines workload namespaces `gateway`, `keycloak`, `rabbitmq`, `observability`, `specification`, `formulation`, `compliance`, and `label-workflow`. The intended Gateway→service/Keycloak and service→private-JWKS, RabbitMQ, RDS, and observability flows are rendered in `deploy/helm/platform-network-policies`; Gateway and service containers use port `8080`, with readiness/liveness paths above. Actual Service names, endpoints, applied policies, and pod probe results remain unverified. The Gateway HTTPS Ingress is rendered from Terraform inputs, but the deployed Gateway Service/chart is not present in this M5 PR.
+- No confirmed staging FQDN, DNS record, or issued ACM certificate ARN is available. The needed public HTTPS endpoint, DNS target, and TLS listener therefore remain unverified.
+- Current read-only AWS checks failed before account/resource reads: `aws sts get-caller-identity` returned `NoCredentials`; the kubeconfig's `foodlabelflow-staging` SSO session is missing. Namespace, Ingress, Service, Pods, and live readiness are **UNKNOWN**, not failed or absent. Do not deploy until an authorized VPC-connected runner/CloudShell or restored least-privilege SSO can query the private EKS endpoint.
+- **Integration window: not scheduled.** Propose a single 60-minute window after the domain/certificate, registry pull access, deploy identity, and live readiness are verified; the date/time requires owner availability and an open staging gate.
+- **Approved budget ceiling: unavailable.** The existing planning model estimates USD 14–16 per running day, but it is not a quote or hard cap. Current billing/credit eligibility and budget alarms were not readable, so this figure cannot authorize a run. The account owner must provide a hard ceiling and confirm billing guardrails before opening the window.
+- **Access path:** use a team-approved VPC-connected CloudShell/bastion/runner with scoped read access; deployment additionally requires a configured protected GitHub `staging` Environment and a separate scoped deploy role. Do not expose the private EKS API or Keycloak as a new public endpoint. Neither the access path nor deployment role was confirmed from current credentials.
+
+No staging deployment or browser-to-Gateway-to-Keycloak-to-service acceptance is claimed by this refresh.
