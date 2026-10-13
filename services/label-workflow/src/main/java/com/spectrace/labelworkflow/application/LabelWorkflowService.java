@@ -130,6 +130,10 @@ public class LabelWorkflowService {
         if (!store.hasPassedValidation(labelVersionId)) {
             throw ApiException.conflict("A PASSED validation record is required before submitting");
         }
+        // Baseline oracle: a newer draft created after the service precheck invalidates the submit.
+        if (store.hasNewerVersion(label.productId(), label.jurisdictionCode(), label.versionNumber())) {
+            throw ApiException.conflict("A newer label version exists for this product and jurisdiction");
+        }
         Instant now = clock.instant();
         if (store.transition(labelVersionId, "DRAFT", "PENDING_REVIEW", now) != 1) {
             throw ApiException.conflict("Label version " + labelVersionId + " is no longer a DRAFT");
