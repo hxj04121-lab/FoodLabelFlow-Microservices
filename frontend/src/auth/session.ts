@@ -135,8 +135,10 @@ export class PublicApiError extends Error {
 
 export const publicApiGet = <T>(path: string, signal?: AbortSignal) => publicApiRequest<T>('GET', path, undefined, signal)
 export const publicApiPost = <T>(path: string, body?: unknown, signal?: AbortSignal) => publicApiRequest<T>('POST', path, body, signal)
+export const publicApiPut = <T>(path: string, body: unknown, signal?: AbortSignal) => publicApiRequest<T>('PUT', path, body, signal)
 
-async function publicApiRequest<T>(method: 'GET' | 'POST', path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+async function publicApiRequest<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  const isWrite = method !== 'GET'
   if (!user || user.expired || session.status !== 'signedIn') {
     await endSession('Your session expired. Sign in again to continue.')
     throw new Error('Sign-in is required.')
@@ -160,9 +162,9 @@ async function publicApiRequest<T>(method: 'GET' | 'POST', path: string, body?: 
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       } })
   } catch {
-    throw new PublicApiError(method === 'POST'
+    throw new PublicApiError(isWrite
       ? 'The result could not be confirmed. Check the label before trying again.'
-      : 'The service could not be reached. Try again.', 0, 'NETWORK_ERROR', correlationId, method === 'POST')
+      : 'The service could not be reached. Try again.', 0, 'NETWORK_ERROR', correlationId, isWrite)
   }
   if (user !== requestUser) throw new Error('Your session changed. Load the information again after signing in.')
   if (response.status === 401) {
@@ -185,9 +187,9 @@ async function publicApiRequest<T>(method: 'GET' | 'POST', path: string, body?: 
     throw new PublicApiError(code === 'LABEL_VALIDATION_REQUIRED' ? 'Validate this draft again before submitting it.'
       : messages[response.status] || 'The service is unavailable. Check the label before trying again.',
     response.status, code, /^[A-Za-z0-9._:-]{1,128}$/.test(traceId) ? traceId : correlationId,
-    method === 'POST' && response.status >= 500)
+    isWrite && response.status >= 500)
   }
   if (value === null) throw new PublicApiError('The service returned an unreadable result. Open the label again before continuing.',
-    response.status, 'INVALID_RESPONSE', correlationId, method === 'POST')
+    response.status, 'INVALID_RESPONSE', correlationId, isWrite)
   return value as T
 }

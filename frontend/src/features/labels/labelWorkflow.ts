@@ -25,6 +25,9 @@ export type LabelValidation = {
 export type Decision = 'APPROVE' | 'REQUEST_CHANGES' | 'REJECT'
 export type LabelDecision = { decisionId: string; labelVersionId: string; decision: Decision; decidedAt: string; comments?: string | null }
 export type LabelPublication = { publicationRecordId: string; labelVersionId: string; lifecycleStatus: 'PUBLISHED'; publishedAt: string }
+export type DeclarationSource = 'MIGRATED_PUBLIC_LABEL' | 'FORMULA_DERIVED' | 'SYSTEM_PROPOSED' | 'USER_ENTERED'
+export type LabelDeclaration = { allergenId: string; declarationType: 'CONTAINS'; declarationSource: DeclarationSource; displayText: string | null }
+export type LabelDeclarationFacts = { labelVersionId: string; formulaVersionId: string; ruleSetVersionId: string; jurisdictionCode: string; declarations: LabelDeclaration[] }
 const isText = (value: unknown): value is string => typeof value === 'string' && !!value.trim()
 const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 
@@ -57,6 +60,27 @@ export function canSubmitLabel(label: LabelDraft | null, validation: LabelValida
 }
 
 export const labelPath = (id: string) => `/api/labels/${encodeURIComponent(id.trim())}`
+export const currentLabelPath = (productId: string, jurisdictionCode: string) =>
+  `/api/labels/current?${new URLSearchParams({ productId: productId.trim(), jurisdictionCode: jurisdictionCode.trim() })}`
+
+export function readCurrentLabel(value: unknown, productId: string, jurisdictionCode: string): LabelDraft {
+  const label = readLabel(value, { productId, jurisdictionCode })
+  if (label.lifecycleStatus !== 'PUBLISHED') throw new Error('The service did not return the current published label.')
+  return label
+}
+
+export function readDeclarationFacts(value: unknown, label: LabelDraft): LabelDeclarationFacts {
+  if (!isRecord(value) || value.labelVersionId !== label.labelVersionId
+    || value.formulaVersionId !== label.formulaVersionId || value.ruleSetVersionId !== label.ruleSetVersionId
+    || value.jurisdictionCode !== label.jurisdictionCode || !Array.isArray(value.declarations)
+    || !value.declarations.every(declaration => isRecord(declaration) && isText(declaration.allergenId)
+      && declaration.declarationType === 'CONTAINS'
+      && ['MIGRATED_PUBLIC_LABEL', 'FORMULA_DERIVED', 'SYSTEM_PROPOSED', 'USER_ENTERED'].includes(String(declaration.declarationSource))
+      && (declaration.displayText === null || typeof declaration.displayText === 'string'))) {
+    throw new Error('The service returned declarations for a different or unreadable label. Open the label again before continuing.')
+  }
+  return value as LabelDeclarationFacts
+}
 
 export function readDecision(value: unknown, labelVersionId: string, decision: Decision): LabelDecision {
   if (!isRecord(value) || !isText(value.decisionId) || value.labelVersionId !== labelVersionId || value.decision !== decision

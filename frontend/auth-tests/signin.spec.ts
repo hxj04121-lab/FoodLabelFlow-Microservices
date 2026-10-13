@@ -25,7 +25,9 @@ let labelDelay = 0
 const freshLabel = () => ({ labelVersionId: 'label-one', productId: 'product-one', formulaVersionId: 'formula-one',
   ruleSetVersionId: 'rules-one', jurisdictionCode: 'SG', versionNumber: 1, lifecycleStatus: 'DRAFT' })
 let label = freshLabel()
-let labelRequests: Array<{ method: string; path: string; body: unknown; authenticated: boolean; correlation: string }> = []
+let labelRequests: Array<{ method: string; path: string; query: string; body: unknown; authenticated: boolean; correlation: string }> = []
+let labelDeclarations: Array<{ allergenId: string; declarationType: 'CONTAINS'; declarationSource: string; displayText: string | null }> = []
+let draftRevision = 0
 async function saveCoverage(page: Page) {
   if (process.env.VITE_COVERAGE !== 'true' || page.isClosed()) return
   const coverage = await page.evaluate(() => (window as Window & { __coverage__?: unknown }).__coverage__)
@@ -43,7 +45,7 @@ test.beforeAll(async () => {
   server = createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:5191')
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Correlation-ID')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS')
     res.setHeader('Access-Control-Expose-Headers', 'X-Correlation-ID')
     if (req.method === 'OPTIONS') { res.end(); return }
     const url = new URL(req.url!, origin)
@@ -94,7 +96,7 @@ test.beforeAll(async () => {
         productDescription: 'Organisation product', brandOwner: 'Test manufacturer', normalizedCategory: 'TEST', currentFormulaVersion: null }], nextCursor: null } : {}, apiStatus)
     } else if (url.pathname.startsWith('/api/labels/')) {
       let text = ''; for await (const chunk of req) text += chunk
-      labelRequests.push({ method: req.method!, path: url.pathname, body: text ? JSON.parse(text) : null,
+      labelRequests.push({ method: req.method!, path: url.pathname, query: url.search, body: text ? JSON.parse(text) : null,
         authenticated: req.headers.authorization === `Bearer ${sentToken}`, correlation: String(req.headers['x-correlation-id']) })
       expect(req.headers['x-auth-provider']).toBeUndefined()
       expect(req.headers['x-external-subject']).toBeUndefined()
@@ -107,12 +109,26 @@ test.beforeAll(async () => {
       if (labelScenario.startsWith('error-')) {
         const status = Number(labelScenario.slice(6))
         json({ code: status === 409 ? 'LABEL_VALIDATION_REQUIRED' : 'FIXTURE_ERROR', message: 'INTERNAL_DETAIL_MUST_NOT_LEAK' }, status)
+      } else if (url.pathname === '/api/labels/current' && req.method === 'GET') {
+        if (url.searchParams.get('productId') !== 'product-one' || url.searchParams.get('jurisdictionCode') !== 'SG') json({ code: 'LABEL_NOT_FOUND' }, 404)
+        else json({ ...label, lifecycleStatus: 'PUBLISHED' })
       } else if (url.pathname === '/api/labels/drafts' && req.method === 'POST') {
         labelCreator = actorSubject
         json(labelScenario === 'malformed-label' ? { ...label, versionNumber: 0 } : label, 201)
       } else if (url.pathname === '/api/labels/label-one' && req.method === 'GET') {
         if (labelScenario === 'decision-refresh-error' && decisionRecorded) json({ code: 'SERVICE_UNAVAILABLE' }, 503)
         else json(labelScenario === 'wrong-label' ? { ...label, labelVersionId: 'another-label' } : label)
+      } else if (url.pathname === '/api/labels/label-one/declarations' && req.method === 'GET') {
+        json({ labelVersionId: label.labelVersionId, formulaVersionId: label.formulaVersionId,
+          ruleSetVersionId: label.ruleSetVersionId, jurisdictionCode: label.jurisdictionCode, declarations: labelDeclarations })
+      } else if (url.pathname === '/api/labels/label-one/declarations' && req.method === 'PUT') {
+        const body = JSON.parse(text)
+        if (!actorRoles.includes('LABEL_OFFICER') || label.lifecycleStatus !== 'DRAFT') json({ code: 'AUTHORIZATION_DENIED' }, 403)
+        else {
+          labelDeclarations = body.declarations; draftRevision++
+          json({ labelVersionId: label.labelVersionId, formulaVersionId: label.formulaVersionId,
+            ruleSetVersionId: label.ruleSetVersionId, jurisdictionCode: label.jurisdictionCode, declarations: labelDeclarations })
+        }
       } else if (url.pathname.endsWith('/validations') && req.method === 'POST') {
         const failed = labelScenario === 'failed-validation'
         const result = { validationRunId: 'validation-one', labelVersionId: label.labelVersionId,
@@ -151,7 +167,7 @@ test.beforeAll(async () => {
 })
 test.afterAll(async () => { await new Promise<void>(resolve => server.close(() => resolve())) })
 test.beforeEach(() => { mode = 'ok'; apiStatus = 200; observedAuthorization = ''; exchanges = 0; verifiedPkce = false; codes.clear()
-  actorRoles = ['LABEL_OFFICER', 'APPROVER']; actorType = 'MANUFACTURER'; actorSubject = 'test-user'; labelCreator = 'original-maker'; decisionRecorded = false; labelScenario = 'ok'; labelDelay = 0; label = freshLabel(); labelRequests = [] })
+  actorRoles = ['LABEL_OFFICER', 'APPROVER']; actorType = 'MANUFACTURER'; actorSubject = 'test-user'; labelCreator = 'original-maker'; decisionRecorded = false; labelScenario = 'ok'; labelDelay = 0; label = freshLabel(); labelRequests = []; labelDeclarations = []; draftRevision = 0 })
 async function login(page: Page) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Continue with Keycloak', exact: true }).click()
@@ -245,7 +261,7 @@ async function labels(page: Page) {
 }
 async function createDraft(page: Page) {
   await page.getByLabel('Product ID', { exact: true }).fill('product-one')
-  await page.getByLabel('Jurisdiction code').fill('SG')
+  await page.getByLabel('Jurisdiction code', { exact: true }).fill('SG')
   await page.getByRole('button', { name: 'Create draft', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Label version 1', exact: true })).toBeVisible()
 }
@@ -266,6 +282,7 @@ test('STCN-74 creates, validates and submits an exact label through authenticate
   await expect(page.getByRole('button', { name: 'Submit for review' })).toHaveCount(0)
   expect(labelRequests.map(request => [request.method, request.path, request.body])).toEqual([
     ['POST', '/api/labels/drafts', { productId: 'product-one', jurisdictionCode: 'SG' }],
+    ['GET', '/api/labels/label-one/declarations', null],
     ['POST', '/api/labels/label-one/validations', null], ['POST', '/api/labels/label-one/submit', null],
   ])
   for (const request of labelRequests) { expect(request.authenticated).toBe(true); expect(request.correlation).toMatch(/^[a-z0-9-]{36}$/) }
@@ -278,7 +295,7 @@ test('STCN-77 exact roles and organisation type control writes while keeping rea
   await page.getByLabel('Label version ID').fill('label-one'); await page.getByRole('button', { name: 'Open label', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Label version 1', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Validate draft', exact: true })).toHaveCount(0)
-  expect(labelRequests).toHaveLength(1)
+  expect(labelRequests).toHaveLength(2)
 })
 
 test('STCN-77 suppliers cannot gain label writes from a label-officer role', async ({ page }) => {
@@ -286,6 +303,49 @@ test('STCN-77 suppliers cannot gain label writes from a label-officer role', asy
   await expect(page.getByText('Open an existing version', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Create draft', exact: true })).toHaveCount(0)
   expect(labelRequests).toHaveLength(0)
+})
+
+test('STCN-76 loads the current published label through its organisation-scoped query', async ({ page }) => {
+  actorRoles = []; label.lifecycleStatus = 'PUBLISHED'
+  await labels(page)
+  await page.getByLabel('Current product ID').fill('product-one')
+  await page.getByLabel('Current jurisdiction code').fill('SG')
+  await page.getByRole('button', { name: 'Load current label', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Label version 1', exact: true })).toBeVisible()
+  await expect(page.getByText('This is the current published label returned by the service.')).toBeVisible()
+  expect(labelRequests[0].path).toBe('/api/labels/current')
+  expect(labelRequests[0].query).toBe('?productId=product-one&jurisdictionCode=SG')
+  expect(labelRequests.every(request => request.authenticated && request.correlation)).toBe(true)
+})
+
+test('STCN-74/75 edits declarations after REQUEST_CHANGES, then revalidates and resubmits', async ({ page }) => {
+  await labels(page); await createDraft(page)
+  await page.getByRole('button', { name: 'Add declaration', exact: true }).click()
+  await page.getByLabel('Allergen ID').fill('all_soy')
+  await page.getByLabel('Display text (optional)').fill('Soy lecithin')
+  await page.getByRole('button', { name: 'Save declarations', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('Validate this exact draft again')
+  await page.getByRole('button', { name: 'Validate draft', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Submit for review' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Submit for review' }).click()
+  await expect(page.getByText('PENDING REVIEW', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Request changes', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('Edit the declarations, save them, then validate and resubmit')
+  await expect(page.getByLabel('Allergen ID')).toHaveValue('all_soy')
+  await page.getByLabel('Display text (optional)').fill('Soy lecithin (updated)')
+  await page.getByRole('button', { name: 'Save declarations', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Submit for review' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Validate draft', exact: true }).click()
+  await page.getByRole('button', { name: 'Submit for review' }).click()
+  await expect(page.getByText('PENDING REVIEW', { exact: true })).toBeVisible()
+  const replacements = labelRequests.filter(request => request.method === 'PUT')
+  expect(replacements.map(request => request.body)).toEqual([
+    { declarations: [{ allergenId: 'all_soy', declarationType: 'CONTAINS', declarationSource: 'USER_ENTERED', displayText: 'Soy lecithin' }] },
+    { declarations: [{ allergenId: 'all_soy', declarationType: 'CONTAINS', declarationSource: 'USER_ENTERED', displayText: 'Soy lecithin (updated)' }] },
+  ])
+  expect(draftRevision).toBe(2)
+  expect(JSON.stringify(labelRequests)).not.toContain('draftRevision')
+  expect(labelRequests.every(request => request.authenticated && /^[a-z0-9-]{36}$/.test(request.correlation))).toBe(true)
 })
 
 test('STCN-74 failed revalidation clears the previous pass and blocks submit', async ({ page }) => {
@@ -310,7 +370,7 @@ for (const scenario of ['mismatch-labelVersionId', 'mismatch-formulaVersionId', 
 for (const status of [400, 403, 404, 422, 429, 503]) {
   test(`STCN-74 explains ${status} without retrying or leaking server details`, async ({ page }) => {
     await labels(page); labelScenario = `error-${status}`
-    await page.getByLabel('Product ID', { exact: true }).fill('product-one'); await page.getByLabel('Jurisdiction code').fill('SG')
+    await page.getByLabel('Product ID', { exact: true }).fill('product-one'); await page.getByLabel('Jurisdiction code', { exact: true }).fill('SG')
     await page.getByRole('button', { name: 'Create draft', exact: true }).click()
     await expect(page.getByRole('alert')).toBeVisible()
     await expect(page.getByRole('alert')).toContainText('Reference:')
@@ -336,11 +396,11 @@ test('STCN-74 a stale submit needs a fresh read and validation', async ({ page }
 
 test('STCN-74 malformed creation cannot become a draft or be silently retried', async ({ page }) => {
   await labels(page); labelScenario = 'malformed-label'
-  await page.getByLabel('Product ID', { exact: true }).fill('product-one'); await page.getByLabel('Jurisdiction code').fill('SG')
+  await page.getByLabel('Product ID', { exact: true }).fill('product-one'); await page.getByLabel('Jurisdiction code', { exact: true }).fill('SG')
   await page.getByRole('button', { name: 'Create draft', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('unreadable label')
   await expect(page.getByRole('button', { name: 'Create draft', exact: true })).toBeDisabled()
-  expect(labelRequests).toHaveLength(1)
+  expect(labelRequests.filter(request => request.method === 'POST')).toHaveLength(1)
 })
 
 test('STCN-74 mismatched submission never displays success', async ({ page }) => {
@@ -354,10 +414,10 @@ test('STCN-74 mismatched submission never displays success', async ({ page }) =>
 
 test('STCN-77 concurrent clicks and navigation cannot leave late label state', async ({ page }) => {
   await labels(page); labelDelay = 500
-  await page.getByLabel('Product ID', { exact: true }).fill('product-one'); await page.getByLabel('Jurisdiction code').fill('SG')
+  await page.getByLabel('Product ID', { exact: true }).fill('product-one'); await page.getByLabel('Jurisdiction code', { exact: true }).fill('SG')
   await page.getByRole('button', { name: 'Create draft', exact: true }).dblclick()
   await expect(page.getByRole('heading', { name: 'Label version 1', exact: true })).toBeVisible()
-  expect(labelRequests).toHaveLength(1)
+  expect(labelRequests.filter(request => request.method === 'POST')).toHaveLength(1)
   await page.getByRole('button', { name: 'Validate draft', exact: true }).click()
   await page.getByRole('button', { name: 'Workspace', exact: true }).click()
   await page.getByRole('button', { name: 'Labels', exact: true }).click()
@@ -367,7 +427,7 @@ test('STCN-77 concurrent clicks and navigation cannot leave late label state', a
 
 test('STCN-77 a write 401 clears the identity and label screen', async ({ page }) => {
   await labels(page); labelScenario = 'error-401'
-  await page.getByLabel('Product ID', { exact: true }).fill('product-one'); await page.getByLabel('Jurisdiction code').fill('SG')
+  await page.getByLabel('Product ID', { exact: true }).fill('product-one'); await page.getByLabel('Jurisdiction code', { exact: true }).fill('SG')
   await page.getByRole('button', { name: 'Create draft', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('session is no longer accepted')
   await expect(page.getByRole('button', { name: 'Labels', exact: true })).toHaveCount(0)
@@ -394,7 +454,7 @@ for (const scenario of ['lost-response', 'empty-response']) {
       const send = window.fetch.bind(window)
       window.fetch = (input, init) => { if (init?.method === 'POST') tracked.labelPostAttempts++; return send(input, init) }
     })
-    await page.getByLabel('Product ID', { exact: true }).fill('product-one'); await page.getByLabel('Jurisdiction code').fill('SG')
+    await page.getByLabel('Product ID', { exact: true }).fill('product-one'); await page.getByLabel('Jurisdiction code', { exact: true }).fill('SG')
     await page.getByRole('button', { name: 'Create draft', exact: true }).click()
     await expect(page.getByRole('alert')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Create draft', exact: true })).toBeDisabled()
