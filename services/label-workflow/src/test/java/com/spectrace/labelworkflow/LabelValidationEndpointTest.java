@@ -148,6 +148,32 @@ class LabelValidationEndpointTest {
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
     }
 
+    private HttpResponse<String> get(String path, String token) throws Exception {
+        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + path))
+                .header("Accept", "application/json")
+                .header("Authorization", "Bearer " + token)
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void returnsTheDeclarationFactsToTheOwningOrganisationAnd403ToOthers() throws Exception {
+        jdbc.update("""
+                INSERT INTO label_allergen_declaration (label_version_id, allergen_id, declaration_type,
+                    declaration_source, display_text)
+                VALUES ('lbl_v1', 'allergen-milk', 'CONTAINS', 'FORMULA_DERIVED', 'Contains: Milk')
+                """);
+        String owner = tokens.token(Caller.of("officer", "org-maker-1", "MANUFACTURER", "LABEL_OFFICER"));
+
+        HttpResponse<String> facts = get("/api/labels/lbl_v1/declarations", owner);
+
+        assertThat(facts.statusCode()).isEqualTo(200);
+        assertThat(facts.body()).contains("allergen-milk").contains("\"declarationType\":\"CONTAINS\"");
+
+        String other = tokens.token(Caller.of("officer", "org-maker-2", "MANUFACTURER", "LABEL_OFFICER"));
+        assertThat(get("/api/labels/lbl_v1/declarations", other).statusCode()).isEqualTo(403);
+    }
+
     @Test
     void aPassedValidationIsStoredAndUnblocksSubmission() throws Exception {
         String token = tokens.token(Caller.of("officer", "org-maker-1", "MANUFACTURER", "LABEL_OFFICER"));
