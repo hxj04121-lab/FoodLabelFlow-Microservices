@@ -78,7 +78,8 @@ class LabelPublicationTransactionTest {
         String envelope = jdbc.queryForObject("""
                 SELECT envelope FROM outbox WHERE event_type = 'LabelPublished.v2' AND aggregate_id = 'lbl_pub_1'
                 """, String.class);
-        assertThat(envelope).contains("\"versionNumber\":1")
+        // Compare without whitespace so the assertion does not depend on the mapper's formatting.
+        assertThat(envelope.replaceAll("\\s+", "")).contains("\"versionNumber\":1")
                 .contains("\"labelVersionId\":\"lbl_pub_1\"")
                 .contains("\"eventType\":\"LabelPublished.v2\"");
     }
