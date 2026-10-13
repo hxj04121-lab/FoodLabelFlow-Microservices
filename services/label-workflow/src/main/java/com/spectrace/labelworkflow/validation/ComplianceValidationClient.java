@@ -11,6 +11,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import com.spectrace.platform.starter.error.ApiException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -56,24 +58,31 @@ public class ComplianceValidationClient implements ValidationClient {
                 response = attempt(idempotencyKey, body, authorization, correlationId); // one retry, same key
             }
             if (response.statusCode() >= 500) {
-                recordFailure();
                 throw new ValidationUnavailableException("Compliance validation failed with "
                         + response.statusCode());
             }
             if (response.statusCode() == 409 || response.statusCode() == 400) {
-                // A rejection is an answer, not an outage: the caller sees a non-passing result.
                 recordSuccess();
-                return new ValidationResult(null, "FAILED", true, List.of());
+                if (response.statusCode() == 400) {
+                    throw ApiException.invalid("Compliance rejected the validation snapshot");
+                }
+                throw ApiException.conflict("Compliance rejected the validation snapshot");
+            }
+            if (response.statusCode() == 401 || response.statusCode() == 403) {
+                recordSuccess();
+                throw response.statusCode() == 401 ? ApiException.unauthenticated() : ApiException.forbidden();
             }
             if (response.statusCode() != 200 && response.statusCode() != 201) {
-                recordFailure();
                 throw new ValidationUnavailableException("Unexpected validation status "
                         + response.statusCode());
             }
-            recordSuccess();
             JsonNode node = json.readTree(response.body());
-            return new ValidationResult(text(node, "validationRunId"), text(node, "resultStatus"),
-                    node.path("blockingFindings").asBoolean(false), findings(node));
+            ValidationResult result = validationResult(node, payload, correlationId);
+            recordSuccess();
+            return result;
+        } catch (ValidationUnavailableException failure) {
+            recordFailure();
+            throw failure;
         } catch (IOException | InterruptedException failure) {
             if (failure instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -104,28 +113,87 @@ public class ComplianceValidationClient implements ValidationClient {
         return value == null || !value.isString() ? null : value.asString();
     }
 
+    private static ValidationResult validationResult(JsonNode node, Map<String, Object> request,
+                                                     String correlationId) {
+        String runId = requiredText(node, "validationRunId");
+        String status = requiredText(node, "status");
+        if (!Set.of("PASSED", "FAILED").contains(status)) {
+            throw new ValidationUnavailableException("Compliance returned an unknown validation status");
+        }
+        String responseCorrelationId = requiredText(node, "correlationId");
+        if (correlationId != null && !correlationId.isBlank() && !correlationId.equals(responseCorrelationId)) {
+            throw new ValidationUnavailableException("Compliance returned a different correlationId");
+        }
+        matches(node, request, "organisationId");
+        matches(node, request, "labelVersionId");
+        matches(node, request, "versionNumber");
+        matches(node, request, "draftRevision");
+        matches(node, request, "formulaVersionId");
+        matches(node, request, "jurisdiction");
+        matches(node, request, "ruleSetVersionId");
+        JsonNode findingsNode = node.get("findings");
+        if (findingsNode == null || !findingsNode.isArray()) {
+            throw new ValidationUnavailableException("Compliance returned no findings array");
+        }
+        List<ValidationFinding> findings = findings(node);
+        boolean blocking = findings.stream().anyMatch(ValidationFinding::blocking);
+        if ("PASSED".equals(status) && blocking || "FAILED".equals(status) && !blocking) {
+            throw new ValidationUnavailableException("Compliance returned an inconsistent status and findings tuple");
+        }
+        return new ValidationResult(runId, status, blocking, findings);
+    }
+
+    private static void matches(JsonNode response, Map<String, Object> request, String field) {
+        Object expected = request.get(field);
+        if (expected == null) return;
+        JsonNode actual = response.get(field);
+        if (expected instanceof Number number) {
+            if (actual == null || !actual.isIntegralNumber() || actual.asLong() != number.longValue()) {
+                throw new ValidationUnavailableException("Compliance returned a different " + field);
+            }
+        } else if (actual == null || !actual.isString() || !expected.equals(actual.asString())) {
+            throw new ValidationUnavailableException("Compliance returned a different " + field);
+        }
+    }
+
+    private static String requiredText(JsonNode node, String field) {
+        String value = text(node, field);
+        if (value == null || value.isBlank()) {
+            throw new ValidationUnavailableException("Compliance response is missing " + field);
+        }
+        return value;
+    }
+
     /** Maps the provider findings while enforcing the shape the reference client validates. */
     private static List<ValidationFinding> findings(JsonNode node) {
         JsonNode array = node.get("findings");
-        if (array == null || !array.isArray()) {
-            return List.of();
-        }
         List<ValidationFinding> mapped = new ArrayList<>();
         for (JsonNode finding : array) {
-            boolean blocking = finding.path("blocking").asBoolean(false);
+            boolean blocking = requiredBoolean(finding, "blocking");
+            boolean passed = requiredBoolean(finding, "passed");
+            String resultCode = requiredText(finding, "resultCode");
+            String severity = requiredText(finding, "severity");
+            String message = requiredText(finding, "message");
+            if (!Set.of("INFO", "WARNING", "ERROR").contains(severity)
+                    || blocking && (!"ERROR".equals(severity) || passed)) {
+                throw new ValidationUnavailableException("Compliance returned an invalid validation finding");
+            }
             mapped.add(new ValidationFinding(
-                    str(finding, "resultCode", blocking ? "VALIDATION_FAILED" : "VALIDATION_INFO"),
-                    blocking ? "ERROR" : str(finding, "severity", "INFO"),
-                    !blocking && finding.path("passed").asBoolean(true),
+                    resultCode,
+                    severity,
+                    passed,
                     blocking,
-                    str(finding, "message", "")));
+                    message));
         }
         return mapped;
     }
 
-    private static String str(JsonNode node, String field, String fallback) {
+    private static boolean requiredBoolean(JsonNode node, String field) {
         JsonNode value = node.get(field);
-        return value != null && value.isString() ? value.asString() : fallback;
+        if (value == null || !value.isBoolean()) {
+            throw new ValidationUnavailableException("Compliance finding is missing " + field);
+        }
+        return value.asBoolean();
     }
 
     private void requireClosedCircuit() {

@@ -23,18 +23,21 @@ for(const source of manifest.sources){
 }
 const ajv=new Ajv2020({strict:false,allErrors:true});addFormats(ajv);
 // Use each real file's URI as its resolution base without editing provider bytes.
-for(const path of ['openapi/compliance-types.v1.schema.json','events/event-envelope.v1.schema.json','events/label-published-v1.schema.json']){
+for(const path of ['openapi/compliance-types.v1.schema.json','events/event-envelope.v1.schema.json','events/label-published-v1.schema.json','events/label-published-v2.schema.json']){
   const schema=json(path);assert(ajv.validateSchema(schema),ajv.errorsText());
   ajv.addSchema({...schema,$id:new URL(path,root).href});
 }
 const profile=ajv.getSchema(new URL('events/label-published-v1.schema.json',root).href);
+const profileV2=ajv.getSchema(new URL('events/label-published-v2.schema.json',root).href);
 const canonical=ajv.getSchema(new URL('events/event-envelope.v1.schema.json',root).href);
 const sample=json('events/examples/label-published-v1.json');
+const sampleV2=json('events/examples/label-published-v2.json');
 let checks=0;
 function expect(name,validator,value,wanted){assert.equal(Boolean(validator(value)),wanted,`${name}: ${ajv.errorsText(validator.errors)}`);checks++;console.log(`PASS ${name}`);}
 const copy=()=>structuredClone(sample);
 expect('published sample satisfies actual M1 Envelope',canonical,sample,true);
 expect('published sample satisfies LabelPublished profile',profile,sample,true);
+expect('LabelPublished.v2 sample satisfies its independent profile',profileV2,sampleV2,true);
 expect('old M4 producer rejected by canonical',canonical,{...sample,producer:'label-workflow'},false);
 expect('old M4 producer rejected by profile',profile,{...sample,producer:'label-workflow'},false);
 expect('other valid service producer is canonical-valid',canonical,{...sample,producer:'compliance-service'},true);
@@ -56,6 +59,13 @@ for(const [name,change] of [
   ['zero aggregate version',{aggregateVersion:0}],
   ['undeclared envelope field',{unexpected:true}],
 ]) expect(name,profile,{...sample,...change},false);
+expect('v1 rejects v2 event type',profile,{...sampleV2},false);
+expect('v2 rejects v1 event type',profileV2,{...sampleV2,eventType:'LabelPublished.v1'},false);
+const missingBusinessVersion=structuredClone(sampleV2);delete missingBusinessVersion.payload.versionNumber;
+expect('v2 requires the Label business version number',profileV2,missingBusinessVersion,false);
+expect('v2 rejects non-positive business version numbers',profileV2,{...sampleV2,payload:{...sampleV2.payload,versionNumber:0}},false);
+expect('v1 remains unchanged and closed to v2 business fields',profile,{...sample,payload:{...sample.payload,versionNumber:2}},false);
+expect('aggregate event sequence remains independent from Label business version',profileV2,{...sampleV2,aggregateVersion:7},true);
 for(const field of ['productId','labelVersionId','formulaVersionId','ruleSetVersionId','jurisdictionCode','declarations']){
   const value=copy();delete value.payload[field];expect(`missing payload ${field}`,profile,value,false);
 }

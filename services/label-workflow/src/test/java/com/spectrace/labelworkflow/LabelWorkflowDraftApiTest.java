@@ -41,11 +41,11 @@ class LabelWorkflowDraftApiTest {
             return tokens.jwtDecoder();
         }
 
-        /** Stands in for the Compliance-owned active rule set until that source is agreed. */
+        /** Deterministic test fixture; the provider-backed integration path is covered separately. */
         @Bean
         @org.springframework.context.annotation.Primary
         RuleSetVersionResolver ruleSetVersionResolver() {
-            return (organisationId, jurisdictionCode, authorization, correlationId) -> "ruleset_us_v1";
+            return (organisationId, jurisdictionCode, authorization, correlationId) -> "ruleset_us_falcpa_demo_v1";
         }
     }
 
@@ -90,7 +90,7 @@ class LabelWorkflowDraftApiTest {
 
         assertThat(created.statusCode()).isEqualTo(201);
         assertThat(created.body()).contains("\"lifecycleStatus\":\"DRAFT\"").contains("\"versionNumber\":1")
-                .contains("\"ruleSetVersionId\":\"ruleset_us_v1\"");
+                .contains("\"ruleSetVersionId\":\"ruleset_us_falcpa_demo_v1\"");
         String labelVersionId = created.body().replaceAll(".*\"labelVersionId\":\"([^\"]+)\".*", "$1");
 
         HttpResponse<String> read = request("GET", "/api/labels/" + labelVersionId, null, token);
@@ -99,7 +99,7 @@ class LabelWorkflowDraftApiTest {
     }
 
     @Test
-    void hidesALabelOfAnotherOrganisationAsAbsent() throws Exception {
+    void deniesALabelOfAnotherOrganisationWithoutRevealingIt() throws Exception {
         String owner = tokens.token(Caller.of("officer", "org-maker-1", "MANUFACTURER", "LABEL_OFFICER"));
         String created = request("POST", "/api/labels/drafts",
                 "{\"productId\":\"product_demo_1\",\"jurisdictionCode\":\"US\"}", owner).body();

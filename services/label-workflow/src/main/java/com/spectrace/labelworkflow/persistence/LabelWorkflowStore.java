@@ -125,6 +125,16 @@ public class LabelWorkflowStore {
                 """, LabelWorkflowStore::labelVersionRow, labelVersionId).stream().findFirst();
     }
 
+    /** Current publication for a product and jurisdiction, independent of the requesting tenant. */
+    public Optional<LabelVersionRow> currentPublishedLabel(String productId, String jurisdictionCode) {
+        return jdbc.query("""
+                SELECT label_version_id, organisation_id, product_id, version_number, formula_version_id,
+                       rule_set_version_id, jurisdiction_code, lifecycle_status, draft_revision, created_by_subject
+                FROM label_version
+                WHERE product_id = ? AND jurisdiction_code = ? AND lifecycle_status = 'PUBLISHED'
+                """, LabelWorkflowStore::labelVersionRow, productId, jurisdictionCode).stream().findFirst();
+    }
+
     private static LabelVersionRow labelVersionRow(ResultSet rs, int row) throws SQLException {
         return new LabelVersionRow(rs.getString("label_version_id"), rs.getString("organisation_id"),
                 rs.getString("product_id"), rs.getInt("version_number"), rs.getString("formula_version_id"),
@@ -211,6 +221,37 @@ public class LabelWorkflowStore {
         return count != null && count > 0;
     }
 
+    /** A PASSED result only authorises the exact private draft revision and immutable bindings. */
+    public boolean hasPassedValidation(LabelVersionRow label) {
+        Integer count = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM label_validation_record
+                WHERE label_version_id = ? AND formula_version_id = ? AND rule_set_version_id = ?
+                    AND jurisdiction_code = ? AND draft_revision = ? AND result_status = 'PASSED'
+                """, Integer.class, label.labelVersionId(), label.formulaVersionId(), label.ruleSetVersionId(),
+                label.jurisdictionCode(), label.draftRevision());
+        return count != null && count > 0;
+    }
+
+    /** Advances the private revision of a DRAFT; historical validations remain as immutable evidence. */
+    public int advanceDraftRevision(String labelVersionId, Instant updatedAt) {
+        return jdbc.update("""
+                UPDATE label_version SET draft_revision = draft_revision + 1, updated_at = ?
+                WHERE label_version_id = ? AND lifecycle_status = 'DRAFT'
+                """, Timestamp.from(updatedAt), labelVersionId);
+    }
+
+    /** Replaces the complete declaration set inside the caller's transaction. */
+    public void replaceDeclarations(String labelVersionId, List<DeclarationRow> declarations) {
+        jdbc.update("DELETE FROM label_allergen_declaration WHERE label_version_id = ?", labelVersionId);
+        for (DeclarationRow declaration : declarations) {
+            jdbc.update("""
+                    INSERT INTO label_allergen_declaration (label_version_id, allergen_id, declaration_type,
+                        declaration_source, display_text) VALUES (?, ?, ?, ?, ?)
+                    """, labelVersionId, declaration.allergenId(), declaration.declarationType(),
+                    declaration.declarationSource(), declaration.displayText());
+        }
+    }
+
     public int transition(String labelVersionId, String from, String to, Instant now) {
         return jdbc.update("""
                 UPDATE label_version SET lifecycle_status = ?, updated_at = ?
@@ -240,11 +281,24 @@ public class LabelWorkflowStore {
     }
 
     public void insertDecision(String decisionId, String labelVersionId, String decision, String actorSubject,
-                               Instant now) {
+                               String comments, Instant now) {
         jdbc.update("""
-                INSERT INTO label_decision (label_decision_id, label_version_id, decision, actor_subject, decided_at)
-                VALUES (?, ?, ?, ?, ?)
-                """, decisionId, labelVersionId, decision, actorSubject, Timestamp.from(now));
+                INSERT INTO label_decision (label_decision_id, label_version_id, decision, actor_subject, decided_at,
+                    comments)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """, decisionId, labelVersionId, decision, actorSubject, Timestamp.from(now), comments);
+    }
+
+    public record DecisionRow(String decisionId, String labelVersionId, String decision, Instant decidedAt,
+                              String comments) { }
+
+    public List<DecisionRow> decisions(String labelVersionId) {
+        return jdbc.query("""
+                SELECT label_decision_id, label_version_id, decision, decided_at, comments
+                FROM label_decision WHERE label_version_id = ? ORDER BY decided_at, label_decision_id
+                """, (rs, row) -> new DecisionRow(rs.getString("label_decision_id"),
+                rs.getString("label_version_id"), rs.getString("decision"),
+                rs.getTimestamp("decided_at").toInstant(), rs.getString("comments")), labelVersionId);
     }
 
     public void insertValidationRecord(String validationRunId, String labelVersionId, String formulaVersionId,
@@ -254,10 +308,19 @@ public class LabelWorkflowStore {
                 INSERT INTO label_validation_record (validation_run_id, label_version_id, formula_version_id,
                     rule_set_version_id, jurisdiction_code, result_status, draft_revision, recorded_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE result_status = VALUES(result_status), draft_revision = VALUES(draft_revision),
-                    recorded_at = VALUES(recorded_at)
+                ON DUPLICATE KEY UPDATE validation_run_id = VALUES(validation_run_id)
                 """, validationRunId, labelVersionId, formulaVersionId, ruleSetVersionId, jurisdictionCode,
                 resultStatus, draftRevision, Timestamp.from(now));
+        Integer exact = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM label_validation_record
+                WHERE validation_run_id = ? AND label_version_id = ? AND formula_version_id = ?
+                    AND rule_set_version_id = ? AND jurisdiction_code = ? AND result_status = ? AND draft_revision = ?
+                """, Integer.class, validationRunId, labelVersionId, formulaVersionId, ruleSetVersionId,
+                jurisdictionCode, resultStatus, draftRevision);
+        if (exact == null || exact != 1) {
+            throw com.spectrace.platform.starter.error.ApiException.conflict(
+                    "Compliance reused a validation run ID for a different snapshot");
+        }
     }
 
     /**

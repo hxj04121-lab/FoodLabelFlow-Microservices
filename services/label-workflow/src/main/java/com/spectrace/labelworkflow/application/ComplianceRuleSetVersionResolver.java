@@ -1,13 +1,16 @@
 package com.spectrace.labelworkflow.application;
 
 import com.spectrace.platform.starter.error.ApiException;
+import com.spectrace.platform.starter.error.ErrorCodes;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.LocalDate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -52,20 +55,48 @@ public class ComplianceRuleSetVersionResolver implements RuleSetVersionResolver 
         }
         try {
             HttpResponse<String> response = http.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                throw ApiException.conflict("No effective rule set is available for jurisdiction " + jurisdictionCode);
+            if (response.statusCode() == 401) {
+                throw ApiException.unauthenticated();
+            }
+            if (response.statusCode() == 403) {
+                throw ApiException.forbidden();
+            }
+            if (response.statusCode() == 422) {
+                throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "RULE_SET_UNAVAILABLE",
+                        "No effective rule set is available for jurisdiction " + jurisdictionCode);
+            }
+            if (response.statusCode() >= 500 || response.statusCode() != 200) {
+                throw unavailable();
             }
             JsonNode node = json.readTree(response.body());
             JsonNode id = node.get("ruleSetVersionId");
-            if (id == null || !id.isString() || id.asString().isBlank()) {
-                throw ApiException.conflict("Compliance returned no ruleSetVersionId");
+            JsonNode version = node.get("versionNumber");
+            JsonNode jurisdiction = node.get("jurisdiction");
+            JsonNode effectiveFrom = node.get("effectiveFrom");
+            JsonNode effectiveTo = node.get("effectiveTo");
+            if (id == null || !id.isString() || id.asString().isBlank()
+                    || version == null || !version.isInt() || version.asInt() < 1
+                    || jurisdiction == null || !jurisdiction.isString()
+                    || !jurisdictionCode.equals(jurisdiction.asString())
+                    || effectiveFrom == null || !effectiveFrom.isString()
+                    || effectiveTo == null || !(effectiveTo.isNull() || effectiveTo.isString())) {
+                throw unavailable();
             }
+            LocalDate.parse(effectiveFrom.asString());
+            if (effectiveTo.isString()) LocalDate.parse(effectiveTo.asString());
             return id.asString();
         } catch (IOException failure) {
-            throw ApiException.conflict("The effective rule set could not be resolved: " + failure.getMessage());
+            throw unavailable();
         } catch (InterruptedException failure) {
             Thread.currentThread().interrupt();
-            throw ApiException.conflict("The effective rule set lookup was interrupted");
+            throw unavailable();
+        } catch (IllegalArgumentException failure) {
+            throw unavailable();
         }
+    }
+
+    private static ApiException unavailable() {
+        return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.SERVICE_UNAVAILABLE,
+                "The effective rule-set service is unavailable or returned an invalid response.");
     }
 }

@@ -13,7 +13,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.LinkedHashMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +34,8 @@ public class LabelWorkflowService {
     private final Clock clock;
 
     /** Frozen success shape for a decision (contracts/openapi/label-workflow-v1.yaml). */
-    public record DecisionOutcome(String decisionId, String decision, Instant decidedAt) {
+    public record DecisionOutcome(String decisionId, String labelVersionId, String decision, Instant decidedAt,
+                                  String comments) {
     }
 
     /** Frozen success shape for a validation run. */
@@ -47,6 +47,9 @@ public class LabelWorkflowService {
     public record PublicationOutcome(String publicationRecordId, Instant publishedAt) {
     }
 
+    public record DeclarationInput(String allergenId, String declarationType, String declarationSource,
+                                   String displayText) { }
+
     public LabelWorkflowService(LabelWorkflowStore store, Outbox outbox, ValidationClient validations, Clock clock) {
         this.store = store;
         this.outbox = outbox;
@@ -56,7 +59,7 @@ public class LabelWorkflowService {
 
     /**
      * @return the immutable id of the publication record
-     * @throws ApiException notFound when the label does not exist or belongs to another organisation (BR-11)
+     * @throws ApiException notFound when the label is absent; forbidden when another organisation owns it (BR-11)
      * @throws ApiException conflict when the label is not APPROVED, has no APPROVE decision, or a newer
      *                      version for the same product and jurisdiction exists
      */
@@ -127,8 +130,8 @@ public class LabelWorkflowService {
         if (!"DRAFT".equals(label.lifecycleStatus())) {
             throw ApiException.conflict("Only a DRAFT label version can be submitted for review");
         }
-        if (!store.hasPassedValidation(labelVersionId)) {
-            throw ApiException.conflict("A PASSED validation record is required before submitting");
+        if (!store.hasPassedValidation(label)) {
+            throw ApiException.conflict("A PASSED validation record for the current draft revision is required");
         }
         // Baseline oracle: a newer draft created after the service precheck invalidates the submit.
         if (store.hasNewerVersion(label.productId(), label.jurisdictionCode(), label.versionNumber())) {
@@ -150,7 +153,7 @@ public class LabelWorkflowService {
      */
     @Transactional
     public DecisionOutcome decide(String organisationId, String labelVersionId, String decision,
-                                  String actorSubject) {
+                                  String comments, String actorSubject) {
         LabelWorkflowStore.LabelVersionRow label = requireLabel(organisationId, labelVersionId);
         if (!"PENDING_REVIEW".equals(label.lifecycleStatus())) {
             throw ApiException.conflict("Only a label version pending review can receive a decision");
@@ -161,12 +164,15 @@ public class LabelWorkflowService {
         if (!Set.of("APPROVE", "REQUEST_CHANGES", "REJECT").contains(normalized)) {
             throw ApiException.invalid("decision must be APPROVE, REQUEST_CHANGES or REJECT");
         }
+        if (comments != null && comments.length() > 1000) {
+            throw ApiException.invalid("comments must be at most 1000 characters");
+        }
         if ("APPROVE".equals(normalized) && actorSubject.equals(label.createdBySubject())) {
             throw ApiException.conflict("The creator of a label version cannot approve it");
         }
         Instant now = clock.instant();
         String decisionId = "dec_" + UUID.randomUUID().toString().replace("-", "");
-        store.insertDecision(decisionId, labelVersionId, normalized, actorSubject, now);
+        store.insertDecision(decisionId, labelVersionId, normalized, actorSubject, comments, now);
         String target = switch (normalized) {
             case "APPROVE" -> "APPROVED";
             case "REJECT" -> "REJECTED";
@@ -176,14 +182,75 @@ public class LabelWorkflowService {
             throw ApiException.conflict("Label version " + labelVersionId + " is no longer pending review");
         }
         store.resolveReviewTask(reviewTaskId, now);
-        return new DecisionOutcome(decisionId, normalized, now);
+        return new DecisionOutcome(decisionId, labelVersionId, normalized, now, comments);
+    }
+
+    /** Replaces a draft's declarations and advances its private revision in one local transaction. */
+    @Transactional
+    public List<LabelWorkflowStore.DeclarationRow> replaceDeclarations(String organisationId, String labelVersionId,
+                                                                       List<DeclarationInput> declarations) {
+        LabelWorkflowStore.LabelVersionRow label = requireLabel(organisationId, labelVersionId);
+        if (!"DRAFT".equals(label.lifecycleStatus())) {
+            throw ApiException.conflict("Declarations can only be changed while the label is a DRAFT");
+        }
+        if (declarations == null) {
+            throw ApiException.invalid("declarations is required");
+        }
+        List<LabelWorkflowStore.DeclarationRow> rows = new ArrayList<>();
+        Set<String> allergenIds = new java.util.HashSet<>();
+        for (DeclarationInput declaration : declarations) {
+            if (declaration == null || declaration.allergenId() == null || declaration.allergenId().isBlank()
+                    || !"CONTAINS".equals(declaration.declarationType())
+                    || declaration.declarationSource() == null
+                    || !Set.of("MIGRATED_PUBLIC_LABEL", "FORMULA_DERIVED", "SYSTEM_PROPOSED", "USER_ENTERED")
+                    .contains(declaration.declarationSource())
+                    || declaration.displayText() != null && declaration.displayText().length() > 300) {
+                throw ApiException.invalid("Each declaration must match the Label declaration contract");
+            }
+            if (!allergenIds.add(declaration.allergenId())) {
+                throw ApiException.invalid("Each allergen can be declared only once");
+            }
+            rows.add(new LabelWorkflowStore.DeclarationRow(declaration.allergenId(), declaration.declarationType(),
+                    declaration.declarationSource(), declaration.displayText()));
+        }
+        if (store.advanceDraftRevision(labelVersionId, clock.instant()) != 1) {
+            throw ApiException.conflict("The label is no longer a DRAFT");
+        }
+        store.replaceDeclarations(labelVersionId, rows);
+        return store.declarations(labelVersionId);
+    }
+
+    /** Returns the tenant-bound immutable decision history. */
+    @Transactional(readOnly = true)
+    public List<DecisionOutcome> decisions(String organisationId, String labelVersionId) {
+        LabelWorkflowStore.LabelVersionRow label = store.labelVersion(labelVersionId)
+                .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
+        if (!label.organisationId().equals(organisationId)) {
+            throw ApiException.forbidden();
+        }
+        return store.decisions(labelVersionId).stream()
+                .map(row -> new DecisionOutcome(row.decisionId(), row.labelVersionId(), row.decision(),
+                        row.decidedAt(), row.comments()))
+                .toList();
+    }
+
+    /** Resolves the current publication and enforces tenant ownership before returning it. */
+    @Transactional(readOnly = true)
+    public LabelWorkflowStore.LabelVersionRow currentPublishedLabel(String organisationId, String productId,
+                                                                    String jurisdictionCode) {
+        LabelWorkflowStore.LabelVersionRow label = store.currentPublishedLabel(productId, jurisdictionCode)
+                .orElseThrow(() -> ApiException.notFound("No current published label exists for this product and jurisdiction"));
+        if (!label.organisationId().equals(organisationId)) {
+            throw ApiException.forbidden();
+        }
+        return label;
     }
 
     private LabelWorkflowStore.LabelVersionRow requireLabel(String organisationId, String labelVersionId) {
         LabelWorkflowStore.LabelVersionRow label = store.lockLabelVersion(labelVersionId)
                 .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
         if (!label.organisationId().equals(organisationId)) {
-            throw ApiException.notFound("Label version " + labelVersionId + " does not exist");
+            throw ApiException.forbidden();
         }
         return label;
     }
@@ -225,20 +292,19 @@ public class LabelWorkflowService {
         request.put("declarations", declarations);
         ValidationClient.ValidationResult result = validations.validate(
                 labelVersionId + ":" + draftRevision, request, authorization, correlationId);
-        String validationRunId = result.validationRunId() == null
-                ? "run_" + UUID.randomUUID().toString().replace("-", "") : result.validationRunId();
-        // Normalise to the shape the reference client validates: blocking implies ERROR and not passed,
-        // a PASSED run carries no blocking finding, and a FAILED run must produce at least one.
-        java.util.List<ValidationClient.ValidationFinding> findings =
-                new ArrayList<>(result.findings() == null ? java.util.List.<ValidationClient.ValidationFinding>of()
-                        : result.findings());
-        boolean blocking = findings.stream().anyMatch(ValidationClient.ValidationFinding::blocking);
-        boolean passed = result.passed() && !blocking;
-        if (!passed && !blocking) {
-            findings.add(new ValidationClient.ValidationFinding("VALIDATION_FAILED", "ERROR", false, true,
-                    "The provider reported this draft as failed."));
+        if (result == null || result.validationRunId() == null || result.validationRunId().isBlank()
+                || !Set.of("PASSED", "FAILED").contains(result.resultStatus()) || result.findings() == null) {
+            throw new ValidationClient.ValidationUnavailableException(
+                    "Compliance did not return a complete validation result");
         }
-        String status = passed ? "PASSED" : "FAILED";
+        String status = result.resultStatus();
+        boolean blocking = result.findings().stream().anyMatch(ValidationClient.ValidationFinding::blocking);
+        if ("PASSED".equals(status) && blocking || "FAILED".equals(status) && !blocking) {
+            throw new ValidationClient.ValidationUnavailableException(
+                    "Compliance returned an inconsistent status and findings tuple");
+        }
+        java.util.List<ValidationClient.ValidationFinding> findings = List.copyOf(result.findings());
+        String validationRunId = result.validationRunId();
         store.insertValidationRecord(validationRunId,
                 labelVersionId, label.formulaVersionId(), label.ruleSetVersionId(), label.jurisdictionCode(),
                 status, draftRevision, clock.instant());

@@ -46,11 +46,16 @@ class LabelSubmitDecisionTransactionTest {
     }
 
     private void seedValidation(String labelVersionId, String result) {
+        seedValidation(labelVersionId, result, 1);
+    }
+
+    private void seedValidation(String labelVersionId, String result, int draftRevision) {
         jdbc.update("""
                 INSERT INTO label_validation_record (validation_run_id, label_version_id, formula_version_id,
                     rule_set_version_id, jurisdiction_code, result_status, draft_revision, recorded_at)
-                VALUES (?, ?, 'formula_demo_v1', 'ruleset_us_v1', 'US', ?, 1, ?)
-                """, "run_" + labelVersionId, labelVersionId, result, Timestamp.from(Instant.parse("2026-10-13T09:05:00Z")));
+                VALUES (?, ?, 'formula_demo_v1', 'ruleset_us_v1', 'US', ?, ?, ?)
+                """, "run_" + labelVersionId + "_" + draftRevision, labelVersionId, result, draftRevision,
+                Timestamp.from(Instant.parse("2026-10-13T09:05:00Z")));
     }
 
     private String status(String labelVersionId) {
@@ -90,10 +95,11 @@ class LabelSubmitDecisionTransactionTest {
         seedValidation("lbl_s3", "PASSED");
         service.submit(ORG, "lbl_s3", "maker");
 
-        var outcome = service.decide(ORG, "lbl_s3", "APPROVE", "checker");
+        var outcome = service.decide(ORG, "lbl_s3", "APPROVE", "Looks good", "checker");
 
         assertThat(outcome.decision()).isEqualTo("APPROVE");
         assertThat(outcome.decisionId()).startsWith("dec_");
+        assertThat(outcome.comments()).isEqualTo("Looks good");
         assertThat(status("lbl_s3")).isEqualTo("APPROVED");
         assertThat(jdbc.queryForObject("""
                 SELECT COUNT(*) FROM label_review_task WHERE label_version_id = 'lbl_s3' AND status = 'OPEN'
@@ -106,7 +112,7 @@ class LabelSubmitDecisionTransactionTest {
         seedValidation("lbl_s4", "PASSED");
         service.submit(ORG, "lbl_s4", "maker");
 
-        assertThatThrownBy(() -> service.decide(ORG, "lbl_s4", "APPROVE", "maker"))
+        assertThatThrownBy(() -> service.decide(ORG, "lbl_s4", "APPROVE", null, "maker"))
                 .isInstanceOf(ApiException.class).hasMessageContaining("cannot approve");
 
         assertThat(status("lbl_s4")).isEqualTo("PENDING_REVIEW");
@@ -121,7 +127,7 @@ class LabelSubmitDecisionTransactionTest {
         seedValidation("lbl_s5", "PASSED");
         service.submit(ORG, "lbl_s5", "maker");
 
-        var outcome = service.decide(ORG, "lbl_s5", "request_changes", "checker");
+        var outcome = service.decide(ORG, "lbl_s5", "request_changes", null, "checker");
 
         assertThat(outcome.decision()).isEqualTo("REQUEST_CHANGES");
         assertThat(status("lbl_s5")).isEqualTo("DRAFT");
@@ -134,7 +140,7 @@ class LabelSubmitDecisionTransactionTest {
                 UPDATE label_version SET lifecycle_status = 'PENDING_REVIEW' WHERE label_version_id = 'lbl_s6'
                 """);
 
-        assertThatThrownBy(() -> service.decide(ORG, "lbl_s6", "APPROVE", "checker"))
+        assertThatThrownBy(() -> service.decide(ORG, "lbl_s6", "APPROVE", null, "checker"))
                 .isInstanceOf(ApiException.class).hasMessageContaining("review task");
     }
 
@@ -143,7 +149,13 @@ class LabelSubmitDecisionTransactionTest {
         seedDraft("lbl_s7", "maker");
         seedValidation("lbl_s7", "PASSED");
         service.submit(ORG, "lbl_s7", "maker");
-        service.decide(ORG, "lbl_s7", "REQUEST_CHANGES", "checker");
+        service.decide(ORG, "lbl_s7", "REQUEST_CHANGES", "Please add the missing declaration.", "checker");
+        service.replaceDeclarations(ORG, "lbl_s7", java.util.List.of(new LabelWorkflowService.DeclarationInput(
+                "allergen-milk", "CONTAINS", "USER_ENTERED", "Contains: Milk")));
+
+        assertThatThrownBy(() -> service.submit(ORG, "lbl_s7", "maker"))
+                .isInstanceOf(ApiException.class).hasMessageContaining("current draft revision");
+        seedValidation("lbl_s7", "PASSED", 2);
 
         var secondRound = service.submit(ORG, "lbl_s7", "maker");
 
@@ -154,5 +166,8 @@ class LabelSubmitDecisionTransactionTest {
         assertThat(jdbc.queryForObject("""
                 SELECT COUNT(*) FROM label_review_task WHERE label_version_id = 'lbl_s7'
                 """, Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM label_decision WHERE label_version_id = 'lbl_s7' AND comments = ?
+                """, Integer.class, "Please add the missing declaration.")).isEqualTo(1);
     }
 }

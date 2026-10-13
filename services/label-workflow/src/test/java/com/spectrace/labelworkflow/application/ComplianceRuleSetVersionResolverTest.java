@@ -19,6 +19,7 @@ class ComplianceRuleSetVersionResolverTest {
 
     private final List<String> queries = new ArrayList<>();
     private final List<String> authorizations = new ArrayList<>();
+    private final List<String> correlations = new ArrayList<>();
     private HttpServer server;
 
     @AfterEach
@@ -34,6 +35,7 @@ class ComplianceRuleSetVersionResolverTest {
         server.createContext("/internal/rule-sets/effective", exchange -> {
             queries.add(exchange.getRequestURI().getQuery());
             authorizations.add(exchange.getRequestHeaders().getFirst("Authorization"));
+            correlations.add(exchange.getRequestHeaders().getFirst("X-Correlation-ID"));
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(status, payload.length);
             try (var out = exchange.getResponseBody()) {
@@ -48,13 +50,15 @@ class ComplianceRuleSetVersionResolverTest {
     @Test
     void returnsTheEffectiveRuleSetForTheJurisdictionAndForwardsTheActorJwt() throws IOException {
         ComplianceRuleSetVersionResolver resolver = resolver(200,
-                "{\"ruleSetVersionId\":\"ruleset_us_v1\",\"versionNumber\":3,\"jurisdiction\":\"US\"}");
+                "{\"ruleSetVersionId\":\"ruleset_us_falcpa_demo_v1\",\"versionNumber\":1,"
+                        + "\"jurisdiction\":\"US\",\"effectiveFrom\":\"2026-01-01\",\"effectiveTo\":null}");
 
-        String ruleSetVersionId = resolver.resolve("org-maker-1", "US", "Bearer actor", "corr-1");
+        String ruleSetVersionId = resolver.resolve("org-maker-1", "US", "Bearer actor", "corr-rule-set");
 
-        assertThat(ruleSetVersionId).isEqualTo("ruleset_us_v1");
+        assertThat(ruleSetVersionId).isEqualTo("ruleset_us_falcpa_demo_v1");
         assertThat(queries).containsExactly("jurisdiction=US");
         assertThat(authorizations).containsExactly("Bearer actor");
+        assertThat(correlations).containsExactly("corr-rule-set");
     }
 
     @Test
@@ -62,7 +66,10 @@ class ComplianceRuleSetVersionResolverTest {
         ComplianceRuleSetVersionResolver resolver = resolver(422, "{}");
 
         assertThatThrownBy(() -> resolver.resolve("org-maker-1", "US", "Bearer actor", null))
-                .isInstanceOf(ApiException.class).hasMessageContaining("effective rule set");
+                .isInstanceOfSatisfying(ApiException.class, exception -> {
+                    assertThat(exception.status().value()).isEqualTo(422);
+                    assertThat(exception.code()).isEqualTo("RULE_SET_UNAVAILABLE");
+                });
     }
 
     @Test
@@ -70,6 +77,32 @@ class ComplianceRuleSetVersionResolverTest {
         ComplianceRuleSetVersionResolver resolver = resolver(200, "{}");
 
         assertThatThrownBy(() -> resolver.resolve("org-maker-1", "US", "Bearer actor", null))
-                .isInstanceOf(ApiException.class).hasMessageContaining("ruleSetVersionId");
+                .isInstanceOfSatisfying(ApiException.class, exception -> {
+                    assertThat(exception.status().value()).isEqualTo(503);
+                    assertThat(exception.code()).isEqualTo("SERVICE_UNAVAILABLE");
+                });
+    }
+
+    @Test
+    void preservesProviderAuthenticationAndAuthorizationFailures() throws IOException {
+        ComplianceRuleSetVersionResolver unauthorized = resolver(401, "{}");
+        assertThatThrownBy(() -> unauthorized.resolve("org-maker-1", "US", "Bearer actor", null))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.status().value()).isEqualTo(401));
+        stop();
+
+        ComplianceRuleSetVersionResolver forbidden = resolver(403, "{}");
+        assertThatThrownBy(() -> forbidden.resolve("org-maker-1", "US", "Bearer actor", null))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.status().value()).isEqualTo(403));
+    }
+
+    @Test
+    void mapsProviderOutageToServiceUnavailable() throws IOException {
+        ComplianceRuleSetVersionResolver resolver = resolver(503, "{}");
+
+        assertThatThrownBy(() -> resolver.resolve("org-maker-1", "US", "Bearer actor", null))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.status().value()).isEqualTo(503));
     }
 }
