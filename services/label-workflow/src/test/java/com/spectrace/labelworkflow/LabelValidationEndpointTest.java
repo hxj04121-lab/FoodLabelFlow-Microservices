@@ -90,6 +90,7 @@ class LabelValidationEndpointTest {
         failing = false;
         jdbc.update("DELETE FROM label_review_task");
         jdbc.update("DELETE FROM label_decision");
+        jdbc.update("DELETE FROM label_publication");
         jdbc.update("DELETE FROM label_validation_record");
         jdbc.update("DELETE FROM label_allergen_declaration");
         jdbc.update("DELETE FROM label_version");
