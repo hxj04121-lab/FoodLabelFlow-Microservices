@@ -8,7 +8,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -92,5 +94,73 @@ public class LabelWorkflowService {
         }
         payload.put("declarations", declarations);
         return payload;
+    }
+
+    /**
+     * Submit transaction (G2-M4.2, BR-05): a draft with a PASSED validation record moves to
+     * PENDING_REVIEW and gains exactly one open review task, atomically.
+     *
+     * @return the id of the created review task
+     */
+    @Transactional
+    public String submit(String organisationId, String labelVersionId, String actorSubject) {
+        LabelWorkflowStore.LabelVersionRow label = requireLabel(organisationId, labelVersionId);
+        if (!"DRAFT".equals(label.lifecycleStatus())) {
+            throw ApiException.conflict("Only a DRAFT label version can be submitted for review");
+        }
+        if (!store.hasPassedValidation(labelVersionId)) {
+            throw ApiException.conflict("A PASSED validation record is required before submitting");
+        }
+        Instant now = clock.instant();
+        if (store.transition(labelVersionId, "DRAFT", "PENDING_REVIEW", now) != 1) {
+            throw ApiException.conflict("Label version " + labelVersionId + " is no longer a DRAFT");
+        }
+        String reviewTaskId = "task_" + UUID.randomUUID().toString().replace("-", "");
+        store.insertReviewTask(reviewTaskId, labelVersionId, now);
+        return reviewTaskId;
+    }
+
+    /**
+     * Decision transaction (G2-M4.2, BR-06 and BR-09): requires an open review task; APPROVE moves the
+     * version to APPROVED, REQUEST_CHANGES returns it to DRAFT, REJECT closes it. BR-06 only forbids the
+     * creator from approving - the wider baseline "creator may never decide" rule is not carried over.
+     */
+    @Transactional
+    public String decide(String organisationId, String labelVersionId, String decision, String actorSubject) {
+        LabelWorkflowStore.LabelVersionRow label = requireLabel(organisationId, labelVersionId);
+        if (!"PENDING_REVIEW".equals(label.lifecycleStatus())) {
+            throw ApiException.conflict("Only a label version pending review can receive a decision");
+        }
+        String reviewTaskId = store.openReviewTask(labelVersionId)
+                .orElseThrow(() -> ApiException.conflict("No open review task for " + labelVersionId));
+        String normalized = decision == null ? "" : decision.trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("APPROVE", "REQUEST_CHANGES", "REJECT").contains(normalized)) {
+            throw ApiException.invalid("decision must be APPROVE, REQUEST_CHANGES or REJECT");
+        }
+        if ("APPROVE".equals(normalized) && actorSubject.equals(label.createdBySubject())) {
+            throw ApiException.conflict("The creator of a label version cannot approve it");
+        }
+        Instant now = clock.instant();
+        store.insertDecision("dec_" + UUID.randomUUID().toString().replace("-", ""), labelVersionId, normalized,
+                actorSubject, now);
+        String target = switch (normalized) {
+            case "APPROVE" -> "APPROVED";
+            case "REJECT" -> "REJECTED";
+            default -> "DRAFT";
+        };
+        if (store.transition(labelVersionId, "PENDING_REVIEW", target, now) != 1) {
+            throw ApiException.conflict("Label version " + labelVersionId + " is no longer pending review");
+        }
+        store.resolveReviewTask(reviewTaskId, now);
+        return target;
+    }
+
+    private LabelWorkflowStore.LabelVersionRow requireLabel(String organisationId, String labelVersionId) {
+        LabelWorkflowStore.LabelVersionRow label = store.lockLabelVersion(labelVersionId)
+                .orElseThrow(() -> ApiException.notFound("Label version " + labelVersionId + " does not exist"));
+        if (!label.organisationId().equals(organisationId)) {
+            throw ApiException.notFound("Label version " + labelVersionId + " does not exist");
+        }
+        return label;
     }
 }
