@@ -35,6 +35,7 @@ import org.springframework.test.context.DynamicPropertySource;
 class LabelValidationEndpointTest {
 
     private static final HttpServer COMPLIANCE = startCompliance();
+    private static volatile boolean failing;
 
     @TestConfiguration(proxyBeanMethods = false)
     static class SignedTokens {
@@ -61,11 +62,14 @@ class LabelValidationEndpointTest {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             byte[] body = ("{\"validationRunId\":\"run_endpoint_1\",\"resultStatus\":\"PASSED\","
                     + "\"blockingFindings\":false}").getBytes(StandardCharsets.UTF_8);
+            byte[] failed = ("{\"validationRunId\":\"run_endpoint_2\",\"resultStatus\":\"FAILED\","
+                    + "\"blockingFindings\":true}").getBytes(StandardCharsets.UTF_8);
             server.createContext("/internal/validations", exchange -> {
+                byte[] answer = failing ? failed : body;
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
-                exchange.sendResponseHeaders(200, body.length);
+                exchange.sendResponseHeaders(200, answer.length);
                 try (var out = exchange.getResponseBody()) {
-                    out.write(body);
+                    out.write(answer);
                 }
             });
             server.start();
@@ -83,7 +87,9 @@ class LabelValidationEndpointTest {
 
     @BeforeEach
     void seedDraft() {
+        failing = false;
         jdbc.update("DELETE FROM label_review_task");
+        jdbc.update("DELETE FROM label_decision");
         jdbc.update("DELETE FROM label_validation_record");
         jdbc.update("DELETE FROM label_allergen_declaration");
         jdbc.update("DELETE FROM label_version");
@@ -95,6 +101,42 @@ class LabelValidationEndpointTest {
                 VALUES ('lbl_v1', 'org-maker-1', 'product_demo_1', 1, 'formula_demo_v1', 'ruleset_us_v1',
                     'US', 'DRAFT', 'maker', ?, ?)
                 """, Timestamp.from(now), Timestamp.from(now));
+    }
+
+    private void seedApprove() {
+        jdbc.update("""
+                UPDATE label_version SET lifecycle_status = 'APPROVED' WHERE label_version_id = 'lbl_v1'
+                """);
+        jdbc.update("""
+                INSERT INTO label_decision (label_decision_id, label_version_id, decision, actor_subject, decided_at)
+                VALUES ('dec_pub', 'lbl_v1', 'APPROVE', 'checker', ?)
+                """, Timestamp.from(Instant.parse("2026-10-13T10:05:00Z")));
+    }
+
+    @Test
+    void aFailedValidationIsStoredAsFailedAndBlocksSubmission() throws Exception {
+        failing = true;
+        String token = tokens.token(Caller.of("officer", "org-maker-1", "MANUFACTURER", "LABEL_OFFICER"));
+
+        HttpResponse<String> validated = post("/api/labels/lbl_v1/validations", "", token);
+
+        assertThat(validated.statusCode()).isEqualTo(201);
+        assertThat(validated.body()).contains("\"status\":\"FAILED\"");
+        assertThat(jdbc.queryForObject("""
+                SELECT result_status FROM label_validation_record WHERE label_version_id = 'lbl_v1'
+                """, String.class)).isEqualTo("FAILED");
+        assertThat(post("/api/labels/lbl_v1/submit", "", token).statusCode()).isEqualTo(409);
+    }
+
+    @Test
+    void publishingAnApprovedLabelReturnsTheFrozenPublication() throws Exception {
+        seedApprove();
+        String publisher = tokens.token(Caller.of("publisher", "org-maker-1", "MANUFACTURER", "PUBLISHER"));
+
+        HttpResponse<String> published = post("/api/labels/lbl_v1/publish", "", publisher);
+
+        assertThat(published.statusCode()).isEqualTo(201);
+        assertThat(published.body()).contains("\"publicationRecordId\"").contains("\"lifecycleStatus\":\"PUBLISHED\"");
     }
 
     private HttpResponse<String> post(String path, String body, String token) throws Exception {
