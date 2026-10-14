@@ -2,17 +2,18 @@
   "schema_version": "1.0",
   "issue": "STCN-15",
   "updated_at": "2026-10-14",
-  "source_commit": "fec201a69fafc5e68abdc2fc1a7269360716d270",
+  "source_commit": "22df1efb42ebdb0042f116a7f286534fec2fe6c2",
   "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
   "aws_readonly_snapshot": "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
-  "latest_aws_observation": "2026-10-14T15:31:00+08:00",
+  "latest_aws_observation": "2026-10-14T16:27:00+08:00",
   "checks": {
     "STCN-83": {
       "status": "LOCAL_PRIVILEGE_TESTS_AND_CI_PASS_LIVE_RDS_PERMISSION_CHECK_PENDING",
       "evidence": [
         "docs/evidence/stcn-15/database-bootstrap.log",
         "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
-        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466777"
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466777",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935983"
       ]
     },
     "STCN-84": {
@@ -23,6 +24,9 @@
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466777",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466818",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466906",
+        "https://sonarcloud.io/dashboard?id=hxj04121-lab_FoodLabelFlow-Microservices&pullRequest=52",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935983",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935957",
         "https://sonarcloud.io/dashboard?id=hxj04121-lab_FoodLabelFlow-Microservices&pullRequest=52"
       ]
     },
@@ -32,15 +36,20 @@
         "docs/evidence/stcn-15/helm-template-tests.log",
         "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989854",
-        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989806"
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989806",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935971"
       ]
     },
     "STCN-86": {
-      "status": "PROTECTED_ENVIRONMENT_REVIEWER_SET_VARS_SECRETS_EMPTY_RUNTIME_INJECTION_PENDING",
+      "status": "OFFLINE_SECRET_INJECTION_AND_NAMESPACE_SCOPED_OIDC_POLICY_TESTS_PASS_LIVE_GITHUB_AWS_CONFIGURATION_PENDING",
       "evidence": [
-        "docs/evidence/stcn-15/README.md",
+        "docs/evidence/stcn-15/runtime-secrets-selfcheck.log",
+        "docs/evidence/stcn-15/admin-configuration-checklist.md",
         "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
-        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52"
+        "infra/terraform/modules/github-oidc/tests/deploy-role.tftest.hcl",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935983",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935957"
       ]
     },
     "STCN-87": {
@@ -57,25 +66,27 @@
       "evidence": [
         "docs/evidence/stcn-15/alert-rules-validation.log",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39",
-        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466777"
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466777",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935983"
       ]
     }
   },
   "deployments": [],
   "blockers": [
     "G1-M5 PR #39 remains Draft; Terraform validate passes but plan is skipped for missing plan credentials.",
-    "GitHub staging Environment now exists with required reviewer hxj04121-lab and a custom branch policy limited to main; admins can bypass the reviewer rule. Environment variables and secrets are both empty, main branch protection is not evidenced (protection API returned 404), and the connected account has admin:false/maintain:false so it cannot finish configuration.",
-    "The target AWS account and configured deploy role are verified by STS. AWS Budget forecasts USD 149.085 against the USD 120 monthly limit; Cost Explorer returned a conflicting estimated near-zero value. Credit balance and actual accrued project charges remain unverified; stop staging changes pending AWS account-owner reconciliation.",
-    "EKS/RDS/NAT/internal ALB staging infrastructure is active and tagged to STCN-39/Terraform. The private EKS API cannot be reached from this workstation, so Kubernetes workloads and live NetworkPolicy behavior remain unknown. AWS list-addons returned no managed add-ons; this does not establish whether self-managed VPC CNI has the network policy agent enabled, which remains unknown until an authorized cluster query. The ALB has no listeners or target groups; no staging Gateway route was verified.",
+    "GitHub staging Environment is restricted to main and requires reviewer hxj04121-lab, but prevent_self_review is false; it has zero variables/secrets, administrators can bypass the reviewer, main branch protection returns 404, and this account has admin:false/maintain:false.",
+    "AWS Budget actual is USD 0.00 but forecasts USD 149.085 against the USD 120 monthly limit; Cost Explorer returned a conflicting near-zero estimate and eligible credits/project charges remain unverified. Stop staging changes pending account-owner reconciliation.",
+    "EKS/RDS/NAT/internal ALB staging infrastructure is active and tagged to STCN-39/Terraform. EKS is private-only and the current kube context times out from this workstation, so workloads and live NetworkPolicy behavior remain unknown. No managed add-ons are listed and self-managed VPC CNI agent state is unknown. The ALB has no listeners; the Gateway target group exists but is not attached to a load balancer.",
     "Terraform state ownership is unknown because infra/terraform/backend.hcl is absent; do not initialize a guessed backend.",
+    "The observed AWS IAM OIDC provider list contains only the EKS provider, not token.actions.githubusercontent.com. iam:GetRole is denied for the assumed deploy role, so its current trust policy remains unknown; the new separate GitHub OIDC roles are Terraform code only and have not been applied.",
     "Draft PR #39 implements validated registry digest capture and passes repository@sha256 to Helm, but remains unmerged and has no caller or published/deployed image; deployment-record generation/binding is still absent. Its deploy job does not create per-service runtime Kubernetes Secrets. Its Alloy config scrapes RabbitMQ /metrics rather than /metrics/detailed?family=queue_coarse_metrics.",
     "The current G1 edge module allows ALB TCP/80 from configured ingress CIDRs and forwards plain HTTP when no certificate is configured; require approved HTTPS or redirect-only behavior before public use.",
     "No G2 staging deployment, Gateway staging smoke, live NetworkPolicy probe, image-digest-to-Kubernetes-revision binding, staging demo, or authorized project-resource destroy has occurred."
   ],
   "workflow_run": {
-    "run_id": 38528989806,
-    "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989806",
-    "commit_sha": "fec201a69fafc5e68abdc2fc1a7269360716d270",
+    "run_id": 38535935983,
+    "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935983",
+    "commit_sha": "22df1efb42ebdb0042f116a7f286534fec2fe6c2",
     "conclusion": "success",
     "checks": [
       "backend",
@@ -83,6 +94,7 @@
       "containers and browser smoke",
       "frontend",
       "database-privileges",
+      "runtime-secrets",
       "observability-alerts",
       "security (Trivy and OWASP Dependency-Check)",
       "SonarQube analysis",
@@ -91,17 +103,31 @@
     "companion_workflows": [
       {
         "name": "SWE5001 Compliance contracts",
-        "run_id": 38528989797,
-        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989797",
+        "run_id": 38535936063,
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535936063",
         "conclusion": "success"
       },
       {
         "name": "SWE5001 Helm template",
-        "run_id": 38528989854,
-        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989854",
+        "run_id": 38535935971,
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935971",
+        "conclusion": "success"
+      },
+      {
+        "name": "Terraform validation",
+        "run_id": 38535935957,
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935957",
+        "conclusion": "success",
+        "plan": "skipped_missing_plan_credentials"
+      },
+      {
+        "name": "AWS staging window estimate",
+        "run_id": 38535935959,
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935959",
         "conclusion": "success"
       }
-    ]
+    ],
+    "terraform_plan": "skipped_missing_plan_credentials"
   },
   "g1_dependency_snapshot": {
     "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39",
