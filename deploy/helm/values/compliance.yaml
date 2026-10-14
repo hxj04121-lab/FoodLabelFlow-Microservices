@@ -1,4 +1,7 @@
 serviceName: compliance
+envFrom:
+  - secretRef:
+      name: compliance-runtime
 resources:
   requests: {cpu: "1", memory: "2Gi"}
   limits: {cpu: "1", memory: "2Gi"}
@@ -8,4 +11,16 @@ nodeSelector:
 tolerations:
   - {key: dedicated, operator: Equal, value: compliance, effect: NoSchedule}
 networkPolicy:
+  ingressFromPeers:
+    - {namespace: gateway, name: gateway}
+    - {namespace: label-workflow, name: label-workflow}
+    - {namespace: observability, name: grafana-alloy}
   ingressFromServices: [gateway, label-workflow]
+  egressRules:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: rabbitmq}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rabbitmq
+      ports: [{port: 5672, protocol: TCP}]

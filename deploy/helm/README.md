@@ -12,6 +12,8 @@ HPA is disabled for the fixed 1-vs-3 Must comparison. Setting `autoscaling.enabl
 
 NetworkPolicy isolates ingress/egress for each release. Compliance allows same-namespace Gateway and Label Workflow callers; defaults allow DNS only. M3/M4/M5 supply explicit Gateway/Keycloak/broker/RDS/metrics egress and ALB ingress rules through values at integration, using real selectors/CIDRs. No permissive fabricated CIDR is inserted. The CNI must enforce policies. Static checks do not prove policy enforcement or authentication.
 
+For current staging, install each release in namespace `staging` (the deploy role is scoped there) and add `values/staging-single-node.yaml`; it sets zone `minDomains` to 1 while the chart default remains 2. For database-backed services, also add `values/staging-rds.yaml`, which allows TCP 3306 only to the two observed private RDS subnets. For Gateway, add `values/staging-gateway.yaml`; it limits inbound traffic to the internal ALB subnets and selects backend pods in the shared staging namespace. The ALB still needs a working controller, listener and permitted inbound security-group rule before it can serve requests.
+
 See [node-pool handoff](../../docs/swe5001/G1-M2-node-pool-interface.md). G0 merge/acceptance, M1 starter and M5 Terraform/runtime evidence remain dependencies. No apply, resource creation or deployment is performed by these checks.
 
 References: [Helm lint](https://helm.sh/docs/helm/helm_lint/), [Kubernetes topology spread](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/), [NetworkPolicy](https://kubernetes.io/docs/concepts/services-networking/network-policies/).

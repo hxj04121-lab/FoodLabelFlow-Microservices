@@ -1,0 +1,35 @@
+# Internal ALB subnets observed in AWS; backend releases share the staging namespace.
+networkPolicy:
+  ingressFromPeers: []
+  ingressFromCIDRs:
+    - 10.40.0.0/20
+    - 10.40.16.0/20
+  egressRules:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: specification
+      ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: formulation
+      ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: compliance
+      ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: label-workflow
+      ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: keycloak
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports: [{port: 8080, protocol: TCP}]

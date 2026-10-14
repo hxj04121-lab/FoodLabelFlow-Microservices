@@ -60,6 +60,7 @@ class LabelWorkflowDraftApiTest {
         jdbc.update("DELETE FROM label_allergen_declaration");
         jdbc.update("DELETE FROM label_decision");
         jdbc.update("DELETE FROM label_publication");
+        jdbc.update("DELETE FROM label_review_task");
         jdbc.update("DELETE FROM label_version");
         Instant now = Instant.parse("2026-10-13T08:00:00Z");
         jdbc.update("""
