@@ -37,6 +37,16 @@ Cost Explorer for 1–15 Oct returned an estimated value of approximately `-USD 
 
 The repository's `staging` Environment was created during this evidence refresh. GitHub reports a required reviewer `hxj04121-lab`, a custom deployment branch policy allowing only `main`, and `can_admins_bypass=true`. The Environment currently has zero variables and zero secrets. The connected GitHub account reports `admin:false` and `maintain:false`, so it cannot add the required values/secrets or adjust protection. The branch-protection REST endpoint for `main` returned HTTP 404; branch protection is therefore not evidenced. No GitHub settings were changed by this check.
 
+## Read-only recheck (15:27 +08:00)
+
+The configured `FoodLabelFlowStagingDeploy` role still resolves to account `679857346122`. AWS Budgets still reports actual USD 0.00 and forecast USD 149.085 against the USD 120 monthly limit (budget data last updated 13:49 +08:00). EKS remains `ACTIVE`, Kubernetes 1.36, private endpoint enabled/public endpoint disabled. `eks list-addons` returns an empty managed add-on list; because Kubernetes API access is still unavailable, the self-managed VPC CNI and network policy agent configuration remain **UNKNOWN**. RDS remains `available`, MySQL 8.0.46, Multi-AZ and not publicly accessible. The internal ALB is active with zero listeners and zero target groups. No AWS or Kubernetes changes were made.
+
+GitHub recheck found the same `staging` reviewer/branch policy and zero environment variables/secrets. The repository-level Actions secret name list contains `SONAR_TOKEN`; its value was not read. The `main` branch-protection endpoint still returns HTTP 404. No GitHub setting or secret was changed.
+
+## Read-only recheck (15:31 +08:00)
+
+Using the configured `foodlabelflow-staging-deploy` profile, STS again confirmed assumed role `FoodLabelFlowStagingDeploy` in account `679857346122`; no Root credentials were used. AWS Budgets reported actual USD 0.00 and forecast USD 149.085 against the USD 120 monthly limit (budget last updated 13:49 +08:00). EKS is still `ACTIVE`/1.36/private-only; `list-addons` returned no managed add-ons. RDS remains available MySQL 8.0.46, Multi-AZ and private. The internal ALB is active with no listeners or target groups. A fresh `kubectl get pods,deployments,services,ingresses -n staging` attempt timed out against the private API; workloads and self-managed VPC CNI network-policy-agent state remain **UNKNOWN**. No AWS/Kubernetes mutation was made.
+
 ## Reproduction
 
 Use the configured non-root SSO profile and role chain, region `ap-southeast-1`; remove the stale proxy only for the AWS CLI process if it still points at `127.0.0.1:7892`. Read-only calls included STS identity, EKS cluster/node-group descriptions, RDS and ALB descriptions, listener/target-group queries, scoped security-group/VPC/NAT queries, AWS Budgets, and Cost Explorer. Do not copy session tokens or generated kubeconfig contents into evidence.

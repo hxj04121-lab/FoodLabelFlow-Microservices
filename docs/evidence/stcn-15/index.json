@@ -5,6 +5,7 @@
   "source_commit": "81a9fddda4c4fc87dda4625c2094a1eaa7625993",
   "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
   "aws_readonly_snapshot": "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
+  "latest_aws_observation": "2026-10-14T15:31:00+08:00",
   "checks": {
     "STCN-83": {
       "status": "LOCAL_PRIVILEGE_TESTS_AND_CI_PASS_LIVE_RDS_PERMISSION_CHECK_PENDING",
@@ -26,7 +27,7 @@
       ]
     },
     "STCN-85": {
-      "status": "HELM_AND_AWS_SG_SNAPSHOT_PASS_LIVE_NETWORKPROBE_BLOCKED_PRIVATE_EKS",
+      "status": "LABEL_TO_COMPLIANCE_RULE_AND_TEST_ADDED_CI_PENDING_LIVE_PROBE_BLOCKED_PRIVATE_EKS_AND_CNI_UNKNOWN",
       "evidence": [
         "docs/evidence/stcn-15/helm-template-tests.log",
         "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
@@ -64,7 +65,7 @@
     "G1-M5 PR #39 remains Draft; Terraform validate passes but plan is skipped for missing plan credentials.",
     "GitHub staging Environment now exists with required reviewer hxj04121-lab and a custom branch policy limited to main; admins can bypass the reviewer rule. Environment variables and secrets are both empty, main branch protection is not evidenced (protection API returned 404), and the connected account has admin:false/maintain:false so it cannot finish configuration.",
     "The target AWS account and configured deploy role are verified by STS. AWS Budget forecasts USD 149.085 against the USD 120 monthly limit; Cost Explorer returned a conflicting estimated near-zero value. Credit balance and actual accrued project charges remain unverified; stop staging changes pending AWS account-owner reconciliation.",
-    "EKS/RDS/NAT/internal ALB staging infrastructure is active and tagged to STCN-39/Terraform. The private EKS API cannot be reached from this workstation, so Kubernetes workloads and live NetworkPolicy behavior remain unknown. The ALB has no listeners or target groups; no staging Gateway route was verified.",
+    "EKS/RDS/NAT/internal ALB staging infrastructure is active and tagged to STCN-39/Terraform. The private EKS API cannot be reached from this workstation, so Kubernetes workloads and live NetworkPolicy behavior remain unknown. AWS list-addons returned no managed add-ons; this does not establish whether self-managed VPC CNI has the network policy agent enabled, which remains unknown until an authorized cluster query. The ALB has no listeners or target groups; no staging Gateway route was verified.",
     "Terraform state ownership is unknown because infra/terraform/backend.hcl is absent; do not initialize a guessed backend.",
     "Draft PR #39 implements validated registry digest capture and passes repository@sha256 to Helm, but remains unmerged and has no caller or published/deployed image; deployment-record generation/binding is still absent. Its deploy job does not create per-service runtime Kubernetes Secrets. Its Alloy config scrapes RabbitMQ /metrics rather than /metrics/detailed?family=queue_coarse_metrics.",
     "The current G1 edge module allows ALB TCP/80 from configured ingress CIDRs and forwards plain HTTP when no certificate is configured; require approved HTTPS or redirect-only behavior before public use.",
