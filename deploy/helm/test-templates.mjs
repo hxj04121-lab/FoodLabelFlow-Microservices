@@ -60,6 +60,7 @@ for(const service of ['compliance','specification','formulation','label-workflow
     assert(crossNamespace.some(([ns,name])=>ns==='observability'&&name==='grafana-alloy'));
     if(service==='compliance') assert(crossNamespace.some(([ns,name])=>ns==='label-workflow'&&name==='label-workflow'));
     if(service==='gateway') assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='specification'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='specification')&&r.ports?.some(p=>p.port===8080)));
+    else if(service==='label-workflow') assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='compliance'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='compliance')&&r.ports?.some(p=>p.port===8080)),'Label Workflow can reach Compliance on TCP/8080');
     else assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='rabbitmq'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='rabbitmq')));
   });
 }

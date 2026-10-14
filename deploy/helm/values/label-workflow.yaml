@@ -21,3 +21,10 @@ networkPolicy:
             matchLabels:
               app.kubernetes.io/name: keycloak
       ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: compliance}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: compliance
+      ports: [{port: 8080, protocol: TCP}]
