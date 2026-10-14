@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import {mkdirSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
-import {parseAllDocuments} from 'yaml';
+import {parse, parseAllDocuments} from 'yaml';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const helm=process.env.HELM_BIN || 'helm';
@@ -118,5 +118,33 @@ check('Gateway binds its existing target group without creating an Ingress/ALB',
 check('target group binding is disabled by default',()=>assert(!render('gateway').some(d=>d.kind==='TargetGroupBinding')));
 check('reject target binding on a business service',()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'--set-string','targetGroupArn='+targetGroup],false));
 check('reject malformed target group ARN',()=>run(['template','review',chart,'-f',resolve(root,'values/gateway.yaml'),'--set-string','targetGroupArn=not-an-arn'],false));
+
+check('RabbitMQ policies match the actual spectrace Operator labels',()=>{
+  const output=run(['template','review',resolve(root,'platform-network-policies')]).stdout;
+  const docs=parseAllDocuments(output).map(d=>d.toJSON()).filter(Boolean);
+  const policy=docs.find(d=>d.metadata.name==='stcn-rabbitmq-flows');
+  assert.equal(policy.spec.podSelector.matchLabels['app.kubernetes.io/name'],'spectrace');
+  for(const doc of docs) {
+    const json=JSON.stringify(doc);
+    assert(!json.includes('"app.kubernetes.io/name":"rabbitmq"'),'Operator uses cluster name, not the generic service name');
+  }
+  for(const service of ['specification','formulation','compliance','label-workflow']) {
+    const policy=docs.find(d=>d.metadata.name===`stcn-${service}-flows`);
+    assert(policy,`missing ${service} flows`);
+    assert(policy.spec.egress.some(rule=>rule.ports?.some(p=>p.port===5672) && rule.to?.some(peer=>peer.podSelector?.matchLabels?.['app.kubernetes.io/name']==='spectrace')));
+  }
+});
+check('RabbitMQ placement keeps three replicas on separate General workers and protects quorum',()=>{
+  const patch=parse(readFileSync(resolve(root,'../kubernetes/staging/rabbitmq-scheduling-patch.yaml'),'utf8'));
+  const affinity=patch.spec.affinity;
+  assert.deepEqual(affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions,
+    [{key:'eks.amazonaws.com/nodegroup',operator:'In',values:['general']}]);
+  const term=affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0];
+  assert.equal(term.topologyKey,'kubernetes.io/hostname');
+  assert.deepEqual(term.labelSelector.matchLabels,{'app.kubernetes.io/name':'spectrace','app.kubernetes.io/component':'rabbitmq'});
+  const pdb=parse(readFileSync(resolve(root,'../kubernetes/staging/rabbitmq-pdb.yaml'),'utf8'));
+  assert.equal(pdb.spec.maxUnavailable,1);
+  assert.deepEqual(pdb.spec.selector,term.labelSelector);
+});
 
 console.log(`${count} Helm checks passed. Rendered constraints are not live pod-placement evidence.`);
