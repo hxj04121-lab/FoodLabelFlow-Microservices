@@ -39,9 +39,6 @@ export function Catalog({ formulas = false }: { formulas?: boolean }) {
     <>
       <div className="page-title">
         <div>
-          <div className="eyebrow">
-            {formulas ? 'VERSIONED & TRACEABLE' : 'YOUR PRODUCT LIBRARY'}
-          </div>
           <h1>{formulas ? 'Formula versions' : 'Products'}</h1>
           <p>
             {formulas

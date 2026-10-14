@@ -269,6 +269,54 @@ class GatewayHttpTests {
                 .method("OPTIONS", HttpRequest.BodyPublishers.noBody())), 403, "CORS_REJECTED");
     }
 
+    @Test void declarationPutPreservesBearerBodyAndRequiresLabelOfficer() throws Exception {
+        String path = "/api/labels/example/declarations";
+        String jwt = token(Map.of("roles", List.of("LABEL_OFFICER")), KEY);
+        String payload = "{\"declarations\":[]}";
+        var response = send(request(path).header("Origin", "http://localhost:5173")
+                .header("Authorization", "Bearer " + jwt).header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(payload)));
+        assertEquals(200, response.statusCode(), response.body());
+        assertEquals("label-workflow", body(response).get("upstream"));
+        assertEquals(payload, body(response).get("body"));
+        assertEquals("Bearer " + jwt, body(response).get("authorization"));
+        int before = HITS.get();
+        error(send(request(path).PUT(HttpRequest.BodyPublishers.ofString(payload))), 401, "AUTHENTICATION_REQUIRED");
+        for (String role : List.of("READER", "APPROVER", "PUBLISHER")) {
+            error(send(request(path).header("Authorization", "Bearer " + token(Map.of("roles", List.of(role)), KEY))
+                    .PUT(HttpRequest.BodyPublishers.ofString(payload))), 403, "AUTHORIZATION_DENIED");
+        }
+        assertEquals(before, HITS.get(), "Unauthorized PUT must not reach the owner service");
+    }
+
+    @Test void declarationPutPreflightDoesNotOpenOtherPutRoutes() throws Exception {
+        var preflight = send(request("/api/labels/example/declarations").header("Origin", "http://localhost:5173")
+                .header("Access-Control-Request-Method", "PUT").header("Access-Control-Request-Headers", "authorization,content-type,x-correlation-id")
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody()));
+        assertEquals(200, preflight.statusCode());
+        assertTrue(preflight.headers().firstValue("Access-Control-Allow-Methods").orElseThrow().contains("PUT"));
+        int before = HITS.get();
+        for (String path : List.of("/api/labels/drafts", "/api/labels/example/publish", "/api/formulations/formula-versions/example")) {
+            error(send(request(path).header("Origin", "http://localhost:5173")
+                    .header("Access-Control-Request-Method", "PUT").method("OPTIONS", HttpRequest.BodyPublishers.noBody())),
+                    403, "CORS_REJECTED");
+            error(send(request(path).header("Authorization", "Bearer " + token(Map.of("roles", List.of("LABEL_OFFICER")), KEY))
+                    .PUT(HttpRequest.BodyPublishers.ofString("{}"))), 405, "METHOD_NOT_ALLOWED");
+        }
+        assertEquals(before, HITS.get());
+    }
+
+    @Test void declarationPutKeepsPayloadLimitAndForeignOriginDenial() throws Exception {
+        String path = "/api/labels/example/declarations";
+        String jwt = token(Map.of("roles", List.of("LABEL_OFFICER")), KEY);
+        int before = HITS.get();
+        error(send(request(path).header("Authorization", "Bearer " + jwt)
+                .PUT(HttpRequest.BodyPublishers.ofString("x".repeat(1025)))), 413, "PAYLOAD_TOO_LARGE");
+        error(send(request(path).header("Origin", "https://evil.example").header("Access-Control-Request-Method", "PUT")
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())), 403, "CORS_REJECTED");
+        assertEquals(before, HITS.get());
+    }
+
     @ParameterizedTest @ValueSource(strings = {"/internal/validations", "/api/compliance/internal/validations", "/auth/admin/master", "/auth/realms/test/account", "/auth/realms/other/protocol/openid-connect/auth", "/actuator/env", "/api/notifications/test", "/unknown"})
     void noPrivateOrUnknownRoutes(String path) throws Exception { error(send(request(path)), 404, "RESOURCE_NOT_FOUND"); }
 

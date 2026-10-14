@@ -28,7 +28,6 @@ export function HealthPage() {
     <>
       <div className="page-title">
         <div>
-          <div className="eyebrow">LIVE SYSTEM STATUS</div>
           <h1>System status</h1>
           <p>Check the application and database connection in real time.</p>
         </div>

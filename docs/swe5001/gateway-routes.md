@@ -25,7 +25,7 @@
 | specification | GET `suppliers`、`suppliers/{supplierId}`、`materials`、`materials/{materialId}`、`ingredients`、`versions`、`versions/{specificationVersionId}`；POST `materials`、`versions`、`versions/{specificationVersionId}/release` | 候选写角色 SPEC_AUTHOR / SPEC_RELEASER；尚需 M4 realm 对齐 |
 | formulation | GET `products`、`products/{productId}`、`products/{productId}/formula-versions`、`released-specifications`、`formula-versions/{formulaVersionId}`、`formula-versions/{formulaVersionId}/trace`；POST `formula-versions`、`formula-versions/{formulaVersionId}/release` | 候选写角色 FORMULA_AUTHOR / FORMULA_RELEASER；release body 用 expectedCurrentFormulaVersionId，无 If-Match 要求 |
 
-四份已合并公开契约仅 GET/POST；不因草案通配路径就允许其他 mutation。跨组织资源返回403，不存在返回404；C-08 已解决，Gateway 不重写服务响应。Label Workflow 提供 drafts、版本/declarations 读取、validations、submit、decisions 和 publish；缺失的公开读面见 [消费者核对](ui/consumer-contract-review.md)。
+当前公开契约以 GET/POST 为主；已接受的 Label Workflow 契约另有 `PUT /api/labels/{labelVersionId}/declarations`，Gateway只为此精确路径开放PUT及预检，并要求LABEL_OFFICER。其他PUT/PATCH/DELETE仍拒绝，不因通配prefix开放。跨组织资源返回403，不存在返回404；Gateway不重写服务响应。Label Workflow已有drafts、版本/declarations读取、声明编辑、validations、submit、decisions、publish与current查询；历史消费者核对见 [消费者核对](ui/consumer-contract-review.md)。
 
 `/auth/**` 不能因为允许 OIDC 登录而对外开放 Keycloak 管理控制台/管理 API。管理路径应由 ALB/Gateway 独立 deny 或私有入口限制；JWKS/discovery 只公开协议所需路径。禁止通配业务 JWT 过滤器阻断正常 PKCE 登录。
 
@@ -62,7 +62,7 @@ Origin 是 scheme + host + port，不含路径；GitHub Pages 项目路径属于
 
 ### 请求与响应头
 
-- `allowedMethods`：目前已合并 M1/M2/M4 公开端点只需 GET/POST。OPTIONS preflight 单独在 CORS 层处理；PUT/PATCH/DELETE 仅在后续接受的公开契约需要时加入，实际方法仍须认证授权。
+- `allowedMethods`：GET/POST以及已接受的声明编辑PUT；OPTIONS preflight单独处理，PUT预检仅允许`/api/labels/{labelVersionId}/declarations`。实际PUT要求LABEL_OFFICER，保留body/rate和服务端组织检查；其他PUT/PATCH/DELETE不开放。
 - `allowedHeaders`：`Authorization`、`Content-Type`、`X-Correlation-ID`；`Idempotency-Key`、`If-Match` 仅在公开 LW/M1 契约规定后加入。浏览器不因为内部校验需要幂等键就调用 internal 路由。
 - `exposedHeaders`：`X-Correlation-ID`；需要使用且真实返回时公开 `Retry-After`、`ETag`、`Location`。
 - `allowCredentials=false`：业务 API 采用 Bearer token，不依赖跨站 cookie；浏览器 API 请求不启用 `credentials: include`。Keycloak 登录重定向的自身会话 cookie 属于 OIDC 流程，不是业务 API CORS 的凭据策略。

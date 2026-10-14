@@ -161,7 +161,7 @@ test('clears validation feedback when the selected draft or product changes', as
   await page.getByRole('button', { name: 'Load label draft' }).click()
   await expect(page.getByRole('region', { name: 'Label draft details' })).toContainText(draft.labelVersionId)
   await showRun()
-  await page.getByLabel('Product').selectOption({ index: 1 })
+  await page.getByLabel('Product', { exact: true }).selectOption({ index: 1 })
   await expect(page.getByRole('region', { name: 'Validation run results' })).toHaveCount(0)
   await expect(page.getByLabel('Existing validation run ID')).toHaveCount(0)
 })

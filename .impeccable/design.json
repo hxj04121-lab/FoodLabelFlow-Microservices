@@ -1,0 +1,304 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-14T07:59:58.588Z",
+  "title": "Design System: SpecTrace",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Action purple"
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "Deep action purple"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "White surface"
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Ink"
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Quiet canvas"
+      },
+      "surface-tint": {
+        "role": "neutral",
+        "displayName": "Purple selection tint"
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Supporting ink"
+      },
+      "border-soft": {
+        "role": "neutral",
+        "displayName": "Surface boundary"
+      },
+      "border-control": {
+        "role": "neutral",
+        "displayName": "Control boundary"
+      },
+      "focus": {
+        "role": "interaction",
+        "displayName": "Focus purple"
+      },
+      "navy": {
+        "role": "neutral",
+        "displayName": "Header navy"
+      },
+      "success": {
+        "role": "semantic",
+        "displayName": "Success green"
+      },
+      "success-bg": {
+        "role": "semantic",
+        "displayName": "Success wash"
+      },
+      "warning": {
+        "role": "semantic",
+        "displayName": "Reserved warning amber"
+      },
+      "warning-bg": {
+        "role": "semantic",
+        "displayName": "Reserved warning wash"
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Danger berry"
+      },
+      "danger-bg": {
+        "role": "semantic",
+        "displayName": "Danger wash"
+      },
+      "destructive": {
+        "role": "semantic",
+        "displayName": "Destructive red"
+      },
+      "disabled-surface": {
+        "role": "neutral",
+        "displayName": "Disabled surface"
+      },
+      "chart-purple": {
+        "role": "data",
+        "displayName": "Chart purple"
+      },
+      "chart-teal": {
+        "role": "data",
+        "displayName": "Chart teal"
+      },
+      "chart-blue": {
+        "role": "data",
+        "displayName": "Chart blue"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Catalog heading",
+        "purpose": "Recurring catalog page heading; responsive and authenticated variants are scoped in DESIGN.md."
+      },
+      "title": {
+        "displayName": "Section title",
+        "purpose": "Recurring catalog panel heading."
+      },
+      "body": {
+        "displayName": "Operational body",
+        "purpose": "Root body typography."
+      },
+      "label": {
+        "displayName": "Field label",
+        "purpose": "Authenticated form labels; table names use the same size with semibold emphasis."
+      },
+      "support": {
+        "displayName": "Support text",
+        "purpose": "Table headings, chart annotations, metadata, and footers."
+      }
+    },
+    "shadows": [
+      {
+        "name": "surface",
+        "value": "0 4px 20px #25274206",
+        "purpose": "Root surface shadow used on shared panels and sign-in entry."
+      },
+      {
+        "name": "segmented-active",
+        "value": "0 1px 5px #40386912",
+        "purpose": "Local selected chart control."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "150ms",
+        "purpose": "Shared button and tab state transitions."
+      },
+      {
+        "name": "navigation-transition",
+        "value": "180ms",
+        "purpose": "Catalog navigation background and color."
+      },
+      {
+        "name": "sidebar-transition",
+        "value": "transform 200ms",
+        "purpose": "Mobile sidebar reveal."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation:none!important;transition:none!important;scroll-behavior:auto!important",
+        "purpose": "Applied to all elements and pseudo-elements under prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide-catalog",
+        "value": "1600px"
+      },
+      {
+        "name": "compact-catalog",
+        "value": "1180px"
+      },
+      {
+        "name": "task-grid",
+        "value": "1000px"
+      },
+      {
+        "name": "label-overview",
+        "value": "900px"
+      },
+      {
+        "name": "mobile-navigation",
+        "value": "800px"
+      },
+      {
+        "name": "validation-actions",
+        "value": "700px"
+      },
+      {
+        "name": "authenticated-mobile",
+        "value": "600px"
+      },
+      {
+        "name": "catalog-mobile",
+        "value": "560px"
+      }
+    ],
+    "focus": [
+      {
+        "name": "shared",
+        "value": "3px solid var(--focus); outline-offset: 3px",
+        "purpose": "Shared interactive and table-region focus."
+      },
+      {
+        "name": "authenticated-local",
+        "value": "3px solid #7155bc",
+        "purpose": "Retained scoped sign-in, label, and impact focus; sign-in button offset is 4px."
+      }
+    ],
+    "sourceScope": {
+      "sourceFiles": [
+        "frontend/src/styles.css",
+        "frontend/src/components/ui/button.tsx",
+        "frontend/src/components/ui/tabs.tsx",
+        "frontend/src/components/ui/input.tsx",
+        "frontend/src/components/ui/badge.tsx",
+        "frontend/src/components/catalog-shared.tsx",
+        "frontend/src/app/Shell.tsx",
+        "frontend/src/auth/SignInWorkspace.tsx"
+      ],
+      "tokenAuthority": "DESIGN.md frontmatter",
+      "legacyNote": "Scoped authenticated focus, disabled colors, feedback, and task-specific container literals remain; many older field boundary/radius literals are superseded by the shared selector. Reserved warning root tokens are not currently applied."
+    }
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Shared default action; minimum height extends the component size preset.",
+      "html": "<button class=\"ds-primary\">Save changes</button>",
+      "css": ".ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:8px 16px;border-radius:var(--control-radius);font-family:'Segoe UI','Microsoft YaHei',sans-serif;font-size:14px;font-weight:500;cursor:pointer;transition:background-color 150ms,color 150ms,border-color 150ms,box-shadow 150ms,opacity 150ms;background:var(--primary);color:var(--background);border:0}.ds-primary:hover:not(:disabled){background:var(--primary-hover)}.ds-primary:focus-visible{outline:3px solid var(--focus);outline-offset:3px;}.ds-primary:disabled{background:#eeedf4;color:var(--text-muted);opacity:1;cursor:not-allowed}"
+    },
+    {
+      "name": "Outline button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action with a visible control boundary.",
+      "html": "<button class=\"ds-outline\">Cancel</button>",
+      "css": ".ds-outline{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:8px 16px;border-radius:var(--control-radius);font-family:'Segoe UI','Microsoft YaHei',sans-serif;font-size:14px;font-weight:500;cursor:pointer;transition:background-color 150ms,color 150ms,border-color 150ms,box-shadow 150ms,opacity 150ms;background:var(--background);color:var(--foreground);border:1px solid var(--border-control)}.ds-outline:hover:not(:disabled){background:var(--surface-tint);color:var(--primary-hover)}.ds-outline:focus-visible{outline:3px solid var(--focus);outline-offset:3px;}.ds-outline:disabled{background:#eeedf4;color:var(--text-muted);border-color:var(--border-soft);cursor:not-allowed}"
+    },
+    {
+      "name": "Ghost button",
+      "kind": "button",
+      "description": "Low-emphasis action using the incumbent ghost variant.",
+      "html": "<button class=\"ds-ghost\">View details</button>",
+      "css": ".ds-ghost{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:8px 16px;border-radius:var(--control-radius);font-family:'Segoe UI','Microsoft YaHei',sans-serif;font-size:14px;font-weight:500;cursor:pointer;transition:background-color 150ms,color 150ms,border-color 150ms,box-shadow 150ms,opacity 150ms;background:transparent;color:var(--foreground);border:0}.ds-ghost:hover:not(:disabled){background:var(--surface-tint);color:var(--primary-hover)}.ds-ghost:focus-visible{outline:3px solid var(--focus);outline-offset:3px;}.ds-ghost:disabled{background:#eeedf4;color:var(--text-muted);cursor:not-allowed}"
+    },
+    {
+      "name": "Text field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Catalog input, with visible boundary and readable placeholder.",
+      "html": "<input class=\"ds-field\" aria-label=\"Search products\" placeholder=\"Search products\">",
+      "css": ".ds-field{min-height:44px;width:100%;min-width:0;padding:4px 12px;border:1px solid var(--border-control);border-radius:var(--control-radius);background:transparent;color:var(--foreground);caret-color:var(--primary);font-family:'Segoe UI','Microsoft YaHei',sans-serif;font-size:14px;transition:color 150ms,box-shadow 150ms}.ds-field::placeholder{color:var(--text-muted);opacity:1}.ds-field:focus-visible{outline:3px solid var(--focus);outline-offset:3px;}.ds-field:disabled{background:var(--canvas);color:var(--text-muted);cursor:not-allowed;}.ds-field[aria-invalid=true]{border-color:#c73e4b}"
+    },
+    {
+      "name": "Active navigation",
+      "kind": "nav",
+      "refersTo": "navigation-active",
+      "description": "Current catalog route with tinted selection and the existing narrow marker.",
+      "html": "<nav aria-label=\"Example navigation\"><a class=\"ds-nav\" href=\"#products\" aria-current=\"page\">Products</a></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;position:relative;min-height:44px;padding:12px;border-radius:var(--control-radius);background:var(--surface-tint);color:var(--primary-hover);font-family:'Segoe UI','Microsoft YaHei',sans-serif;font-size:14px;font-weight:600;text-decoration:none;transition:background 180ms,color 180ms}.ds-nav:before{content:'';position:absolute;left:-15px;top:12px;bottom:12px;width:3px;border-radius:0 4px 4px 0;background:#815be4}.ds-nav:hover{background:#f0edf9;color:var(--primary-hover)}.ds-nav:focus-visible{outline:3px solid var(--focus);outline-offset:3px;}"
+    },
+    {
+      "name": "Success group tag",
+      "kind": "chip",
+      "refersTo": "group-tag-success",
+      "description": "Compact category tag; explicit text carries the meaning.",
+      "html": "<span class=\"ds-tag\">Released</span>",
+      "css": ".ds-tag{display:inline-block;padding:4px 8px;border-radius:5px;background:var(--success-bg);color:var(--success);font-family:'Segoe UI','Microsoft YaHei',sans-serif;font-size:14px;white-space:nowrap}"
+    },
+    {
+      "name": "Shared panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "White task surface with the root border, radius, and restrained shadow.",
+      "html": "<section class=\"ds-panel\"><h2>Products</h2><p>Product information and versions</p></section>",
+      "css": ".ds-panel{min-width:0;overflow:hidden;padding:24px;background:var(--background);border:1px solid var(--border-soft);border-radius:var(--surface-radius);box-shadow:var(--surface-shadow);color:var(--foreground);font-family:'Segoe UI','Microsoft YaHei',sans-serif}.ds-panel h2{margin:0;font-size:18px;font-weight:650}.ds-panel p{margin:4px 0 0;font-size:12px;color:var(--text-muted)}"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "description": "Default Radix tab appearance, translated into static HTML with CSS states.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"Product detail\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">Formula</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">History</button></div>",
+      "css": ".ds-tabs{display:inline-flex;align-items:center;flex-wrap:wrap;min-height:50px;max-width:100%;padding:3px;border-radius:14px;background:var(--canvas)}.ds-tab{min-height:44px;padding:4px 8px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--text-muted);font-family:'Segoe UI','Microsoft YaHei',sans-serif;font-size:14px;font-weight:500;cursor:pointer;transition:background-color 150ms,color 150ms,border-color 150ms,box-shadow 150ms}.ds-tab[aria-selected=true]{background:var(--background);color:var(--foreground);box-shadow:0 1px 3px 0 rgb(0 0 0 / 0.1),0 1px 2px -1px rgb(0 0 0 / 0.1)}.ds-tab:hover{color:var(--foreground)}.ds-tab:focus-visible{outline:3px solid var(--focus);outline-offset:3px;}.ds-tab:disabled{opacity:.5;cursor:not-allowed}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Shared purple and navy operational workspace",
+    "overview": "Retain the existing workspace identity: a navy header, cyan-to-purple layered mark, purple actions, and white bordered surfaces on a quiet canvas. Dense tables and evidence forms stay readable through clear headings, restrained support text, and visible interaction states.\n\nThis records the implemented shared system after the frontend refinement. It does not introduce a new brand or page strategy. Frontmatter defines the reusable primitives; `frontend/src/styles.css` and the shared UI components remain implementation evidence. Some scoped legacy treatments remain, as described below.",
+    "keyCharacteristics": [
+      "Recognizable purple actions and navy framing.",
+      "Compact data layouts with generous separation between tasks.",
+      "Visible current navigation, keyboard focus, and explicit status text."
+    ],
+    "rules": [
+      {
+        "name": "The Meaning Rule",
+        "body": "Pair status color with explicit text. Preserve the distinction between action, status, and chart-category color.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do use the shared tokens and existing UI components for new workspace controls and surfaces.",
+      "Do preserve readable support text, visible keyboard focus, and contained table scrolling.",
+      "Do keep chart-category assignments, explicit status text, and current-page indications.",
+      "Do preserve the existing distinction between preview/source notices and authenticated workflow states."
+    ],
+    "donts": [
+      "Don't introduce a replacement visual identity during an incumbent refinement.",
+      "Don't treat every older CSS literal as an alias of a root token.",
+      "Don't turn chart gradients or local metric emphasis into generic action or status styling."
+    ]
+  }
+}
