@@ -153,6 +153,25 @@ if SPECTRACE_SECURITY_JWKSETURI=http://keycloak.example.invalid/jwks bash "$repo
 fi
 ! grep -q 'create secret' "$tmp_dir/invalid-jwks"
 
+if RABBITMQ_HOST=bad..host bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/invalid-rabbitmq-host" 2>&1; then
+  echo "FAIL invalid RabbitMQ hostname was accepted" >&2
+  exit 1
+fi
+! grep -q 'create secret' "$tmp_dir/invalid-rabbitmq-host"
+
+if RABBITMQ_USERNAME='not valid' bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/invalid-rabbitmq-username" 2>&1; then
+  echo "FAIL invalid RabbitMQ username was accepted" >&2
+  exit 1
+fi
+! grep -q 'create secret' "$tmp_dir/invalid-rabbitmq-username"
+
+if RABBITMQ_PASSWORD=too-short bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/invalid-rabbitmq-password" 2>&1; then
+  echo "FAIL invalid RabbitMQ password was accepted" >&2
+  exit 1
+fi
+! grep -Fq too-short "$tmp_dir/invalid-rabbitmq-password"
+! grep -q 'create secret' "$tmp_dir/invalid-rabbitmq-password"
+
 unset MYSQL_HOST RABBITMQ_HOST RABBITMQ_USERNAME RABBITMQ_PASSWORD STAGING_GATEWAY_URL SPECTRACE_SECURITY_JWKSETURI SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD
 export STAGING_WINDOW_OPEN=false
 bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" delete > "$tmp_dir/deleted-output"

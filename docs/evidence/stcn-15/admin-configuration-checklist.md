@@ -2,12 +2,12 @@
 
 For GitHub and AWS administrators. Configure names and values directly in the protected systems; never send secret values in chat or commit them to Git.
 
-## Immediate administrator actions (read-only GitHub/AWS state checked 14 Oct 2026, 22:40–22:44 CST)
+## Immediate administrator actions (read-only GitHub/AWS state checked 14 Oct 2026, 22:50–22:54 CST)
 
 1. **Protect `main`.** The read-only branch-protection API returned 404, so protection is not evidenced. Require the CI, SWE5001 Helm template, and SWE5001 Compliance contracts checks before merge.
 2. **Harden the `staging` Environment.** Its allowed deployment branch is already `main`, but required reviewers are empty and its Variables/Secrets lists are empty. Add the M1 approver, enable Prevent self-review, review administrator bypass, and populate only the names listed below.
 3. **Configure AWS OIDC.** The target account currently has zero GitHub Actions OIDC providers. IAM denied read access to the deployment role trust policy, so its trust is unverified. Add the provider and review separate plan/deploy roles and trust conditions before use.
-4. **Provide private-cluster access.** The staging EKS API is private. VPC-connected runner availability is UNKNOWN. Reuse or provision an approved restricted runner; do not expose the cluster endpoint.
+4. **Provide private-cluster access.** The staging EKS API is private, the AWS API reports no managed EKS add-ons, and the self-managed VPC CNI network-policy setting is UNKNOWN. Runner availability is UNKNOWN. Reuse or provision an approved restricted runner; do not expose the cluster endpoint.
 5. **Keep staging closed.** The latest read-only budget check shows forecast spend above the configured monthly limit; eligible credits are not verified. Reconfirm an approved staging window with the account owner before use.
 6. **Confirm state ownership.** `infra/terraform/backend.hcl` is absent. The state bucket/backend must be confirmed by its owner before any plan or mutation.
 
@@ -17,6 +17,7 @@ For GitHub and AWS administrators. Configure names and values directly in the pr
 - [x] Restrict the `staging` Environment deployment branch to `main` (GitHub API currently lists only this branch).
 - [ ] Add the required approver and enable **Prevent self-review**; review administrator bypass. The current Environment API returns no required reviewers.
 - [ ] Provide a restricted self-hosted runner reachable from the staging VPC with labels `self-hosted`, `linux`, and `staging-vpc`. VPC runner availability is UNKNOWN.
+- The repository runner inventory API returned 403 for the connected GitHub token; do not interpret that as proof a runner is absent.
 - [ ] Create the GitHub Actions OIDC provider in the AWS account, then provision the separate plan and deploy roles from `infra/terraform/modules/github-oidc`. The read-only IAM provider query returned zero; `iam:GetRole` was denied, so verify role trust and least-privilege policies as an administrator.
 - [ ] Configure the listed Environment variables and secrets. The current Environment API returns empty Variables and Secrets lists. Keep `STAGING_WINDOW_OPEN=false` until the account owner approves the budget and staging window.
 
@@ -92,7 +93,7 @@ For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPR
 ## Current sanitized observations
 
 - The latest read-only identity check succeeded through the configured non-root role chain. GitHub lists only `main` as the Environment deployment branch, but no Environment variables/secrets are present to bind the owner-verified AWS target; the GitHub OIDC provider count is zero.
-- The staging EKS API is active and private-only. A local read-only Kubernetes request failed during TLS handshake; workload state and live NetworkPolicy enforcement remain UNKNOWN.
+- The staging EKS API is active and private-only. A local read-only Kubernetes request failed during TLS handshake. No managed EKS add-ons were reported; self-managed VPC CNI network-policy configuration, workload state, and live enforcement remain UNKNOWN.
 - The staging database is private and available, but no service login, grant inspection, or cross-database probe was run.
 - The visible load balancer is internal and has no usable HTTPS Gateway listener; no Gateway smoke path is available for this staging window.
 - Per-service Secrets currently have no values installed. Once configured, the protected helper supplies database and RabbitMQ credentials plus the external OIDC issuer, internal JWKS URI, and fixed `spectrace-api` audience; it does not require static AWS credentials.
