@@ -2,20 +2,20 @@
 
 For GitHub and AWS administrators. Configure names and values directly in the protected systems; never send secret values in chat or commit them to Git.
 
-## Immediate administrator actions (read-only GitHub/AWS state checked 15 Oct 2026, 00:22–00:27 CST)
+## Immediate administrator actions (read-only GitHub/AWS state checked 15 Oct 2026, 00:22–01:01 CST)
 
 1. **Protect `main`.** The read-only branch-protection API returned 404, so protection is not evidenced. Require the CI, SWE5001 Helm template, and SWE5001 Compliance contracts checks before merge.
-2. **Harden the `staging` Environment.** Its allowed deployment branch is `main` and one required reviewer is configured, but Prevent self-review is disabled and Variables/Secrets are empty. Confirm the reviewer is the designated M1 approver, enable Prevent self-review, review administrator bypass, and populate only the names listed below.
+2. **Harden the `staging` Environment.** Its allowed deployment branch is `main` and one required-reviewer rule is configured for `hxj04121-lab`, but Prevent self-review is disabled and Variables/Secrets are empty. Confirm that reviewer is the designated M1 approver, enable Prevent self-review, review administrator bypass, and populate only the names listed below.
 3. **Configure AWS OIDC.** The target account has one OIDC provider, but its issuer is not GitHub Actions; the deployment-role lookup returned no such role. Add the GitHub provider and review separate plan/deploy roles and trust conditions before use.
 4. **Provide private-cluster access.** The staging EKS API is private, the AWS API reports no managed EKS add-ons, and the self-managed VPC CNI network-policy setting is UNKNOWN. Runner availability is UNKNOWN. Reuse or provision an approved restricted runner; do not expose the cluster endpoint.
-5. **Keep staging closed.** The latest read-only budget check shows forecast spend above the configured monthly limit; eligible credits are not verified. Reconfirm an approved staging window with the account owner before use.
+5. **Keep staging closed.** The latest budget check reports a USD 120 monthly limit, USD 149.085 forecast and USD 0 actual spend; eligible credits are not verified. Reconcile the forecast with the account owner and obtain approval for a specific staging window before use.
 6. **Confirm state ownership.** `infra/terraform/backend.hcl` is absent. The state bucket/backend must be confirmed by its owner before any plan or mutation.
 
 ## GitHub repository settings
 
 - [x] Read-only status checked: required `main` branch protection is not evidenced. An administrator still needs to enable protection and require CI, Helm, and Compliance contract checks.
 - [x] Restrict the `staging` Environment deployment branch to `main` (GitHub API currently lists only this branch).
-- [ ] Confirm the single configured reviewer is the designated M1 approver, enable **Prevent self-review**, and review administrator bypass. The current Environment API reports one reviewer and `prevent_self_review=false`.
+- [ ] Confirm `hxj04121-lab` is the designated M1 approver, enable **Prevent self-review**, and review administrator bypass. The current Environment API reports one required reviewer and `prevent_self_review=false`.
 - [ ] Provide a restricted self-hosted runner reachable from the staging VPC with labels `self-hosted`, `linux`, and `staging-vpc`. VPC runner availability is UNKNOWN.
 - The repository runner inventory API returned 403 for the connected GitHub token; do not interpret that as proof a runner is absent.
 - [ ] Create the GitHub Actions OIDC provider in the AWS account, then provision the separate plan and deploy roles from `infra/terraform/modules/github-oidc`. The read-only query found one provider, but its issuer is not GitHub Actions; the deployment-role lookup returned no such role. Verify trust and least-privilege policies as an administrator.
@@ -80,9 +80,9 @@ For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPR
 
 ## AWS owner checks
 
-- [ ] Reconcile the live forecast, actual charges, and eligible credits against the configured monthly limit. The latest read shows forecast above the limit and zero actual spend; eligible credits are UNKNOWN. Keep the staging window closed until the account owner confirms the current cost basis.
+- [ ] Reconcile the live forecast, actual charges, and eligible credits against the configured monthly limit. The latest read shows a USD 120 limit, USD 149.085 forecast, and USD 0 actual spend; eligible credits are UNKNOWN. Keep the staging window closed until the account owner confirms the current cost basis.
 - [ ] Confirm Terraform state ownership and the backend configuration before running a plan or apply. The repository does not contain `infra/terraform/backend.hcl`; do not initialize a guessed backend.
-- [ ] Configure the GitHub Actions OIDC provider and verify the trust policies for the approved plan and deploy roles.
+- [ ] Configure the GitHub Actions OIDC provider and verify the trust policies for the approved plan and deploy roles. The latest read still shows only the EKS cluster OIDC provider; `spectrace-staging-github-deploy` does not exist.
 - [ ] Review the deploy role's EKS access scope. The managed EKS edit policy can read and write Kubernetes Secrets in its namespaces; require narrower custom RBAC if that scope is not approved.
 - [ ] Verify the VPC CNI network-policy agent is enabled and provide the approved VPC-connected runner path for live NetworkPolicy and Gateway tests.
 - [ ] Confirm the Gateway HTTPS listener, certificate, target health, and security-group ingress before enabling the smoke test. Permit only the approved HTTPS path.
