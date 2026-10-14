@@ -104,4 +104,19 @@ check('immutable image digest renders by digest',()=>{
 });
 check('invalid image digest is rejected',()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'--set','image.digest=sha256:short'],false));
 
+const targetGroup='arn:aws:elasticloadbalancing:ap-southeast-1:000000000000:targetgroup/test-gateway/0123456789abcdef';
+check('Gateway binds its existing target group without creating an Ingress/ALB',()=>{
+  const docs=render('gateway',['--set-string','targetGroupArn='+targetGroup]);
+  const binding=docs.find(d=>d.kind==='TargetGroupBinding');
+  const service=docs.find(d=>d.kind==='Service');
+  assert.equal(binding.spec.targetGroupARN,targetGroup);
+  assert.equal(binding.spec.targetType,'ip');
+  assert.equal(binding.spec.serviceRef.name,service.metadata.name);
+  assert.equal(binding.spec.serviceRef.port,service.spec.ports[0].port);
+  assert(!docs.some(d=>d.kind==='Ingress'));
+});
+check('target group binding is disabled by default',()=>assert(!render('gateway').some(d=>d.kind==='TargetGroupBinding')));
+check('reject target binding on a business service',()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'--set-string','targetGroupArn='+targetGroup],false));
+check('reject malformed target group ARN',()=>run(['template','review',chart,'-f',resolve(root,'values/gateway.yaml'),'--set-string','targetGroupArn=not-an-arn'],false));
+
 console.log(`${count} Helm checks passed. Rendered constraints are not live pod-placement evidence.`);

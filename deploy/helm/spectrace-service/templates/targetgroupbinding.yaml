@@ -1,0 +1,14 @@
+{{- if .Values.targetGroupArn }}
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: {{ include "spectrace.fullname" . }}
+  labels:
+    {{- include "spectrace.labels" . | nindent 4 }}
+spec:
+  targetGroupARN: {{ .Values.targetGroupArn | quote }}
+  targetType: ip
+  serviceRef:
+    name: {{ include "spectrace.fullname" . }}
+    port: {{ .Values.service.port }}
+{{- end }}

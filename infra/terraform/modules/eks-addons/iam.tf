@@ -5,11 +5,10 @@ data "aws_iam_openid_connect_provider" "cluster" {
 locals {
   oidc_issuer = trimprefix(data.aws_iam_openid_connect_provider.cluster.url, "https://")
 
-  irsa_subjects = {
+  irsa_subjects = merge({
     aws_load_balancer_controller = "system:serviceaccount:kube-system:aws-load-balancer-controller"
     ebs_csi                      = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
-    vpc_cni                      = "system:serviceaccount:kube-system:aws-node"
-  }
+  }, var.manage_vpc_cni ? { vpc_cni = "system:serviceaccount:kube-system:aws-node" } : {})
 }
 
 data "aws_iam_policy_document" "irsa" {
@@ -64,6 +63,7 @@ resource "aws_iam_role_policy_attachment" "ebs_csi" {
 }
 
 resource "aws_iam_role_policy_attachment" "vpc_cni" {
+  count      = var.manage_vpc_cni ? 1 : 0
   role       = aws_iam_role.addons["vpc_cni"].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
 }

@@ -1,45 +1,32 @@
 # AWS staging Terraform
 
-This root creates the two-AZ network, one NAT Gateway, EKS, the private MySQL Multi-AZ instance and an ALB that stays internal until HTTPS and an approved ingress CIDR are configured. `general_desired_size=1` is the bounded spike setting; the normal staging default is three. Terraform includes the optional Compliance group, but it defaults off and uses the chart contract `dedicated=compliance:NoSchedule`; enable it only for an approved experiment. Autoscaler IAM role and ASG discovery tags are included; install Cluster Autoscaler as a staging add-on and bind its ServiceAccount to the output role ARN.
+Use the protected existing S3 backend and workspace for an established environment. Never initialize an existing deployment from a new or guessed state. Review every plan before Apply, and preserve existing network, EKS, database, load-balancing resources, and persistent data. Destroy, import, migration, permission changes, and cleanup require their own explicit approval.
 
-RDS error/general/slow-query exports use Terraform-managed CloudWatch Log Groups with 14-day retention. The staging destroy removes them with RDS so log groups do not remain billable after a window. EKS 1.36 uses default AWS-owned KMS v2 envelope encryption for Kubernetes API data; no customer-managed KMS key is added to this short-lived cluster.
+## Planning safely
 
-The static G0 ALB target group has no Kubernetes target registration. The separate EKS add-ons integration must install the AWS Load Balancer Controller and Gateway Ingress before the HTTPS listener can route to pods. The ALB stays internal and has no listener unless both an ACM certificate and reviewed client CIDRs are supplied. This Terraform branch alone does not provide a working application URL.
+Keep the API private. Retain the existing ownership tags in the protected variable file: removing them can create a new launch-template version and roll nodes. General capacity can increase without changing that template. Compliance placement retains the existing labels, taint, fixed per-pod resource contract, and two-zone scheduling rules. Verify live allocatable capacity and eligible AZs before accepting scheduling.
 
-AWS is on-demand staging only. Use local Docker Compose between evidence windows, and destroy the staging root after each approved AWS window; only the separately bootstrapped state bucket remains. The independent k6 EC2 runner is a G3-only experiment input and is not part of the always-on EKS node groups or this Terraform root. Include its planned hours in the fail-closed budget check before provisioning it.
+Worker self-ingress is restricted to DNS, application, telemetry, messaging, and kubelet ports used by the manifests. Control-plane ingress is limited to kubelet and reviewed controller webhooks. Before removing a broader existing rule, inventory any other webhook/APIService backends; the narrow rule uses create-before-destroy.
 
-## Persistent state
+## Foundations and existing ingress
 
-Create the S3 state bucket once from `state-bootstrap/` after the required budget gate and account checks. That bucket uses the AWS-managed S3 KMS key, is versioned, private, TLS-only, and protected against Terraform destruction. It is the only AWS resource intended to survive a staging window. Keep its bootstrap state securely outside this repository. Then copy `backend.hcl.example` to the ignored `backend.hcl`, enter the actual bucket name, and initialize with `terraform init -backend-config=backend.hcl`.
+`enable_eks_addons=true` installs missing EBS storage and controllers without removing `module.edge`. It does not require a domain or certificate. `manage_vpc_cni=false` preserves the healthy self-managed CNI and its node-role permission; enabling CNI ownership is a separate migration requiring inventory and approval. For a self-managed CNI, install the NetworkPolicies and confirm the policy-endpoint CRD before an approved strict-enforcement parameter patch. Do not assume a Ready policy-agent container means enforcement is enabled.
 
-The staging root must be destroyed with the same backend after each window. The bootstrap bucket is deliberately separate and must not be included in a staging destroy.
+`alb_internal=true` keeps the existing ALB internal when HTTPS is configured. The existing target group is reused through the Gateway service chart's optional `targetGroupArn`; only Gateway can render a TargetGroupBinding. LBC registers pod IPs in that target group. This path does not create another ALB or Ingress-owned edge. The Terraform listener and reviewed source CIDRs remain separately controlled.
 
-## Bounded spike
+Leave `domain_name` and `certificate_arn` empty until the owner selects the FQDN and DNS provider. A non-empty domain with no certificate requests an ACM DNS-validation certificate during Apply; this is a separately approved write. Pass the issued ARN and reviewed source CIDRs to plan an HTTPS-only listener. No domain is purchased or assumed.
 
-Use a dedicated Terraform workspace and temporary values file; do not commit account IDs, state, passwords, or credentials. Set the active account role, account plan/credits and budget alerts first; run the STCN-37 enforced cost gate; inspect the full plan and current AWS charges; and obtain the owner's explicit approval for the billable apply. Set `general_desired_size=1`, `enable_compliance_node_group=false`, and leave `cluster_public_access_cidrs` empty unless a reviewed private access path is supplied. `alb_ingress_cidrs` is empty by default. The ALB remains internal unless both the ACM certificate and an approved ingress CIDR are set; only HTTPS is configured.
+Existing namespaces or storage classes created outside Terraform need a reviewed adoption/import decision before applying their manifest resources. Do not create duplicate resources or overwrite existing ownership.
 
-The repository does not provide an apply workflow or an apply-capable GitHub role. An apply is blocked until the approved STCN-37 fail-closed gate is available on the integration branch and a current live account-cost snapshot passes it. The manual workflow uses a plan-only OIDC role, trusts the immutable owner/repository IDs and exact `refs/heads/${github_branch}`, and grants read-only AWS discovery, read access to the staging DB master secret for Terraform refresh, exact S3 state read, and write/delete on the state lock object only. A repository administrator must create the `staging` GitHub Environment, restrict it to the approved branch, and require an approver before enabling the plan job; the current repository has no such Environment.
-
-The current Trivy scan reports one remaining `AWS-0104` finding for EKS node HTTPS egress to `0.0.0.0/0`; private nodes need HTTPS through NAT for AWS APIs and image pulls. Before a stricter production policy, replace this with service-specific VPC endpoints and scoped egress rules, accounting for their recurring cost. Trivy also reports `AWS-0039` because the config omits a customer-managed KMS key; the selected EKS 1.36 control plane uses AWS-owned KMS v2 envelope encryption by default, which EKS documents for Kubernetes 1.28 and later.
-
-## EKS add-ons (STCN-59)
-
-Set `enable_eks_addons=true` only after the cluster is ready, the ACM certificate is issued, the domain is confirmed, and reviewed source CIDRs are provided in `alb_ingress_cidrs`. This includes the child module at `modules/eks-addons`, which reuses the existing EKS OIDC provider, autoscaler role and node groups. It replaces the static G0 ALB with the AWS Load Balancer Controller-managed HTTPS ALB. Terraform dependency ordering removes the Gateway Ingress and add-ons before EKS during destroy. RabbitMQ PVCs must be removed first so their `Delete`-policy EBS volumes are released.
-
-Run `scripts/check_eks_addons.sh` for offline validation and `scripts/verify_eks_addons.sh deploy|cleanup` for read-only checks inside the authorized staging window. The G0 branch does not yet provide an apply/destroy runner; do not bypass the STCN-37 budget gate or the account-readiness checks.
-
-## Domain and HTTPS
-
-Leave `domain_name` and `certificate_arn` empty until the team selects an FQDN and DNS provider. Setting `domain_name` requests an ACM DNS-validation certificate and exposes the validation CNAMEs as `acm_dns_validation_options`; create those records with the chosen DNS provider and pass the issued ARN as `certificate_arn` to enable an HTTPS-only listener. No HTTP listener is created, and no domain is purchased or assumed.
-
-## Validation
+## Validation and execution controls
 
 ```sh
 terraform fmt -check -recursive
 terraform init -backend=false
 terraform validate
+terraform test -filter=tests/deployment-safety.tftest.hcl
 ```
 
-See [`docs/aws/staging-cost-model.md`](../../docs/aws/staging-cost-model.md) for the explicit 4-hour spike, 8-hour and 24-hour window, and 30-day reference estimates, including the optional G3 nodes and k6 runner.
+The tests use mock providers and do not prove live deployment. `scripts/check_eks_addons.sh` additionally lints controller charts and rendered manifests. `scripts/verify_eks_addons.sh foundations` checks foundations; `deploy` also checks the existing ALB listener, target-group registration, and target health.
 
-The manual workflow can run a read-only AWS plan after `AWS_PLAN_ROLE_ARN` and `TF_STATE_BUCKET` are configured. The plan role cannot modify Terraform state or Kubernetes workloads; no apply role or apply workflow is provisioned. EKS node egress is limited to in-VPC services and HTTPS through NAT; RDS has no initiated outbound rule. The remote state bucket's AWS-managed KMS key has no monthly key charge, but usage-based KMS API charges should be rechecked with the cost gate.
+The manual plan workflow runs only from main, on an authorized VPC-connected runner, behind the protected Environment. Configure `AWS_PLAN_ROLE_ARN`, `TF_STATE_BUCKET`, `TF_STATE_KEY`, `TF_WORKSPACE`, and the protected `TF_PLAN_VARS_JSON` Secret. It selects an existing workspace, checks the expected resource addresses, saves the plan and logs privately, and prints only the plan hash. It provides no Apply path. Keep the existing forced gate in place until any paid-account alternative has passed formal review.
