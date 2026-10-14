@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "issue": "STCN-15",
   "updated_at": "2026-10-14",
-  "source_commit": "a768f05ec151e8c88cc5480e951e1a2f2c5d80de",
+  "source_commit": "a3c8cc21a60481a129375eb1deaff1ad6ccec9dd",
   "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
   "aws_readonly_snapshot": "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
   "latest_aws_observation": "2026-10-14",
