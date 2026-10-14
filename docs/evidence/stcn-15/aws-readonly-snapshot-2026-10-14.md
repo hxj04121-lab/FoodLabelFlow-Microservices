@@ -50,3 +50,9 @@ Using the configured `foodlabelflow-staging-deploy` profile, STS again confirmed
 ## Reproduction
 
 Use the configured non-root SSO profile and role chain, region `ap-southeast-1`; remove the stale proxy only for the AWS CLI process if it still points at `127.0.0.1:7892`. Read-only calls included STS identity, EKS cluster/node-group descriptions, RDS and ALB descriptions, listener/target-group queries, scoped security-group/VPC/NAT queries, AWS Budgets, and Cost Explorer. Do not copy session tokens or generated kubeconfig contents into evidence.
+
+## Read-only recheck (16:27 +08:00)
+
+Using `foodlabelflow-staging-deploy`, STS confirmed `arn:aws:sts::679857346122:assumed-role/FoodLabelFlowStagingDeploy/...`; no Root credentials were used. AWS Budgets still reports actual USD 0.00 and forecast USD 149.085 against the USD 120 monthly limit. EKS `spectrace-staging` remains ACTIVE on Kubernetes 1.36 with authentication mode `API`, `endpointPrivateAccess=true`, and `endpointPublicAccess=false`; RDS remains available, MySQL 8.0.46, Multi-AZ and private. The internal ALB is active with no listeners. One target group named `spectrace-staging-gateway` exists, but its `LoadBalancerArns` list is empty, so it is not attached to the ALB. The current kube context is the expected EKS ARN, but `kubectl get namespaces --request-timeout=8s` timed out waiting for the private API endpoint; Kubernetes authorization and workload state remain UNKNOWN.
+
+The account's IAM OIDC-provider list contains only `oidc.eks.ap-southeast-1.amazonaws.com/...`; no GitHub Actions provider is listed. `iam:GetRole` for the assumed deployment role is denied, so its trust document remains UNKNOWN. GitHub Environment `staging` is restricted to `main`, requires reviewer `hxj04121-lab`, has `prevent_self_review=false`, and has zero variables/secrets. The `main` branch-protection endpoint still returns 404. No AWS, Kubernetes, GitHub Environment, or repository setting was changed.

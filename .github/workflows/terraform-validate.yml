@@ -30,6 +30,10 @@ jobs:
         working-directory: infra/terraform
       - run: terraform validate
         working-directory: infra/terraform
+      - run: terraform init -backend=false -input=false
+        working-directory: infra/terraform/modules/github-oidc
+      - run: terraform test -no-color
+        working-directory: infra/terraform/modules/github-oidc
 
   plan:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_plan }}

@@ -23,6 +23,13 @@ jobs:
           path: database-bootstrap.log
           if-no-files-found: error
 
+  runtime-secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate protected, per-service Kubernetes Secret injection and cleanup
+        run: bash tests/test-runtime-secrets.sh
+
   observability-alerts:
     runs-on: ubuntu-latest
     steps:
