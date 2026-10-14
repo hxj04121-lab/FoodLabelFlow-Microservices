@@ -6,6 +6,14 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 mkdir -p "$tmp_dir/bin" "$tmp_dir/captures"
 
+cat > "$tmp_dir/bin/aws" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$*" == 'sts get-caller-identity --query Account --output text' ]]
+printf '%s\n' "$FAKE_ACCOUNT_ID"
+MOCK
+chmod +x "$tmp_dir/bin/aws"
+
 cat > "$tmp_dir/bin/kubectl" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -54,9 +62,10 @@ export GITHUB_ACTIONS=true
 export GITHUB_REF=refs/heads/main
 export GITHUB_WORKFLOW='STCN-15 staging runtime Secrets'
 export STAGING_WINDOW_OPEN=true
-export STAGING_AWS_ACCOUNT_ID=679857346122
-export STAGING_EKS_CLUSTER_NAME=spectrace-staging
-export MYSQL_HOST=spectrace-staging-mysql.example.rds.amazonaws.com
+export STAGING_AWS_ACCOUNT_ID=000000000000
+export FAKE_ACCOUNT_ID=000000000000
+export STAGING_EKS_CLUSTER_NAME=staging-cluster
+export MYSQL_HOST=staging-mysql.example.invalid
 export FAKE_CONTEXT="arn:aws:eks:${AWS_REGION}:${STAGING_AWS_ACCOUNT_ID}:cluster/${STAGING_EKS_CLUSTER_NAME}"
 export SPECIFICATION_DB_PASSWORD=specification-password-012345678901
 export FORMULATION_DB_PASSWORD=formulation-password-012345678901
@@ -106,6 +115,10 @@ fi
 
 if STAGING_AWS_ACCOUNT_ID=123456789012 bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/wrong-account" 2>&1; then
   echo "FAIL wrong AWS account was accepted" >&2
+  exit 1
+fi
+if FAKE_ACCOUNT_ID=123456789012 bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/wrong-sts-account" 2>&1; then
+  echo "FAIL mismatched STS identity was accepted" >&2
   exit 1
 fi
 

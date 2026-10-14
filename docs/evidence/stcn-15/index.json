@@ -2,10 +2,10 @@
   "schema_version": "1.0",
   "issue": "STCN-15",
   "updated_at": "2026-10-14",
-  "source_commit": "22df1efb42ebdb0042f116a7f286534fec2fe6c2",
+  "source_commit": "a768f05ec151e8c88cc5480e951e1a2f2c5d80de",
   "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
   "aws_readonly_snapshot": "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
-  "latest_aws_observation": "2026-10-14T16:56:00+08:00",
+  "latest_aws_observation": "2026-10-14",
   "checks": {
     "STCN-83": {
       "status": "LOCAL_PRIVILEGE_TESTS_AND_CI_PASS_LIVE_RDS_PERMISSION_CHECK_PENDING",
@@ -53,16 +53,19 @@
       ]
     },
     "STCN-87": {
-      "status": "EVIDENCE_SCHEMA_AND_G1_DIGEST_PASS_READY_NO_CALLER_OR_DEPLOYMENT_RECORD",
+      "status": "SCHEMA_HELPER_AND_G1_CALLER_TESTED_NO_DEPLOYMENT_RECORD",
       "evidence": [
         "docs/evidence/stcn-15/deployment-record.schema.json",
+        "scripts/staging/record-deployment-evidence.py",
+        "tests/test_deployment_record.py",
+        "docs/evidence/stcn-15/deployment-record-selfcheck.log",
         "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52"
       ]
     },
     "STCN-88": {
-      "status": "PROMTOOL_AND_CI_RULE_TESTS_PASS_LIVE_DLQ_SCRAPE_AND_ALERT_TEST_BLOCKED_G1",
+      "status": "PROMTOOL_CI_AND_G1_DETAILED_SCRAPE_STATIC_TESTED_LIVE_ALERT_TEST_BLOCKED",
       "evidence": [
         "docs/evidence/stcn-15/alert-rules-validation.log",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39",
@@ -74,13 +77,12 @@
   "deployments": [],
   "blockers": [
     "G1-M5 PR #39 remains Draft; Terraform validate passes but plan is skipped for missing plan credentials.",
-    "GitHub staging Environment is restricted to main and requires reviewer hxj04121-lab, but prevent_self_review is false; it has zero variables/secrets, administrators can bypass the reviewer, main branch protection returns 404, and this account has admin:false/maintain:false.",
-    "AWS Budget actual is USD 0.00 but forecasts USD 149.085 against the USD 120 monthly limit; Cost Explorer returned a conflicting near-zero estimate and eligible credits/project charges remain unverified. Stop staging changes pending account-owner reconciliation.",
-    "EKS/RDS/NAT/internal ALB staging infrastructure is active and tagged to STCN-39/Terraform. EKS is private-only and the current kube context times out from this workstation, so workloads and live NetworkPolicy behavior remain unknown. No managed add-ons are listed and self-managed VPC CNI agent state is unknown. The ALB has no listeners; the Gateway target group exists but is not attached to a load balancer.",
+    "GitHub staging Environment is restricted to main and requires an approver, but deployment variables/secrets are empty; self-review prevention and main branch protection need administrator verification.",
+    "AWS Budget forecast exceeds the configured monthly limit; eligible credits and project-attributed charges remain unverified. Stop staging changes pending account-owner reconciliation.",
+    "Staging AWS infrastructure is present, but its ownership/state must be confirmed. EKS is private-only and the current workstation cannot reach its Kubernetes API, so workloads and live NetworkPolicy behavior remain unknown. VPC CNI network-policy-agent state is unknown and Gateway ingress is not ready for smoke testing.",
     "Terraform state ownership is unknown because infra/terraform/backend.hcl is absent; do not initialize a guessed backend.",
-    "The observed AWS IAM OIDC provider list contains only the EKS provider, not token.actions.githubusercontent.com. iam:GetRole is denied for the assumed deploy role, so its current trust policy remains unknown; the new separate GitHub OIDC roles are Terraform code only and have not been applied.",
-    "Draft PR #39 implements validated registry digest capture and passes repository@sha256 to Helm, but remains unmerged and has no caller or published/deployed image; deployment-record generation/binding is still absent. Its deploy job does not create per-service runtime Kubernetes Secrets. Its Alloy config scrapes RabbitMQ /metrics rather than /metrics/detailed?family=queue_coarse_metrics.",
-    "The current G1 edge module allows ALB TCP/80 from configured ingress CIDRs and forwards plain HTTP when no certificate is configured; require approved HTTPS or redirect-only behavior before public use.",
+    "The account-level GitHub Actions OIDC provider and current deploy-role trust policy are not verified; the new separate GitHub OIDC roles are Terraform code only and have not been applied.",
+    "Draft PR #39 captures an immutable registry digest for Helm, wires the STCN-15 record writer after rollout/Gateway smoke, and configures RabbitMQ detailed per-queue metrics. It remains unmerged and has no main caller or published/deployed image. No deployment record or runtime Kubernetes Secret exists yet.",
     "No G2 staging deployment, Gateway staging smoke, live NetworkPolicy probe, image-digest-to-Kubernetes-revision binding, staging demo, or authorized project-resource destroy has occurred."
   ],
   "workflow_run": {
@@ -131,16 +133,14 @@
   },
   "g1_dependency_snapshot": {
     "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39",
-    "head_sha": "ab946d70bdad7dc2f3a4e099d7fdfd787694c3c8",
+    "head_sha": "976239ba72dae646d3c4787c04a92ad72fa780fc",
     "ci_run": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38427649964",
     "budget_run": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38427649738",
     "offline_run": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38427649840",
     "terraform_validation_run": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38427649723",
     "terraform_plan": "skipped_missing_plan_credentials",
-    "live_infrastructure": "active_eks_rds_nat_internal_alb",
+    "live_infrastructure": "staging_resources_present_ownership_unverified",
     "application_workloads": "unknown_private_cluster_unreachable",
-    "budget_forecast_usd": 149.085,
-    "budget_limit_usd": 120.0,
-    "live_deployment": "no_gateway_listener_or_target_group_verified"
+    "live_deployment": "no_main_deployment_evidence"
   }
 }

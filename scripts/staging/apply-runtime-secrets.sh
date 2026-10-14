@@ -27,8 +27,9 @@ fi
 [[ "$AWS_REGION" == ap-southeast-1 ]] || { echo "AWS_REGION must be ap-southeast-1" >&2; exit 2; }
 [[ "$STAGING_AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "STAGING_AWS_ACCOUNT_ID must be 12 digits" >&2; exit 2; }
 [[ "$STAGING_EKS_CLUSTER_NAME" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid staging cluster name" >&2; exit 2; }
-[[ "$STAGING_AWS_ACCOUNT_ID" == 679857346122 && "$STAGING_EKS_CLUSTER_NAME" == spectrace-staging ]] || {
-  echo "Refusing runtime Secret operation outside the approved staging account and cluster" >&2
+actual_account_id="$(aws sts get-caller-identity --query Account --output text)"
+[[ "$actual_account_id" == "$STAGING_AWS_ACCOUNT_ID" ]] || {
+  echo "Refusing runtime Secret operation: STS account does not match STAGING_AWS_ACCOUNT_ID" >&2
   exit 2
 }
 

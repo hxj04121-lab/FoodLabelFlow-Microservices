@@ -1,34 +1,37 @@
 # STCN-15 / G2 staging administrator checklist
 
-For GitHub and AWS administrators. This lists configuration names only. Do not send password, token, or key values through chat or commit them to Git.
+For GitHub and AWS administrators. Configure names and values directly in the protected systems; never send secret values in chat or commit them to Git.
 
-## GitHub
+## GitHub repository settings
 
-- [ ] Protect `main` and require CI, Helm, and Compliance contract checks. The repository branch-protection API currently returns 404.
+- [ ] Protect `main` and require CI, Helm, and Compliance contract checks. Current repository protection is not verified.
 - [ ] Keep the `staging` deployment branch policy restricted to `main`.
-- [ ] Keep a required reviewer, enable **Prevent self-review**, and disable administrator bypass (or record an approved exception). The Environment currently requires `hxj04121-lab`, but `prevent_self_review` is false; verify bypass policy in the UI.
-- [ ] Configure a restricted self-hosted runner group with a runner reachable from the staging VPC and labels `self-hosted`, `linux`, `staging-vpc`. Runner availability and private EKS reachability are not verified.
-- [ ] Add these `staging` Environment variables. Keep `STAGING_WINDOW_OPEN=false` except during an approved window.
+- [ ] Require an approver, enable **Prevent self-review**, and disable administrator bypass unless an exception is approved.
+- [ ] Provide a restricted self-hosted runner reachable from the staging VPC with labels `self-hosted`, `linux`, and `staging-vpc`.
+- [ ] Configure the GitHub Actions OIDC provider in the AWS account, then provision the separate plan and deploy roles from `infra/terraform/modules/github-oidc`. Review their trust conditions and least-privilege policies before use.
+- [ ] Keep `STAGING_WINDOW_OPEN=false` until the account owner approves the budget and staging window.
 
-| Variable | Value / source |
+## GitHub Environment `staging`
+
+Configure these **variables** from approved owner-controlled sources:
+
+| Variable | Required source or purpose |
 |---|---|
-| `AWS_DEPLOY_ROLE_ARN` | Approved GitHub OIDC deploy-role output; must differ from plan role |
-| `AWS_PLAN_ROLE_ARN` | Read-only Terraform plan role ARN |
-| `STAGING_AWS_ACCOUNT_ID` | `679857346122` |
-| `STAGING_EKS_CLUSTER_NAME` | `spectrace-staging` |
-| `STAGING_WINDOW_OPEN` | `false` by default; `true` only for an approved open window |
-| `STAGING_WINDOW_HOURS` | Approved maximum window duration |
-| `STAGING_EXPERIMENT_HOURS` | Approved experiment duration |
-| `STAGING_K6_HOURS` | Approved load-test duration, or `0` if not approved |
-| `STAGING_AVAILABLE_CREDIT_USD` | Verified eligible AWS credit; not the USD 120 monthly budget or a Cost Explorer estimate |
-| `MYSQL_HOST` | Private RDS endpoint for `spectrace-staging-mysql` |
-| `TF_STATE_BUCKET` | Only after the account/state owner confirms existing bucket and ownership |
-| `STAGING_GATEWAY_URL` | Approved HTTPS Gateway URL after listener and certificate verification |
-| `STAGING_PROTECTED_SMOKE_PATH` | Approved authenticated smoke endpoint |
-| `STAGING_DATABASE_SUBNET_CIDRS` | Exact private RDS subnet CIDRs used by the G1 NetworkPolicy workflow |
-| `STAGING_ALB_SUBNET_CIDRS` | Exact ALB subnet CIDRs used by the G1 NetworkPolicy workflow |
+| `AWS_DEPLOY_ROLE_ARN` | Approved OIDC deploy-role output; must differ from the plan role |
+| `AWS_PLAN_ROLE_ARN` | Read-only Terraform plan role output |
+| `TF_STATE_BUCKET` | Existing state bucket confirmed by its owner; do not guess or initialize a new backend |
+| `STAGING_AWS_ACCOUNT_ID` | Owner-verified target account; checked against AWS STS at runtime |
+| `STAGING_EKS_CLUSTER_NAME` | Owner-approved staging cluster name |
+| `STAGING_WINDOW_OPEN` | `false` by default; `true` only for an approved, open window |
+| `STAGING_WINDOW_HOURS`, `STAGING_EXPERIMENT_HOURS`, `STAGING_K6_HOURS` | Approved maximum window, experiment, and load-test durations |
+| `STAGING_AVAILABLE_CREDIT_USD` | Verified eligible credit balance; do not infer from a budget limit or forecast |
+| `STAGING_GATEWAY_URL` | Approved HTTPS Gateway origin after listener and certificate verification |
+| `STAGING_PROTECTED_SMOKE_PATH` | Approved authenticated Gateway smoke endpoint |
+| `MYSQL_HOST` | Private RDS endpoint hostname |
+| `STAGING_DATABASE_SUBNET_CIDRS` | Approved private database subnet CIDRs for NetworkPolicy egress |
+| `STAGING_ALB_SUBNET_CIDRS` | Approved load-balancer subnet CIDRs for Gateway ingress |
 
-- [ ] Add the following Environment secrets only through the approved secret manager.
+Configure these **secrets** only through the approved secret manager:
 
 | Secret | Purpose |
 |---|---|
@@ -41,20 +44,25 @@ For GitHub and AWS administrators. This lists configuration names only. Do not s
 | `PROMETHEUS_URL`, `GRAFANA_CLOUD_METRICS_USER` | Alloy metrics remote-write configuration if used by G1 |
 | `LOKI_URL`, `GRAFANA_CLOUD_LOGS_USER`, `GRAFANA_CLOUD_API_KEY` | Alloy log shipping configuration if used by G1 |
 
-## AWS and OIDC
+The existing quality gate also reads repository secret `SONAR_TOKEN`; keep its value in GitHub Secrets. The workflow sets `AWS_REGION=ap-southeast-1`. Generate database account values as 32–128 characters from `[A-Za-z0-9_-]`. The helper compares the configured target account with the role's STS identity and verifies the Kubernetes context before writing any Secret.
 
-- [ ] Reconcile the current Budget forecast of **USD 149.085** against the **USD 120 monthly limit**, actual charges, and eligible credits. Budget actual was USD 0; that is not remaining credit. Keep the staging window closed until the account owner approves a real cost basis and window.
-- [ ] Confirm Terraform state ownership and backend configuration. `infra/terraform/backend.hcl` is absent; do not initialize a guessed backend.
-- [ ] Provide the account-level GitHub Actions OIDC provider. The latest read-only provider list contained only the EKS OIDC provider, not `token.actions.githubusercontent.com`. The assumed deployment role denied `iam:GetRole`, so its trust policy remains unknown.
-- [ ] After budget and state approval, provision the separate plan and deploy roles through `infra/terraform/modules/github-oidc`. The deploy role is limited to `sts:GetCallerIdentity`, `eks:DescribeCluster` for `spectrace-staging`, and EKS `AmazonEKSEditPolicy` scoped to `gateway`, `specification`, `formulation`, `compliance`, and `label-workflow`. It has no Terraform state or KMS permissions. AWS's managed Edit policy also grants Secret read/write within those namespaces; the M1/security reviewer must explicitly accept that scope or require narrower custom Kubernetes RBAC before deployment. See [AWS EKS access policy permissions](https://docs.aws.amazon.com/eks/latest/userguide/access-policy-permissions.html). Do not apply without an owner-approved, reviewed plan.
-- [ ] Set `AWS_DEPLOY_ROLE_ARN` from the approved Terraform output only after checking the role's account, OIDC trust, branch, and Environment conditions. Keep it separate from `AWS_PLAN_ROLE_ARN`.
+## AWS owner checks
 
-## Current read-only observations
+- [ ] Reconcile the current AWS Budget forecast, actual charges, and eligible credits against the configured monthly limit. The latest query omitted spend fields and an earlier same-day response showed an over-limit forecast; keep the staging window closed until the account owner confirms the current cost basis.
+- [ ] Confirm Terraform state ownership and the backend configuration before running a plan or apply. The repository does not contain `infra/terraform/backend.hcl`; do not initialize a guessed backend.
+- [ ] Verify the account-level GitHub Actions OIDC provider and the trust policies for the approved plan and deploy roles.
+- [ ] Review the deploy role's EKS access scope. The managed EKS edit policy can read and write Kubernetes Secrets in its namespaces; require narrower custom RBAC if that scope is not approved.
+- [ ] Verify the VPC CNI network-policy agent is enabled and provide the approved VPC-connected runner path for live NetworkPolicy and Gateway tests.
+- [ ] Confirm the Gateway HTTPS listener, certificate, and target health before enabling the smoke test.
+- [ ] Approve the G2 staging window only after all cost, state, network, and GitHub Environment checks pass.
+- [ ] After the demo, identify only resources created for this project, obtain the resource owner's approval, and verify destruction. Do not delete shared or pre-existing resources.
 
-- AWS identity is a non-root `FoodLabelFlowStagingDeploy` assumed role in account `679857346122`, region `ap-southeast-1`.
-- `spectrace-staging` is ACTIVE, uses EKS authentication mode `API`, has private API access enabled and public API access disabled. This workstation cannot reach its private API; VPC runner access must be tested.
-- Private MySQL 8.0.46 RDS is available and Multi-AZ. The internal ALB is active but has no listener; the Gateway target group exists but is not attached to a load balancer, so Gateway Smoke is not ready.
-- GitHub `staging` is restricted to `main`, requires reviewer `hxj04121-lab`, and currently has zero variables and zero secrets. `main` branch protection is not evidenced.
-- No AWS apply, EKS mutation, Secret injection, deployment, or destroy has been performed by this change.
+## Current sanitized observations
 
-After configuration, report role ARNs, runner online/reachability result, and approved window evidence. Do not provide Secret values.
+- Read-only AWS checks confirmed a non-root assumed identity matching the configured staging account. The cluster is private-only and this workstation cannot reach its Kubernetes API; workload and network-policy-agent state remain unknown.
+- The private database is available. The Gateway ingress is not ready for a staging smoke test.
+- The latest budget response omitted actual and forecast fields; an earlier same-day response showed an over-limit forecast. Eligible credits and project charges need owner reconciliation.
+- GitHub staging deployment protection exists, but required variables/secrets are not configured and self-review prevention / main branch protection need administrator verification.
+- No AWS apply, Kubernetes mutation, Secret injection, deployment, or destroy was performed for this work.
+
+After configuration, share a pass/fail status and approval evidence. Keep role ARNs, account IDs, endpoint values, and all secret values inside the protected systems.
