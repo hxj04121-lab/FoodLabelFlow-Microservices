@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/hxj04121-lab/FoodLabelFlow-Microservices//deploy/operators/rabbitmq?ref=976239ba72dae646d3c4787c04a92ad72fa780fc
+  - rabbitmq-pdb.yaml
+patches:
+  - path: rabbitmq-scheduling-patch.yaml
+    target:
+      group: rabbitmq.com
+      version: v1beta1
+      kind: RabbitmqCluster
+      name: spectrace

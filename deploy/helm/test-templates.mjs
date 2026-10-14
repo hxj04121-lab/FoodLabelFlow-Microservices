@@ -134,15 +134,21 @@ check('RabbitMQ policies match the actual spectrace Operator labels',()=>{
     assert(policy.spec.egress.some(rule=>rule.ports?.some(p=>p.port===5672) && rule.to?.some(peer=>peer.podSelector?.matchLabels?.['app.kubernetes.io/name']==='spectrace')));
   }
 });
-check('RabbitMQ placement keeps three replicas on separate General workers and protects quorum',()=>{
-  const patch=parse(readFileSync(resolve(root,'../kubernetes/staging/rabbitmq-scheduling-patch.yaml'),'utf8'));
-  const affinity=patch.spec.affinity;
+check('staged RabbitMQ bundle renders placement patch and quorum PDB',()=>{
+  const r=spawnSync(process.env.KUBECTL_BIN || 'kubectl',['kustomize',resolve(root,'../kubernetes/staging/rabbitmq')],{encoding:'utf8',timeout:60000});
+  if(r.error) throw r.error;
+  assert.equal(r.status,0,r.stderr+'\n'+r.stdout);
+  const docs=parseAllDocuments(r.stdout).map(d=>d.toJSON()).filter(Boolean);
+  const cluster=docs.find(d=>d.apiVersion==='rabbitmq.com/v1beta1' && d.kind==='RabbitmqCluster' && d.metadata.name==='spectrace');
+  assert(cluster,'pinned RabbitMQ Cluster must be in the rendered bundle');
+  const affinity=cluster.spec.affinity;
   assert.deepEqual(affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions,
     [{key:'eks.amazonaws.com/nodegroup',operator:'In',values:['general']}]);
   const term=affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0];
   assert.equal(term.topologyKey,'kubernetes.io/hostname');
   assert.deepEqual(term.labelSelector.matchLabels,{'app.kubernetes.io/name':'spectrace','app.kubernetes.io/component':'rabbitmq'});
-  const pdb=parse(readFileSync(resolve(root,'../kubernetes/staging/rabbitmq-pdb.yaml'),'utf8'));
+  const pdb=docs.find(d=>d.apiVersion==='policy/v1' && d.kind==='PodDisruptionBudget' && d.metadata.name==='spectrace-rabbitmq-quorum');
+  assert(pdb,'quorum PDB must be in the rendered bundle');
   assert.equal(pdb.spec.maxUnavailable,1);
   assert.deepEqual(pdb.spec.selector,term.labelSelector);
 });
