@@ -8,12 +8,14 @@ from urllib.parse import urlsplit
 
 URLS = {
     "GATEWAY_ISSUER": "/auth/realms/spectrace",
-    "GATEWAY_JWK_SET_URI": "/auth/realms/spectrace/protocol/openid-connect/certs",
-    "GATEWAY_KEYCLOAK": "",
-    "GATEWAY_SPECIFICATION": "",
-    "GATEWAY_FORMULATION": "",
-    "GATEWAY_COMPLIANCE": "",
-    "GATEWAY_LABEL_WORKFLOW": "",
+}
+SERVICE_URLS = {
+    # These DNS names follow the existing shared chart helper: <release>-<serviceName>.
+    "GATEWAY_KEYCLOAK": "http://spectrace-keycloak-service.keycloak.svc.cluster.local:8080",
+    "GATEWAY_SPECIFICATION": "http://specification-specification.specification.svc.cluster.local:8080",
+    "GATEWAY_FORMULATION": "http://formulation-formulation.formulation.svc.cluster.local:8080",
+    "GATEWAY_COMPLIANCE": "http://compliance-compliance.compliance.svc.cluster.local:8080",
+    "GATEWAY_LABEL_WORKFLOW": "http://label-workflow-label-workflow.label-workflow.svc.cluster.local:8080",
 }
 SERVICE_NAMESPACES = {
     "GATEWAY_KEYCLOAK": "keycloak",
@@ -44,17 +46,20 @@ def validate_url(name, value, required_path):
 
 def build_values(env=os.environ):
     rows = []
-    issuer = env.get("GATEWAY_ISSUER", "")
     for name, path in URLS.items():
         value = env.get(name, "").strip()
         if not value:
             raise ValueError(f"missing GitHub staging Environment variable: {name}")
         validate_url(name, value, path)
         rows.append({"name": name, "value": value})
-    issuer_path = urlsplit(issuer).path
-    jwks_path = urlsplit(env["GATEWAY_JWK_SET_URI"]).path
-    if jwks_path != issuer_path + "/protocol/openid-connect/certs":
-        raise ValueError("GATEWAY_JWK_SET_URI path must match the configured Spectrace realm issuer")
+    issuer_path = urlsplit(env["GATEWAY_ISSUER"]).path
+    keycloak = urlsplit(SERVICE_URLS["GATEWAY_KEYCLOAK"])
+    jwks = keycloak._replace(path=issuer_path + "/protocol/openid-connect/certs").geturl()
+    validate_url("GATEWAY_JWK_SET_URI", jwks, issuer_path + "/protocol/openid-connect/certs")
+    rows.append({"name": "GATEWAY_JWK_SET_URI", "value": jwks})
+    for name, value in SERVICE_URLS.items():
+        validate_url(name, value, "")
+        rows.append({"name": name, "value": value})
     return {"env": rows}
 
 

@@ -112,6 +112,7 @@ check('first Gateway release pins its verified image and only permits required i
   const np=docs.find(d=>d.kind==='NetworkPolicy');
   assert.equal(np.spec.ingress.length,0);
   assert.equal(np.spec.egress.length,6,'DNS plus the five Gateway upstream services');
+  assert.deepEqual(np.spec.egress[1].to[0].podSelector.matchLabels,{app:'keycloak'},'Keycloak egress follows the Operator pod label');
   for(const rule of np.spec.egress.slice(1)) assert.deepEqual(rule.ports,[{port:8080,protocol:'TCP'}]);
   const env=pod.containers[0].env;
   assert.equal(env.find(row=>row.name==='GATEWAY_REALM').value,'spectrace');
@@ -129,7 +130,7 @@ check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-
   assert.doesNotMatch(script,/create namespace|kubectl create ns|terraform apply/i);
   assert.match(script,/helm install gateway/);
   assert.match(script,/anonymous GHCR pull/);
-  assert.match(script,/well-known\/openid-configuration/);
+  assert.doesNotMatch(script,/well-known\/openid-configuration|kubectl get service "\$service"|for item in 'GATEWAY_KEYCLOAK/,'process readiness does not require Keycloak or business Services to be deployed');
 });
 check('invalid image digest is rejected',()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'--set','image.digest=sha256:short'],false));
 

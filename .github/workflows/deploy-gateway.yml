@@ -23,12 +23,6 @@ jobs:
       AWS_REGION: ap-southeast-1
       AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       GATEWAY_ISSUER: ${{ vars.GATEWAY_ISSUER }}
-      GATEWAY_JWK_SET_URI: ${{ vars.GATEWAY_JWK_SET_URI }}
-      GATEWAY_KEYCLOAK: ${{ vars.GATEWAY_KEYCLOAK }}
-      GATEWAY_SPECIFICATION: ${{ vars.GATEWAY_SPECIFICATION }}
-      GATEWAY_FORMULATION: ${{ vars.GATEWAY_FORMULATION }}
-      GATEWAY_COMPLIANCE: ${{ vars.GATEWAY_COMPLIANCE }}
-      GATEWAY_LABEL_WORKFLOW: ${{ vars.GATEWAY_LABEL_WORKFLOW }}
       AVAILABLE_CREDIT_USD: ${{ secrets.AVAILABLE_CREDIT_USD }}
       APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
     steps:
@@ -48,12 +42,6 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test -n "$AWS_ROLE_ARN"
           test -n "$GATEWAY_ISSUER"
-          test -n "$GATEWAY_JWK_SET_URI"
-          test -n "$GATEWAY_KEYCLOAK"
-          test -n "$GATEWAY_SPECIFICATION"
-          test -n "$GATEWAY_FORMULATION"
-          test -n "$GATEWAY_COMPLIANCE"
-          test -n "$GATEWAY_LABEL_WORKFLOW"
           python3 -m unittest discover -s tests -p 'test_gateway_deploy_runtime.py' -v
           python3 platform/gateway/deploy-runtime-values.py > "$RUNNER_TEMP/gateway-runtime-values.json"
           if ! python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/gateway-budget-gate.log" 2>&1; then
@@ -92,33 +80,6 @@ jobs:
             done
           done
           test "$(kubectl auth can-i create pods/portforward --namespace gateway)" = yes
-          for item in 'GATEWAY_KEYCLOAK:keycloak' 'GATEWAY_SPECIFICATION:specification' 'GATEWAY_FORMULATION:formulation' 'GATEWAY_COMPLIANCE:compliance' 'GATEWAY_LABEL_WORKFLOW:label-workflow'; do
-            name=${item%%:*}; namespace=${item##*:}; uri=${!name}
-            host=$(python3 -c 'from urllib.parse import urlsplit; import sys; print(urlsplit(sys.argv[1]).hostname or "")' "$uri")
-            service=${host%%.*}
-            case "$host" in *."$namespace".svc.cluster.local) ;; *) echo "::error::$name does not target the $namespace cluster Service DNS zone"; exit 1 ;; esac
-            kubectl get namespace "$namespace" >/dev/null
-            kubectl get service "$service" --namespace "$namespace" >/dev/null
-          done
-      - name: Verify actual Keycloak issuer and JWKS
-        env:
-          ISSUER: ${{ vars.GATEWAY_ISSUER }}
-          JWKS_URI: ${{ vars.GATEWAY_JWK_SET_URI }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json, os, urllib.request
-          issuer=os.environ['ISSUER'].rstrip('/')
-          with urllib.request.urlopen(issuer+'/.well-known/openid-configuration', timeout=10) as response:
-              metadata=json.load(response)
-          if metadata.get('issuer','').rstrip('/') != issuer:
-              raise SystemExit('Keycloak discovery issuer does not match GATEWAY_ISSUER')
-          with urllib.request.urlopen(os.environ['JWKS_URI'], timeout=10) as response:
-              jwks=json.load(response)
-          if not isinstance(jwks.get('keys'),list) or not jwks['keys']:
-              raise SystemExit('Configured JWKS endpoint did not return signing keys')
-          print('Keycloak discovery issuer and JWKS endpoint verified; key material not recorded.')
-          PY
       - name: Verify anonymous GHCR pull for the pinned linux/amd64 image
         run: |
           set -euo pipefail

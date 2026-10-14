@@ -4,20 +4,16 @@ The protected workflow `.github/workflows/deploy-gateway.yml` is manual-only and
 
 ## GitHub configuration required before dispatch
 
-In **Repository → Settings → Environments → staging**, retain the required reviewer and configure these **Environment variables** from the actual staging deployment:
+In **Repository → Settings → Environments → staging**, retain the required reviewer and configure these **Environment variables**:
 
 | Variable | Required value |
 | --- | --- |
 | `AWS_DEPLOY_ROLE_ARN` | ARN of the existing `FoodLabelFlowStagingDeploy` role in account `679857346122` |
-| `GATEWAY_ISSUER` | Actual external HTTPS issuer ending `/auth/realms/spectrace` |
-| `GATEWAY_JWK_SET_URI` | Actual in-cluster Keycloak Service URI ending `/auth/realms/spectrace/protocol/openid-connect/certs` |
-| `GATEWAY_KEYCLOAK` | Actual Keycloak Service DNS name, in `keycloak` namespace, TCP/8080 |
-| `GATEWAY_SPECIFICATION` | Actual Specification Service DNS name, in `specification` namespace, TCP/8080 |
-| `GATEWAY_FORMULATION` | Actual Formulation Service DNS name, in `formulation` namespace, TCP/8080 |
-| `GATEWAY_COMPLIANCE` | Actual Compliance Service DNS name, in `compliance` namespace, TCP/8080 |
-| `GATEWAY_LABEL_WORKFLOW` | Actual Label Workflow Service DNS name, in `label-workflow` namespace, TCP/8080 |
+| `GATEWAY_ISSUER` | Actual externally reachable HTTPS origin plus `/auth/realms/spectrace`, matching the Keycloak `KC_HOSTNAME` configuration |
 
-Service values use `http://<actual-service>.<namespace>.svc.cluster.local:8080`. Do not enter a guessed hostname: the workflow checks that every named Kubernetes Service exists before installing Gateway. Issuer discovery and the configured JWKS endpoint are fetched and verified before the install. The exact CORS origin, realm, audience, and route roles are set in the chart values from the reviewed repository configuration.
+The runtime renderer derives the JWKS path from this issuer and uses the existing internal Keycloak Operator contract (`spectrace-keycloak` CR → `spectrace-keycloak-service`, namespace `keycloak`, HTTP/8080). It derives the four business Service DNS names from the shared Helm chart's `<release>-<serviceName>` helper and the reviewed release names. These are routing configuration, not evidence that those Services are deployed. Initial rollout checks only the Gateway process and its HTTP readiness; it does not query Keycloak discovery, fetch JWKS, or require business Services. Authenticated login and upstream business acceptance remain a separate E2E milestone after those workloads are installed.
+
+The exact CORS origin, realm, audience, and route roles are set in the chart values from the reviewed repository configuration. The Gateway JWT validation remains enabled. A request without a valid token to protected API paths must still receive 401.
 
 In the same protected Environment, configure at least one **Environment secret**:
 
@@ -28,7 +24,7 @@ The existing fail-closed pricing/funding gate accepts the sum of those sources; 
 
 ## AWS and runner prerequisites
 
-- The `staging-vpc` self-hosted GitHub runner must be online and connected to the private EKS API and the required staging services.
+- The `staging-vpc` self-hosted GitHub runner must be online and connected to the private EKS API. Backend Services are not a prerequisite for process readiness.
 - The existing deploy role's OIDC trust must accept only this repository's `staging` Environment subject (`repo:hxj04121-lab/FoodLabelFlow-Microservices:environment:staging`) and `token.actions.githubusercontent.com` audience. The workflow receives no long-lived AWS credentials.
 - The role must already authorize the existing cluster, with namespaced create for Deployments, Services, ServiceAccounts, NetworkPolicies, and Helm release Secrets; get/list/watch for rollout and evidence reads; and `create pods/portforward` for the private HTTP smoke check. This workflow does not modify IAM or Kubernetes RBAC.
 - The Gateway GHCR package must be pullable by the EKS nodes without an unapproved Kubernetes pull secret. The exact immutable image is rendered and checked before installation.

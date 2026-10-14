@@ -26,7 +26,7 @@ networkPolicy:
         - namespaceSelector:
             matchLabels: {kubernetes.io/metadata.name: keycloak}
           podSelector:
-            matchLabels: {app.kubernetes.io/name: keycloak}
+            matchLabels: {app: keycloak}
       ports: [{port: 8080, protocol: TCP}]
     - to:
         - namespaceSelector:
