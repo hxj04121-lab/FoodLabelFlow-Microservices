@@ -44,16 +44,27 @@ Configure these **secrets** only through the approved secret manager:
 | `PROMETHEUS_URL`, `GRAFANA_CLOUD_METRICS_USER` | Alloy metrics remote-write configuration if used by G1 |
 | `LOKI_URL`, `GRAFANA_CLOUD_LOGS_USER`, `GRAFANA_CLOUD_API_KEY` | Alloy log shipping configuration if used by G1 |
 
-The existing quality gate also reads repository secret `SONAR_TOKEN`; keep its value in GitHub Secrets. The workflow sets `AWS_REGION=ap-southeast-1`. Generate database account values as 32–128 characters from `[A-Za-z0-9_-]`. The helper compares the configured target account with the role's STS identity and verifies the Kubernetes context before writing any Secret.
+## Repository Actions settings
+
+| Kind | Name | Required setting |
+|---|---|---|
+| Variable | `SONARQUBE_ENABLED` | `true` so the Sonar quality gate runs |
+| Variable | `SECURITY_SCANS_ENABLED` | `true` so security scanning runs |
+| Variable | `SONAR_HOST_URL` | Approved SonarQube host |
+| Secret | `SONAR_TOKEN` | SonarQube project token |
+| Secret | `NVD_API_KEY` | Optional; reduces unauthenticated NVD rate limiting for Dependency-Check |
+
+`GITHUB_TOKEN` is supplied by GitHub Actions and is not manually configured. The workflow sets `AWS_REGION=ap-southeast-1`. Generate database account values as 32–128 characters from `[A-Za-z0-9_-]`. The helper compares the configured target account with the role's STS identity and verifies the Kubernetes context before writing any Secret.
 
 ## AWS owner checks
 
-- [ ] Reconcile the current AWS Budget forecast, actual charges, and eligible credits against the configured monthly limit. The latest query omitted spend fields and an earlier same-day response showed an over-limit forecast; keep the staging window closed until the account owner confirms the current cost basis.
+- [ ] Reconcile the current AWS Budget forecast, actual charges, and eligible credits against the configured monthly limit. The latest query shows an over-limit forecast; actual spend is zero, which is not a credit balance. Keep the staging window closed until the account owner confirms the current cost basis.
 - [ ] Confirm Terraform state ownership and the backend configuration before running a plan or apply. The repository does not contain `infra/terraform/backend.hcl`; do not initialize a guessed backend.
 - [ ] Verify the account-level GitHub Actions OIDC provider and the trust policies for the approved plan and deploy roles.
 - [ ] Review the deploy role's EKS access scope. The managed EKS edit policy can read and write Kubernetes Secrets in its namespaces; require narrower custom RBAC if that scope is not approved.
 - [ ] Verify the VPC CNI network-policy agent is enabled and provide the approved VPC-connected runner path for live NetworkPolicy and Gateway tests.
-- [ ] Confirm the Gateway HTTPS listener, certificate, and target health before enabling the smoke test.
+- [ ] Confirm the Gateway HTTPS listener, certificate, target health, and security-group ingress before enabling the smoke test. Permit only the approved HTTPS path.
+- [ ] Verify the RDS port 3306 security-group references map only to authorized worker/node or explicitly approved workload security groups.
 - [ ] Approve the G2 staging window only after all cost, state, network, and GitHub Environment checks pass.
 - [ ] After the demo, identify only resources created for this project, obtain the resource owner's approval, and verify destruction. Do not delete shared or pre-existing resources.
 
@@ -61,7 +72,8 @@ The existing quality gate also reads repository secret `SONAR_TOKEN`; keep its v
 
 - Read-only AWS checks confirmed a non-root assumed identity matching the configured staging account. The cluster is private-only and this workstation cannot reach its Kubernetes API; workload and network-policy-agent state remain unknown.
 - The private database is available. The Gateway ingress is not ready for a staging smoke test.
-- The latest budget response omitted actual and forecast fields; an earlier same-day response showed an over-limit forecast. Eligible credits and project charges need owner reconciliation.
+- The load-balancer security group has no public HTTP/HTTPS ingress rule. Database port 3306 is restricted to security-group references, but their worker/node mapping remains unverified.
+- The latest budget response shows an over-limit forecast and zero actual spend. Eligible credits and project charges need owner reconciliation.
 - GitHub staging deployment protection exists, but required variables/secrets are not configured and self-review prevention / main branch protection need administrator verification.
 - No AWS apply, Kubernetes mutation, Secret injection, deployment, or destroy was performed for this work.
 

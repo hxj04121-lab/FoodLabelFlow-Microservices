@@ -5,10 +5,11 @@ This public evidence records only the staging readiness decision. Account identi
 ## Observed state
 
 - AWS STS identity matched the owner-configured target account.
-- The latest AWS Budgets query omitted actual-spend and forecast fields. An earlier same-day response showed a forecast above the configured monthly limit. Eligible credits and project-attributed charges remain unverified; the staging window must stay closed until the account owner reconciles the current values.
+- A fresh AWS Budgets query shows forecast spend above the configured monthly limit and actual spend at zero. Eligible credits and project-attributed charges remain unverified; the staging window must stay closed until the account owner reconciles current values.
 - The EKS cluster is active with a private-only API. The workstation could not reach that endpoint, so Kubernetes authorization, workload state, and VPC CNI network-policy-agent state remain UNKNOWN.
 - The private MySQL RDS instance is available. No live database-account grant check was performed.
-- The internal Gateway ingress is not ready for the staging smoke test. No public listener or target health was established by this read-only check.
+- The internal Gateway ingress is not ready for the staging smoke test. Its security group has no public HTTP/HTTPS ingress rule and it has no listener.
+- RDS port 3306 is limited to security-group references, but the referenced source group could not be verified as an authorized worker/node group. Treat node-only access as UNKNOWN.
 - The GitHub `staging` Environment is restricted to `main` and requires an approver, but its deployment variables and secrets are not configured. Self-review prevention and `main` branch protection need administrator verification.
 - The account-level GitHub Actions OIDC provider and current deploy-role trust policy are not verified. Terraform state ownership and the backend configuration are also UNKNOWN.
 
