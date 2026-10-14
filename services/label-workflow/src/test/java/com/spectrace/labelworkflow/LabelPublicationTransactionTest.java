@@ -28,6 +28,7 @@ class LabelPublicationTransactionTest {
     /** MySqlTestcontainers shares one database across the module run, so each test starts from the label tables cleared. */
     @BeforeEach
     void clearLabelState() {
+        jdbc.update("DELETE FROM label_review_task");
         jdbc.update("DELETE FROM label_publication");
         jdbc.update("DELETE FROM label_decision");
         jdbc.update("DELETE FROM label_validation_record");
