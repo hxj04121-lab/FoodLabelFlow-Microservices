@@ -30,6 +30,16 @@ jobs:
       - name: Validate protected, per-service Kubernetes Secret injection and cleanup
         run: bash tests/test-runtime-secrets.sh
 
+  deployment-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate staging deployment evidence capture
+        run: python3 -m unittest discover -s tests -p 'test_deployment_record.py' -v
+
   observability-alerts:
     runs-on: ubuntu-latest
     steps:
