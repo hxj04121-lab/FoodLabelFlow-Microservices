@@ -1,28 +1,26 @@
 # Remaining Blockers for Full Staging Deployment
 
-**Current result: BLOCKED.** The private EKS API is reachable from the existing VPC CloudShell, but no AWS or Kubernetes resources were changed.
+**Current result: BLOCKED.** The private cluster API is reachable, but the application is not deployed and no AWS or Kubernetes write has been made.
 
-## P0 — resolve before deployment writes
+## P0 — before deployment writes
 
-1. **Mandatory staging gate:** The workflow requires explicit deployment-window, Compliance experiment, and k6 hours plus a verified available-credit input. None was supplied. Public Price List metadata is now refreshed and validated; the gate still cannot run without those owner inputs. It was not bypassed or modified, and no cost report was generated.
-2. **Kubernetes bootstrap authorization:** The existing `FoodLabelFlowStagingDeploy` access entry grants `AmazonEKSEditPolicy` only in `staging`, `gateway`, `specification`, `formulation`, `compliance`, and `label-workflow`; its `AmazonEKSViewPolicy` covers `keycloak`, `rabbitmq`, and `kube-system`. It cannot write the Keycloak/RabbitMQ/operator namespaces, access `observability`, or create cluster-scoped CRDs/StorageClasses. A temporary cluster-wide `AmazonEKSClusterAdminPolicy` association to this role would permit full Kubernetes API access, including reading/modifying/deleting Secrets and cluster-scoped resources. It must be explicitly approved at action time and disassociated after deployment verification; no such change has been made.
-3. **Terraform plan:** The current remote-state baseline plan has 1 create, 30 updates, 19 no-ops, and 0 deletes/replacements. It scales general desired capacity 1 → 3, updates the launch-template version (possible node roll), and adds all-protocol/all-port node self-ingress. It omits the dedicated Compliance group and all EKS add-ons because their default flags are off. Do not Apply this incomplete plan.
-4. **Supported deployment path:** Main has no apply-capable workflow. The interactive `scripts/staging.sh` exists only in Draft PR #39, which is based on a feature branch; its Apply path is not a merged deployment route. The GitHub `staging` Environment has a required reviewer but currently has no variables or secrets. Self-hosted runner inventory is HTTP 403, so VPC runner presence is UNKNOWN.
-5. **Runtime inputs and images:** Main has no runtime-secret workflow/caller; the service chart defaults `envFrom` to empty. PR #52 is still `CHANGES_REQUESTED` and its checks were partly running at the last refresh. Exact GHCR digests for Specification, Formulation, Compliance, and Label Workflow are not verified. PR #54's Gateway digest is the only current service image digest evidenced.
-6. **Application route:** The ALB is internal and has no listener. ACM listing is denied, and no FQDN, certificate ARN, or approved ingress source CIDRs were supplied. The app has no usable URL; keep the EKS API private and do not present the internal ALB DNS name as public.
-7. **PR review:** PR #39 is Draft/open and Terraform plan is skipped; PR #52 has changes requested; PR #54 is approved/open but Pages and deployed E2E were skipped; PR #55 is Draft and its single-node/shared-namespace overlay is not acceptable. PR #56 is the Draft readiness/test-cleanup PR.
+1. **Mandatory budget gate:** Supply approved deployment-window, experiment, and load-test durations plus a verified available-credit input. Public pricing metadata is refreshed and validated; the gate was not run, bypassed, or modified. No cost estimate/report was generated.
+2. **Kubernetes bootstrap access:** Current access is namespace-scoped and cannot inspect all required namespaces or create cluster-scoped components. Any temporary cluster-wide administrator access would reach all Kubernetes resources, including Secrets, and requires action-time approval plus a removal plan.
+3. **Final Terraform review:** Current state-backed plans are foundations, not a full deployment plan. They include node-group changes that may roll nodes and a broad node-to-node network rule. Add-on settings and their ingress effects still need review; do not Apply an incomplete plan.
+4. **Supported release path:** Main lacks a reviewed apply-capable deployment workflow. Protected runtime configuration and a VPC-connected release runner are not verified.
+5. **Images and runtime values:** Immutable digests for every service and protected runtime Secret wiring are not verified. Do not deploy placeholder tags or use database administrator credentials for applications.
+6. **Application route:** Internal ingress has no listener or registered targets. The owner has not supplied the approved domain, certificate, or source ranges needed for the selected route.
 
-## P1 — required for workload acceptance
+## P1 — workload acceptance
 
-- The seven readable application/operator namespaces currently have zero Deployments, StatefulSets, Pods, Services, PVCs, and NetworkPolicies. `observability` and cluster-scoped StorageClasses/CRDs remain inaccessible.
-- `aws-node`, both CoreDNS Pods, and kube-proxy are Ready. EKS managed add-ons are empty; EBS CSI, NetworkPolicy enforcement, and other self-managed platform components remain unverified.
-- The current general node group is one `t3.medium`; account Standard On-Demand quota is 16 vCPU. The dedicated `c6i.large` Compliance group is absent. Preserve service requests, the Compliance taint, and two-zone spread.
-- Create isolated schemas/users for each service and a separate least-privilege Keycloak database identity. Inject runtime values only through a protected deployment path; do not use the RDS master credential for workloads.
-- Install the RabbitMQ/Keycloak operators, EBS storage, NetworkPolicy enforcement, and observability only after their exact existing state and access are verified. Do not overwrite PVCs or existing data.
-- Run real VPC/EKS probes for DB connectivity, RabbitMQ publish/consume, Keycloak discovery/JWKS/JWT, service-to-service calls, Gateway routing, NetworkPolicy isolation, and frontend E2E. CI/local checks are not staging acceptance.
+- No application workloads were found in readable namespaces; other scopes remain UNKNOWN.
+- Core networking and DNS are Ready, while storage integration, network-policy enforcement, operators, and observability remain unverified.
+- Deploy only after confirming node capacity, workload placement, persistent-volume behavior, and required isolation policies from the cluster.
+- Create isolated database identities for each service and identity provider. Inject values only through the protected release path.
+- Run live database, messaging, identity, service-to-service, gateway, network-isolation, and frontend checks. CI/local validation is not staging acceptance.
 
-## Next write plan
+## Next write sequence
 
-After the gate inputs are complete and the exact access change is approved, prepare a final state-linked plan that reuses the existing VPC/EKS/RDS/ALB, scales general capacity, adds the dedicated Compliance group, and enables only missing add-ons. Review node rotation and node-to-node security-group access. Keep the cluster API private. Do not enable the ALB-backed HTTPS ingress until the owner supplies an approved domain, issued certificate, and source CIDRs.
+After the budget gate passes and access is approved, prepare a complete state-backed plan, inventory the cluster, install only missing foundations, configure protected runtime values, deploy pinned images, and run the acceptance checks. Preserve the private API and existing database/storage data. Do not enable external ingress without approved routing inputs.
 
-No Apply, IAM/EKS access-policy change, CRD/operator installation, database/Secret write, Kubernetes workload deployment, or cleanup has been executed.
+No Terraform Apply/Destroy/Import, permission change, cluster installation, database/Secret write, workload deployment, or cleanup has been executed.

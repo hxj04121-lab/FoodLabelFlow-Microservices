@@ -1,51 +1,24 @@
 # Terraform State and Plan Safety
 
-**As of:** 2026-10-14 10:42 UTC
-**Decision:** **BLOCKED from Apply.** The protected state and a current baseline plan were verified, but the baseline is not a full deployment plan and the mandatory staging gate has not passed.
+**As of:** 2026-10-14
+**Decision:** **BLOCKED from Apply.** Protected remote state and the active workspace were verified. The plans reviewed so far are incomplete foundations.
 
-## State inventory
+## State and plan review
 
-- The tracked backend is S3. Metadata checks confirmed the reported state object exists and the bucket is versioned. The bucket/key and object metadata remain omitted from this public report.
-- Terraform initialized against that remote backend without state migration. The current workspace is `default`; `terraform state list` returned 53 managed addresses. No state values or Secret values were printed.
-- The remote state lock was acquired and released by the plan. No Apply, Destroy, Import, state migration, or state repair ran.
-- CI `plan` jobs in PRs #39 and #52 are skipped. The local plan below is the only current state-backed plan reviewed here; it was saved outside the repository with restrictive permissions.
-
-## Baseline plan
-
-Plan generated 2026-10-14 around 10:26 UTC from PR #56 head `f6dc165`, using default Terraform variables and the verified `default` workspace:
-
-| Action | Count |
-|---|---:|
-| Create | 1 |
-| Update | 30 |
-| No-op | 19 |
-| Delete or replace | 0 |
-
-The planned create is a node security-group self-ingress rule allowing all protocols and ports between instances in the existing node security group. The in-place updates include general-node desired capacity 1 → 3 (bounded 1–3), launch-template tags/version changes, and mostly resource tags. The managed node group moves from launch-template version 1 to the new latest version, which can roll existing nodes. The plan does not create or replace the VPC, EKS cluster, RDS, or ALB.
-
-A second plan set `general_desired_size=3`, `enable_compliance_node_group=true`, and left `enable_eks_addons=false`:
-
-| Action | Count |
-|---|---:|
-| Create | 4 |
-| Update | 31 |
-| No-op | 18 |
-| Delete or replace | 0 |
-
-It creates the dedicated Compliance node group, two cluster-autoscaler ASG tags, and the same broad node self-ingress rule. The other updates are general-node launch-template/scaling changes and in-place tags on existing network, EKS, RDS, and ALB resources. The node-group updates may roll nodes. This remains a foundation plan, not a full deployment plan: EKS add-ons, operators, applications, runtime Secrets, and ingress are not included.
-
-This is **not** the full deployment plan. Defaults leave `enable_compliance_node_group=false` and `enable_eks_addons=false`; no domain, certificate, or ALB source CIDRs are configured. It therefore does not plan the Compliance pool, EKS add-ons, operators, application workloads, database users, or runtime Secrets.
+- Terraform initialized against the protected remote backend without migration. A state inventory completed without printing state values or Secret values.
+- The state-backed baseline plan and a Compliance-foundation variant were inspected. Neither proposed deletes or replacements.
+- Both plans include node-group changes that may roll nodes and a node-to-node network rule allowing all protocols and ports. These require explicit review before Apply.
+- The foundation variant enables the dedicated workload group but leaves EKS add-ons disabled. Neither plan installs operators, workloads, database users, runtime Secrets, or ingress.
+- Plans were saved outside the repository with restrictive permissions. No Apply, Destroy, Import, migration, or state repair was run.
 
 ## Apply blockers
 
-1. The exact plan has not been approved after review. In particular, review the all-protocol node self-ingress rule and potential managed-node-group rollout.
-2. The required STCN-37 gate was not run because no approved deployment/experiment/k6 hours or verified available-credit input was supplied. Public Price List metadata has been refreshed and validated without generating a cost estimate/report; the gate was not bypassed.
-3. The main branch has no apply-capable workflow. The staging script is only in Draft PR #39 on a feature-branch base; do not deploy from that unmerged branch.
-4. The current EKS deployment role has namespace-scoped Kubernetes access. It cannot install cluster-scoped CRDs/StorageClasses or access the `observability` namespace. See [staging blockers](staging-remaining-blockers.md).
-5. Neither reviewed plan includes EKS add-ons. A full plan still needs reviewed add-on settings; the add-on module also requires an owner-provided domain, certificate, and ingress CIDRs and changes the ALB path.
+1. The mandatory staging gate has not run. Approved deployment/experiment/load-test hours and a verified available-credit input are missing. Public pricing metadata is refreshed and validated; no estimate/report was generated and the gate was not bypassed.
+2. Current Kubernetes access is namespace-scoped. Cluster bootstrap and several required namespaces need separately reviewed access.
+3. The main branch lacks a reviewed apply-capable deployment workflow.
+4. The add-on configuration still needs a complete plan. It affects the ingress path and requires owner-approved routing inputs.
+5. Runtime configuration and immutable images for every application service are not verified.
 
-Do not Apply this baseline. Before a deployment Apply, prepare a state-linked plan with the final approved variables and access path, inspect every action, and preserve the private EKS endpoint and existing RDS/ALB data. A plan with no delete/replace actions does not prove the cluster can accept the complete application.
+Do not Apply either foundation plan. Before deployment, prepare a complete state-backed plan with approved inputs, inspect every action, resolve node rollout and network-rule changes, and pass the staging gate. A plan with no delete/replace actions does not prove application readiness.
 
-## Offline validation
-
-`terraform fmt -check -recursive`, `terraform init -backend=false -input=false`, and `terraform validate` passed on the latest-main snapshot. These validate syntax and schemas only; they do not authorize or prove a live Apply.
+Offline formatting, initialization, and validation checks passed on the recorded source snapshot. They establish neither state safety nor successful deployment.
