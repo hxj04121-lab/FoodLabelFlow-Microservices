@@ -207,6 +207,13 @@ async function login(page: Page) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Continue with Keycloak', exact: true }).click()
 }
+async function capture(page: Page, path: string) {
+  await page.evaluate(() => {
+    window.scrollTo(0, 0)
+    document.querySelectorAll<HTMLElement>('.table-scroll, .impact-table-wrap').forEach(element => { element.scrollLeft = 0 })
+  })
+  await page.screenshot({ path, fullPage: true })
+}
 test('PKCE round trip displays token organisation and roles, forwards bearer, and signs out', async ({ page }) => {
   await login(page)
   await expect(page.getByRole('heading', { name: 'Your organisation’s workspace' })).toBeVisible()
@@ -222,9 +229,9 @@ test('PKCE round trip displays token organisation and roles, forwards bearer, an
   const storage = await page.evaluate(() => ({ local: JSON.stringify(localStorage), session: JSON.stringify(sessionStorage) }))
   expect(storage.local).not.toContain(sentToken); expect(storage.session).not.toContain(sentToken)
   expect(storage.session).not.toContain('code_verifier')
-  await page.screenshot({ path: 'test-results/signin/desktop.png', fullPage: true })
+  await capture(page, 'test-results/signin/desktop.png')
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.screenshot({ path: 'test-results/signin/mobile.png', fullPage: true })
+  await capture(page, 'test-results/signin/mobile.png')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await saveCoverage(page)
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
@@ -316,9 +323,9 @@ test('STCN-101 reads exact confirmed evidence, version references and the linked
   await expect(page.getByRole('status')).toContainText('Candidate specification verified: spec_001_v2')
   await page.getByRole('button', { name: 'Formula:', exact: false }).click()
   await expect(page.getByRole('status')).toContainText('Formula verified: formula_001_v2')
-  await page.screenshot({ path: 'test-results/signin/impact-desktop.png', fullPage: true })
+  await capture(page, 'test-results/signin/impact-desktop.png')
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.screenshot({ path: 'test-results/signin/impact-mobile.png', fullPage: true })
+  await capture(page, 'test-results/signin/impact-mobile.png')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   expect(impactRequests.every(req => req.authenticated && req.correlation && !req.query.includes('org'))).toBe(true)
   await page.getByRole('button', { name: 'Open label:', exact: false }).click()
@@ -432,9 +439,9 @@ test('STCN-74 creates, validates and submits an exact label through authenticate
   await page.getByRole('button', { name: 'Validate draft', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Validation passed', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Submit for review' })).toBeEnabled()
-  await page.screenshot({ path: 'test-results/signin/labels-flow-desktop.png', fullPage: true })
+  await capture(page, 'test-results/signin/labels-flow-desktop.png')
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.screenshot({ path: 'test-results/signin/labels-flow-mobile.png', fullPage: true })
+  await capture(page, 'test-results/signin/labels-flow-mobile.png')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.getByRole('button', { name: 'Submit for review' }).click()
   await expect(page.getByRole('status')).toContainText('Submitted for review')
@@ -638,9 +645,9 @@ test('STCN-74 preserves severity separately from blocking and pass status', asyn
   await expect(page.getByText('Error · NONBLOCKING_RULE', { exact: true })).toBeVisible()
   await expect(page.getByText('Does not block submission · Check not passed', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Submit for review' })).toBeEnabled()
-  await page.screenshot({ path: 'test-results/signin/labels-desktop.png', fullPage: true })
+  await capture(page, 'test-results/signin/labels-desktop.png')
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.screenshot({ path: 'test-results/signin/labels-mobile.png', fullPage: true })
+  await capture(page, 'test-results/signin/labels-mobile.png')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
@@ -656,9 +663,9 @@ test('STCN-75/76 reviewer records approval and publisher explicitly confirms pub
   await openReviewVersion(page)
   await expect(page.getByRole('button', { name: 'Publish version', exact: true })).toHaveCount(0)
   await page.getByLabel('Review comments (optional)').fill('Checked the declared allergens.')
-  await page.screenshot({ path: 'test-results/signin/labels-review-desktop.png', fullPage: true })
+  await capture(page, 'test-results/signin/labels-review-desktop.png')
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.screenshot({ path: 'test-results/signin/labels-review-mobile.png', fullPage: true })
+  await capture(page, 'test-results/signin/labels-review-mobile.png')
   await page.getByRole('button', { name: 'Approve version', exact: true }).click()
   await expect(page.getByText('APPROVED', { exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Decision recorded', exact: true })).toBeVisible()
@@ -674,9 +681,9 @@ test('STCN-75/76 reviewer records approval and publisher explicitly confirms pub
     ['/api/labels/label-one/publish', null],
   ])
   await page.setViewportSize({ width: 1280, height: 720 })
-  await page.screenshot({ path: 'test-results/signin/labels-published-desktop.png', fullPage: true })
+  await capture(page, 'test-results/signin/labels-published-desktop.png')
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.screenshot({ path: 'test-results/signin/labels-published-mobile.png', fullPage: true })
+  await capture(page, 'test-results/signin/labels-published-mobile.png')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
@@ -728,3 +735,28 @@ test('STCN-77 a label officer cannot see review or publication actions', async (
   await expect(page.getByText('APPROVED', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Publish version', exact: true })).toHaveCount(0)
 })
+
+for (const width of [1440, 900, 390]) {
+  test(`unified authenticated surfaces remain usable at ${width}px`, async ({ page }) => {
+    actorRoles = ['CHANGE_MANAGER', 'LABEL_OFFICER']
+    await page.setViewportSize({ width, height: 1000 })
+    await page.goto('/')
+    await expect(page.getByRole('button', { name: 'Continue with Keycloak' })).toBeEnabled()
+    await capture(page, `test-results/ui-polish/signin-${width}.png`)
+    await page.getByRole('button', { name: 'Continue with Keycloak' }).click()
+    await page.getByRole('button', { name: 'Load products' }).click()
+    await expect(page.getByText('Organisation product', { exact: true })).toBeVisible()
+    for (const view of ['Workspace', 'Labels', 'Impact inbox']) {
+      await page.getByRole('button', { name: view, exact: true }).click()
+      if (view === 'Labels') await createDraft(page)
+      if (view === 'Impact inbox') {
+        await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click()
+        await page.getByRole('button', { name: 'View finding finding_002', exact: true }).click()
+        await expect(page.getByRole('heading', { name: 'Finding finding_002', exact: true })).toBeVisible()
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await expect(page.getByRole('button', { name: view, exact: true })).toHaveAttribute('aria-current', 'page')
+      await capture(page, `test-results/ui-polish/auth-${view.replaceAll(' ', '-').toLowerCase()}-${width}.png`)
+    }
+  })
+}

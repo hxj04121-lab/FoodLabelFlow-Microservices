@@ -38,7 +38,6 @@ export function Upcoming({ kind }: { kind: 'labels' | 'impact' | 'reviews' }) {
     <>
       <div className="page-title">
         <div>
-          <div className="eyebrow">CONTROLLED WORKFLOW</div>
           <h1>{content.title}</h1>
           <p>{content.subtitle}</p>
         </div>

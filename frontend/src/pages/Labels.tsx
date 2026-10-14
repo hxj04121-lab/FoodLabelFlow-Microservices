@@ -164,7 +164,6 @@ export function Labels() {
     <>
       <div className="page-title">
         <div>
-          <div className="eyebrow">LABEL CORRECTNESS</div>
           <h1>Labels</h1>
           <p>Create and reopen a versioned label draft from the current formula.</p>
         </div>

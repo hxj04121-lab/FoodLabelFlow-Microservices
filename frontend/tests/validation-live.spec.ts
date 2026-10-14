@@ -60,7 +60,7 @@ test('validates a seeded PASS and a new blocking FAIL through the browser and pe
   )
 
   // A new draft has no structured declarations, so the real evaluator must block it.
-  await page.getByLabel('Product').selectOption('prod_usda_1106285')
+  await page.getByLabel('Product', { exact: true }).selectOption('prod_usda_1106285')
   await page
     .getByRole('checkbox', {
       name: 'Enable the local demo label-officer identity for this form',
