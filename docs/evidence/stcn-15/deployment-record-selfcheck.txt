@@ -1,0 +1,12 @@
+test_records_workflow_commit_digest_and_ready_deployment_revision (test_deployment_record.DeploymentRecordTest) ... ok
+test_rejects_failed_rollout (test_deployment_record.DeploymentRecordTest) ... ok
+test_rejects_image_mismatched_with_successful_publish_output (test_deployment_record.DeploymentRecordTest) ... ok
+test_rejects_mutable_or_foreign_image (test_deployment_record.DeploymentRecordTest) ... ok
+test_rejects_unprotected_context_and_output_outside_runner_temp (test_deployment_record.DeploymentRecordTest) ... ok
+test_rejects_unready_or_wrong_revision_deployment (test_deployment_record.DeploymentRecordTest) ... ok
+test_rejects_wrong_aws_account_or_cluster_context (test_deployment_record.DeploymentRecordTest) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 3.537s
+
+OK

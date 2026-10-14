@@ -18,6 +18,12 @@ def image_for(service):
     return f"ghcr.io/hxj04121-lab/foodlabelflow-microservices/{service}@sha256:" + "b" * 64
 
 
+ACCOUNT_ID = "123456789012"
+REGION = "ap-southeast-1"
+CLUSTER_NAME = "spectrace-staging"
+CLUSTER_ARN = f"arn:aws:eks:{REGION}:{ACCOUNT_ID}:cluster/{CLUSTER_NAME}"
+
+
 def deployment(service=SERVICE, image=None, ready=2, revision="7"):
     image = image or image_for(service)
     return {
@@ -55,6 +61,9 @@ class DeploymentRecordTest(unittest.TestCase):
             "import os, sys\n"
             "with open(os.environ['KUBECTL_LOG'], 'a', encoding='utf-8') as log:\n"
             "    log.write(' '.join(sys.argv[1:]) + '\\n')\n"
+            "if sys.argv[1:3] == ['config', 'current-context']:\n"
+            "    print(os.environ['KUBECTL_CONTEXT'])\n"
+            "    raise SystemExit(0)\n"
             "if sys.argv[1:3] == ['rollout', 'status']:\n"
             "    raise SystemExit(int(os.environ.get('KUBECTL_ROLLOUT_EXIT', '0')))\n"
             "if sys.argv[1:3] == ['get', 'deployment']:\n"
@@ -64,6 +73,22 @@ class DeploymentRecordTest(unittest.TestCase):
             encoding="utf-8",
         )
         kubectl.chmod(0o755)
+        aws = self.bin_dir / "aws"
+        aws.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os, sys\n"
+            "with open(os.environ['AWSCLI_LOG'], 'a', encoding='utf-8') as log:\n"
+            "    log.write(' '.join(sys.argv[1:]) + '\\n')\n"
+            "if sys.argv[1:3] == ['sts', 'get-caller-identity']:\n"
+            "    print(os.environ['AWS_ACCOUNT_ID'])\n"
+            "    raise SystemExit(0)\n"
+            "if sys.argv[1:3] == ['eks', 'describe-cluster']:\n"
+            "    print(os.environ['AWS_CLUSTER_ARN'])\n"
+            "    raise SystemExit(0)\n"
+            "raise SystemExit(2)\n",
+            encoding="utf-8",
+        )
+        aws.chmod(0o755)
         self.env = os.environ.copy()
         self.env.update({
             "PATH": f"{self.bin_dir}:{self.env['PATH']}",
@@ -75,6 +100,11 @@ class DeploymentRecordTest(unittest.TestCase):
             "GITHUB_SHA": COMMIT,
             "GITHUB_RUN_ID": "38500000123",
             "GITHUB_SERVER_URL": "https://github.com",
+            "AWS_REGION": REGION,
+            "AWS_ACCOUNT_ID": ACCOUNT_ID,
+            "AWS_CLUSTER_ARN": CLUSTER_ARN,
+            "AWSCLI_LOG": str(self.root / "aws.log"),
+            "KUBECTL_CONTEXT": CLUSTER_ARN,
             "KUBECTL_DEPLOYMENT_JSON": json.dumps(deployment()),
             "KUBECTL_LOG": str(self.root / "kubectl.log"),
         })
@@ -87,6 +117,8 @@ class DeploymentRecordTest(unittest.TestCase):
         image = image or image_for(service)
         return subprocess.run(
             [sys.executable, str(SCRIPT), "--service", service, "--image", image,
+             "--publish-image", image, "--expected-account-id", ACCOUNT_ID,
+             "--expected-cluster-name", CLUSTER_NAME, "--region", REGION,
              "--output", str(output or self.output)],
             capture_output=True,
             text=True,
@@ -112,10 +144,19 @@ class DeploymentRecordTest(unittest.TestCase):
                     "image": image_for(service),
                     "deployment_revision": 7,
                 })
+        self.assertEqual((self.root / "aws.log").read_text(encoding="utf-8").splitlines(), [
+            line
+            for _service in SERVICES
+            for line in (
+                "sts get-caller-identity --query Account --output text",
+                f"eks describe-cluster --name {CLUSTER_NAME} --region {REGION} --query cluster.arn --output text",
+            )
+        ])
         self.assertEqual((self.root / "kubectl.log").read_text(encoding="utf-8").splitlines(), [
             line
             for service in SERVICES
             for line in (
+                "config current-context",
                 f"rollout status deployment/{service}-{service} --namespace {service} --timeout=180s",
                 f"get deployment {service}-{service} --namespace {service} --output=json",
             )
@@ -126,6 +167,31 @@ class DeploymentRecordTest(unittest.TestCase):
         for image in (valid_image.split("@", 1)[0] + ":latest", "ghcr.io/example/app@sha256:" + "b" * 64):
             with self.subTest(image=image):
                 result = self.run_recorder(image=image)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(self.output.exists())
+
+    def test_rejects_image_mismatched_with_successful_publish_output(self):
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--service", SERVICE, "--image", image_for(SERVICE),
+             "--publish-image", image_for(SERVICE).replace("b" * 64, "c" * 64),
+             "--expected-account-id", ACCOUNT_ID, "--expected-cluster-name", CLUSTER_NAME,
+             "--region", REGION, "--output", str(self.output)],
+            capture_output=True, text=True, env=self.env, check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("successful publish job output", result.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_rejects_wrong_aws_account_or_cluster_context(self):
+        for variable, value in (
+            ("AWS_ACCOUNT_ID", "999999999999"),
+            ("AWS_CLUSTER_ARN", f"arn:aws:eks:{REGION}:{ACCOUNT_ID}:cluster/other-cluster"),
+            ("KUBECTL_CONTEXT", f"arn:aws:eks:{REGION}:{ACCOUNT_ID}:cluster/other-cluster"),
+        ):
+            with self.subTest(variable=variable):
+                test_env = self.env.copy()
+                test_env[variable] = value
+                result = self.run_recorder(env=test_env)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(self.output.exists())
 

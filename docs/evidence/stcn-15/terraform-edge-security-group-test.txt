@@ -1,0 +1,7 @@
+tests/security-group.tftest.hcl... in progress
+  run "public_edge_allows_only_https_from_approved_cidrs"... pass
+  run "edge_without_certificate_remains_internal_and_closed"... pass
+tests/security-group.tftest.hcl... tearing down
+tests/security-group.tftest.hcl... pass
+
+Success! 2 passed, 0 failed.

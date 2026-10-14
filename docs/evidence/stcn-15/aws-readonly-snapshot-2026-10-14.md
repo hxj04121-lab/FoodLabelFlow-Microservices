@@ -16,3 +16,7 @@ This public evidence records only the staging readiness decision. Account identi
 ## Decision
 
 Do not run Terraform apply, change AWS or Kubernetes resources, inject runtime Secrets, or start the staging window until the account owner reconciles budget and state, an administrator completes the GitHub Environment/OIDC setup, and an authorized VPC-connected path is ready. No Root credentials were used. This file contains no secret values.
+
+## Subsequent read-only check — 14 Oct 2026
+
+The AWS Budgets console later showed the monthly forecast above the configured USD 120 limit, with actual spend at USD 0. The separate credits page showed projected remaining credits, but did not establish that they are eligible for this budget gate. The local AWS CLI currently has no credentials, and the open console session is labelled `root`; only the budget page was viewed in that session. No further AWS service queries or infrastructure changes were made. The earlier assumed-role snapshot above is historical and does not prove the current CLI identity.

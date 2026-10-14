@@ -63,11 +63,27 @@ def validate_deployment(deployment, service, image):
     return int(revision_text)
 
 
-def kubectl(args):
-    result = subprocess.run(["kubectl", *args], capture_output=True, text=True, check=False)
+def run_command(binary, args):
+    result = subprocess.run([binary, *args], capture_output=True, text=True, check=False)
     if result.returncode != 0:
-        raise RuntimeError(f"kubectl {args[0]} failed with exit code {result.returncode}")
-    return result.stdout
+        raise RuntimeError(f"{binary} {args[0]} failed with exit code {result.returncode}")
+    return result.stdout.strip()
+
+
+def verify_staging_target(account_id, cluster_name, region):
+    require(re.fullmatch(r"\d{12}", account_id) is not None, "expected staging account ID must contain 12 digits")
+    require(cluster_name and region, "expected staging cluster and AWS region are required")
+    actual_account = run_command("aws", ["sts", "get-caller-identity", "--query", "Account", "--output", "text"])
+    require(actual_account == account_id, "AWS credentials do not belong to the expected staging account")
+
+    expected_cluster_arn = f"arn:aws:eks:{region}:{account_id}:cluster/{cluster_name}"
+    actual_cluster_arn = run_command(
+        "aws", ["eks", "describe-cluster", "--name", cluster_name, "--region", region,
+                "--query", "cluster.arn", "--output", "text"]
+    )
+    require(actual_cluster_arn == expected_cluster_arn, "AWS EKS cluster does not match the expected staging cluster")
+    current_context = run_command("kubectl", ["config", "current-context"])
+    require(current_context == expected_cluster_arn, "kubectl context does not match the expected staging cluster")
 
 
 def write_record(output_path, runner_temp, record):
@@ -85,21 +101,28 @@ def write_record(output_path, runner_temp, record):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--service", required=True, choices=sorted(SERVICES))
-    parser.add_argument("--image", required=True, help="Published GHCR repository@sha256 digest from the publish job")
+    parser.add_argument("--image", required=True, help="Digest-pinned image observed in the Deployment")
+    parser.add_argument("--publish-image", required=True, help="Exact image output from this run's successful publish job")
+    parser.add_argument("--expected-account-id", required=True, help="Approved staging AWS account ID")
+    parser.add_argument("--expected-cluster-name", required=True, help="Approved staging EKS cluster name")
+    parser.add_argument("--region", required=True, help="AWS region of the approved staging EKS cluster")
     parser.add_argument("--output", required=True, help="JSON record path under RUNNER_TEMP")
     args = parser.parse_args(argv)
 
     try:
         env = os.environ
         commit, run_id, server_url = validate_identity(env)
+        require(args.image == args.publish_image,
+                "Deployment image does not match this run's successful publish job output")
         expected_prefix = f"ghcr.io/{REPOSITORY.lower()}/{args.service}@sha256:"
         require(args.image.startswith(expected_prefix) and
                 re.fullmatch(r"[a-f0-9]{64}", args.image.removeprefix(expected_prefix)) is not None,
                 "image must be this service's GHCR image pinned by a SHA-256 digest")
 
+        verify_staging_target(args.expected_account_id, args.expected_cluster_name, args.region)
         deployment_name = f"{args.service}-{args.service}"
-        kubectl(["rollout", "status", f"deployment/{deployment_name}", "--namespace", args.service, "--timeout=180s"])
-        raw = kubectl(["get", "deployment", deployment_name, "--namespace", args.service, "--output=json"])
+        run_command("kubectl", ["rollout", "status", f"deployment/{deployment_name}", "--namespace", args.service, "--timeout=180s"])
+        raw = run_command("kubectl", ["get", "deployment", deployment_name, "--namespace", args.service, "--output=json"])
         deployment = json.loads(raw)
         revision = validate_deployment(deployment, args.service, args.image)
 
