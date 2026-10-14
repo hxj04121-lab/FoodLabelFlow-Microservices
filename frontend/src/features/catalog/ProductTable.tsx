@@ -2,8 +2,6 @@ import { ProductGlyph } from '@/components/catalog-shared'
 import { Button } from '@/components/ui/button'
 import { data, groupColors, groups, type Product } from '@/data/catalog'
 import { ArrowUpRight, Search } from 'lucide-react'
-const short = (text: string) =>
-  text.length > 52 ? text.slice(0, 52) + '…' : text
 export function ProductTable({
   products,
   onSelect,
@@ -14,15 +12,16 @@ export function ProductTable({
   compact?: boolean
 }) {
   return (
-    <div className="table-scroll">
+    <div className="table-scroll" role="region" aria-label="Product records" tabIndex={0}>
       <table>
+        <caption className="sr-only">Products and their current formula versions</caption>
         <thead>
           <tr>
-            <th>Product name</th>
-            <th>Brand / owner</th>
-            <th>Formula versions</th>
-            {!compact && <th>Fixture group</th>}
-            <th>
+            <th scope="col">Product name</th>
+            <th scope="col">Brand / owner</th>
+            <th scope="col">Formula versions</th>
+            {!compact && <th scope="col">Fixture group</th>}
+            <th scope="col">
               <span className="sr-only">Actions</span>
             </th>
           </tr>
@@ -35,7 +34,7 @@ export function ProductTable({
                   <ProductGlyph index={i} />
                   <span>
                     <strong title={p.product_description}>
-                      {short(p.product_description)}
+                      {p.product_description}
                     </strong>
                     <small>FDC {p.fdc_id}</small>
                   </span>
