@@ -1,5 +1,7 @@
 # G3 M2 acceptance update — 13 October 2026, 22:45 Asia/Shanghai
 
+**Superseded:** This 13 October snapshot is historical. The [14 October acceptance addendum](G3-M2-acceptance-update-20261014.md) is authoritative for current status.
+
 This update supersedes the live PR and acceptance snapshot in the [13 October G3 handoff](../M2-HANDOFF-20261013-G3.md) and the status claims at the top of the [M2 report draft](../report/M2-technical-sections.md). It records code/CI, owner-reported local data, and real staging evidence separately. It does **not** claim G3 is complete.
 
 ## M2 G3 implementation now on main
