@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "issue": "STCN-15",
   "updated_at": "2026-10-14",
-  "source_commit": "cc724a9383b7dda1b4ef85986a8c7050a5bb3e07",
+  "source_commit": "f5b2d70b849f2a8cd7e47992ecca6e4efd8a4365",
   "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
   "aws_readonly_snapshot": "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
   "latest_aws_observation": "2026-10-14",
@@ -13,7 +13,8 @@
         "docs/evidence/stcn-15/database-bootstrap.log",
         "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466777",
-        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935983"
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935983",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682310"
       ]
     },
     "STCN-84": {
@@ -28,7 +29,12 @@
         "https://sonarcloud.io/dashboard?id=hxj04121-lab_FoodLabelFlow-Microservices&pullRequest=52",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935983",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935957",
-        "https://sonarcloud.io/dashboard?id=hxj04121-lab_FoodLabelFlow-Microservices&pullRequest=52"
+        "https://sonarcloud.io/dashboard?id=hxj04121-lab_FoodLabelFlow-Microservices&pullRequest=52",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682310",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682307",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682216",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682343",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682193"
       ]
     },
     "STCN-85": {
@@ -40,7 +46,8 @@
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989806",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935971",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545314544",
-        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545336803"
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545336803",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682310"
       ]
     },
     "STCN-86": {
@@ -54,7 +61,8 @@
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935983",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935957",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545336803",
-        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545314806"
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545314806",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682310"
       ]
     },
     "STCN-87": {
@@ -67,7 +75,8 @@
         "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
-        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545336803"
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545336803",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682310"
       ]
     },
     "STCN-88": {
@@ -77,7 +86,8 @@
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466777",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38535935983",
-        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545336803"
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545336803",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682310"
       ]
     }
   },
@@ -94,9 +104,9 @@
     "No G2 staging deployment, Gateway staging smoke, live NetworkPolicy probe, image-digest-to-Kubernetes-revision binding, staging demo, or authorized project-resource destroy has occurred."
   ],
   "workflow_run": {
-    "run_id": 38545336803,
-    "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545336803",
-    "commit_sha": "cc724a9383b7dda1b4ef85986a8c7050a5bb3e07",
+    "run_id": 38550682310,
+    "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682310",
+    "commit_sha": "f5b2d70b849f2a8cd7e47992ecca6e4efd8a4365",
     "conclusion": "success",
     "checks": [
       "backend",
@@ -114,27 +124,27 @@
     "companion_workflows": [
       {
         "name": "SWE5001 Compliance contracts",
-        "run_id": 38545314913,
-        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545314913",
+        "run_id": 38550682343,
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682343",
         "conclusion": "success"
       },
       {
         "name": "SWE5001 Helm template",
-        "run_id": 38545314544,
-        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545314544",
+        "run_id": 38550682216,
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682216",
         "conclusion": "success"
       },
       {
         "name": "Terraform validation",
-        "run_id": 38545314806,
-        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545314806",
+        "run_id": 38550682307,
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682307",
         "conclusion": "success",
         "plan": "skipped_missing_plan_credentials"
       },
       {
         "name": "AWS staging window estimate",
-        "run_id": 38545314784,
-        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38545314784",
+        "run_id": 38550682193,
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38550682193",
         "conclusion": "success"
       }
     ],

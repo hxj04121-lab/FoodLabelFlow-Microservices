@@ -20,6 +20,8 @@ For GitHub and AWS administrators. Configure names and values directly in the pr
 - [ ] Configure the GitHub Actions OIDC provider in the AWS account, then provision the separate plan and deploy roles from `infra/terraform/modules/github-oidc`. Review their trust conditions and least-privilege policies before use.
 - [ ] Keep `STAGING_WINDOW_OPEN=false` until the account owner approves the budget and staging window.
 
+The root Terraform module already wires `infra/terraform/modules/github-oidc`; role creation is disabled while `github_repository` is empty. Set the exact repository, immutable owner/repository IDs, `github_environment=staging`, and `github_branch=main` in the owner-controlled Terraform inputs. The module uses issuer `https://token.actions.githubusercontent.com`, audience `sts.amazonaws.com`, and an immutable repository/environment subject plus `refs/heads/main`. The current account lacks that provider, so `github_create_oidc_provider=true` is needed only after the account owner confirms the target. Review the plan role separately from the deploy role: plan is read-only except scoped Terraform state locking; deploy receives EKS edit access in the five application namespaces, including Kubernetes Secret operations. Set `AWS_PLAN_ROLE_ARN` and `AWS_DEPLOY_ROLE_ARN` from outputs `role_arn` and `deploy_role_arn` as Environment variables; do not configure static AWS access-key secrets.
+
 ## GitHub Environment `staging`
 
 Configure these **variables** from approved owner-controlled sources:
