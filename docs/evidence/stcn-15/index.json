@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "issue": "STCN-15",
   "updated_at": "2026-10-15",
-  "source_commit": "10660c64c237c46e9a3526cf9092eb3fa1dfb244",
+  "source_commit": "f0f569f0cbdd9583cf4222ab2c72e83333e42c04",
   "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
   "aws_readonly_snapshot": "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-15.md",
   "latest_aws_observation": "2026-10-15T00:27:15+08:00",
@@ -72,7 +72,10 @@
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38586050404",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38586050724",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38586050148",
-        "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-15.md"
+        "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-15.md",
+        "docs/evidence/stcn-15/networkpolicy-hardening-2026-10-15.md",
+        "docs/evidence/stcn-15/networkpolicy-helm-test-2026-10-15.txt",
+        "docs/evidence/stcn-15/networkpolicy-java-contract-test-2026-10-15.txt"
       ]
     },
     "STCN-86": {
