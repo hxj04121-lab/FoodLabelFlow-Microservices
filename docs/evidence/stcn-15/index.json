@@ -5,7 +5,7 @@
   "source_commit": "22df1efb42ebdb0042f116a7f286534fec2fe6c2",
   "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
   "aws_readonly_snapshot": "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
-  "latest_aws_observation": "2026-10-14T16:27:00+08:00",
+  "latest_aws_observation": "2026-10-14T16:56:00+08:00",
   "checks": {
     "STCN-83": {
       "status": "LOCAL_PRIVILEGE_TESTS_AND_CI_PASS_LIVE_RDS_PERMISSION_CHECK_PENDING",
