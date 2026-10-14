@@ -4,11 +4,13 @@
   "updated_at": "2026-10-14",
   "source_commit": "81a9fddda4c4fc87dda4625c2094a1eaa7625993",
   "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
+  "aws_readonly_snapshot": "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
   "checks": {
     "STCN-83": {
-      "status": "LOCAL_PRIVILEGE_TESTS_AND_CI_PASS_RDS_PENDING",
+      "status": "LOCAL_PRIVILEGE_TESTS_AND_CI_PASS_LIVE_RDS_PERMISSION_CHECK_PENDING",
       "evidence": [
         "docs/evidence/stcn-15/database-bootstrap.log",
+        "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466777"
       ]
     },
@@ -24,9 +26,10 @@
       ]
     },
     "STCN-85": {
-      "status": "HELM_NETWORKPOLICY_TESTS_PASS_LIVE_STAGING_PROBE_AND_G1_SECURITY_GROUP_REVIEW_BLOCKED",
+      "status": "HELM_AND_AWS_SG_SNAPSHOT_PASS_LIVE_NETWORKPROBE_BLOCKED_PRIVATE_EKS",
       "evidence": [
         "docs/evidence/stcn-15/helm-template-tests.log",
+        "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466906"
       ]
     },
@@ -34,6 +37,7 @@
       "status": "SECRET_REFERENCES_AND_REQUIRED_NAME_LIST_READY_GITHUB_ENVIRONMENT_OIDC_SETUP_BLOCKED",
       "evidence": [
         "docs/evidence/stcn-15/README.md",
+        "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52"
       ]
     },
@@ -41,6 +45,7 @@
       "status": "EVIDENCE_SCHEMA_READY_DIGEST_TO_DEPLOYMENT_BINDING_PENDING_G1",
       "evidence": [
         "docs/evidence/stcn-15/deployment-record.schema.json",
+        "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52"
       ]
     },
@@ -56,7 +61,9 @@
   "blockers": [
     "G1-M5 PR #39 remains Draft; Terraform validate passes but plan is skipped for missing plan credentials.",
     "GitHub has no staging Environment; the connected account has admin:false and cannot configure protected reviewers, environment variables, or secrets.",
-    "aws sts get-caller-identity returns NoCredentials. Live AWS account identity, cost/credits, Terraform state, security groups, and cluster status are unknown. An Oct 11 historical report says staging resources were deployed and not destroyed; current existence and cost must be checked before any mutation.",
+    "The target AWS account and configured deploy role are verified by STS. AWS Budget forecasts USD 149.085 against the USD 120 monthly limit; Cost Explorer returned a conflicting estimated near-zero value. Credit balance and actual accrued project charges remain unverified; stop staging changes pending AWS account-owner reconciliation.",
+    "EKS/RDS/NAT/internal ALB staging infrastructure is active and tagged to STCN-39/Terraform. The private EKS API cannot be reached from this workstation, so Kubernetes workloads and live NetworkPolicy behavior remain unknown. The ALB has no listeners or target groups; no staging Gateway route was verified.",
+    "Terraform state ownership is unknown because infra/terraform/backend.hcl is absent; do not initialize a guessed backend.",
     "The G1 workflow does not resolve and record a registry SHA-256 digest, create per-service runtime Kubernetes Secrets, or scrape RabbitMQ detailed per-queue DLQ metrics.",
     "The current G1 edge module allows ALB TCP/80 from configured ingress CIDRs and forwards plain HTTP when no certificate is configured; require approved HTTPS or redirect-only behavior before public use.",
     "No G2 staging deployment, Gateway staging smoke, live NetworkPolicy probe, image-digest-to-Kubernetes-revision binding, staging demo, or authorized project-resource destroy has occurred."
@@ -100,6 +107,10 @@
     "offline_run": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38427649840",
     "terraform_validation_run": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38427649723",
     "terraform_plan": "skipped_missing_plan_credentials",
-    "live_deployment": "not_verified"
+    "live_infrastructure": "active_eks_rds_nat_internal_alb",
+    "application_workloads": "unknown_private_cluster_unreachable",
+    "budget_forecast_usd": 149.085,
+    "budget_limit_usd": 120.0,
+    "live_deployment": "no_gateway_listener_or_target_group_verified"
   }
 }
