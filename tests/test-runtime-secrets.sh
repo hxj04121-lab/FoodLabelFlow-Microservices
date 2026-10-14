@@ -66,6 +66,11 @@ export STAGING_AWS_ACCOUNT_ID=000000000000
 export FAKE_ACCOUNT_ID=000000000000
 export STAGING_EKS_CLUSTER_NAME=staging-cluster
 export MYSQL_HOST=staging-mysql.example.invalid
+export RABBITMQ_HOST=rabbitmq.rabbitmq.svc.cluster.local
+export RABBITMQ_USERNAME=spectrace-staging
+export RABBITMQ_PASSWORD=rabbitmq-password-012345678901234567890
+export STAGING_GATEWAY_URL=https://gateway.example.invalid
+export SPECTRACE_SECURITY_JWKSETURI=http://keycloak.keycloak.svc.cluster.local:8080/auth/realms/spectrace/protocol/openid-connect/certs
 export FAKE_CONTEXT="arn:aws:eks:${AWS_REGION}:${STAGING_AWS_ACCOUNT_ID}:cluster/${STAGING_EKS_CLUSTER_NAME}"
 export SPECIFICATION_DB_PASSWORD=specification-password-012345678901
 export FORMULATION_DB_PASSWORD=formulation-password-012345678901
@@ -83,13 +88,21 @@ for spec in \
   grep -Fqx "SPRING_DATASOURCE_URL=jdbc:mysql://${MYSQL_HOST}:3306/${schema}?sslMode=REQUIRED&serverTimezone=UTC" "$tmp_dir/captures/${namespace}.env"
   grep -Fqx "SPRING_DATASOURCE_USERNAME=${schema}" "$tmp_dir/captures/${namespace}.env"
   grep -Fqx "SPRING_DATASOURCE_PASSWORD=${password}" "$tmp_dir/captures/${namespace}.env"
+  grep -Fqx "RABBITMQ_HOST=${RABBITMQ_HOST}" "$tmp_dir/captures/${namespace}.env"
+  grep -Fqx "RABBITMQ_USERNAME=${RABBITMQ_USERNAME}" "$tmp_dir/captures/${namespace}.env"
+  grep -Fqx "RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}" "$tmp_dir/captures/${namespace}.env"
+  grep -Fqx "SPECTRACE_SECURITY_ISSUERURI=${STAGING_GATEWAY_URL}/auth/realms/spectrace" "$tmp_dir/captures/${namespace}.env"
+  grep -Fqx "SPECTRACE_SECURITY_JWKSETURI=${SPECTRACE_SECURITY_JWKSETURI}" "$tmp_dir/captures/${namespace}.env"
+  grep -Fqx 'SPECTRACE_SECURITY_AUDIENCE=spectrace-api' "$tmp_dir/captures/${namespace}.env"
   grep -Fq "apply runtime Secret ${namespace}/${namespace}-runtime" "$tmp_dir/output"
-  if grep -Fq "$password" "$tmp_dir/output"; then
-    echo "FAIL database password appeared in command output" >&2
-    exit 1
-  fi
+  for secret in "$password" "$RABBITMQ_PASSWORD" "$RABBITMQ_USERNAME"; do
+    if grep -Fq "$secret" "$tmp_dir/output"; then
+      echo "FAIL runtime credential appeared in command output" >&2
+      exit 1
+    fi
+  done
 done
-for variable in SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD; do
+for variable in SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD RABBITMQ_USERNAME RABBITMQ_PASSWORD; do
   if grep -Fq "${!variable}" "$tmp_dir/captures/args"; then
     echo "FAIL database password appeared in kubectl arguments" >&2
     exit 1
@@ -128,8 +141,20 @@ if SPECIFICATION_DB_PASSWORD=too-short bash "$repo_root/scripts/staging/apply-ru
 fi
 ! grep -Fq too-short "$tmp_dir/invalid-password"
 
-unset MYSQL_HOST SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD
+if STAGING_GATEWAY_URL=http://gateway.example.invalid bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/invalid-issuer" 2>&1; then
+  echo "FAIL non-HTTPS OIDC issuer origin was accepted" >&2
+  exit 1
+fi
+! grep -q 'create secret' "$tmp_dir/invalid-issuer"
+
+if SPECTRACE_SECURITY_JWKSETURI=http://keycloak.example.invalid/jwks bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/invalid-jwks" 2>&1; then
+  echo "FAIL non-realm JWKS URL was accepted" >&2
+  exit 1
+fi
+! grep -q 'create secret' "$tmp_dir/invalid-jwks"
+
+unset MYSQL_HOST RABBITMQ_HOST RABBITMQ_USERNAME RABBITMQ_PASSWORD STAGING_GATEWAY_URL SPECTRACE_SECURITY_JWKSETURI SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD
 export STAGING_WINDOW_OPEN=false
 bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" delete > "$tmp_dir/deleted-output"
 [[ $(wc -l < "$tmp_dir/captures/deleted") -eq 4 ]]
-echo "PASS runtime Secret injection and cleanup: exact staging context, four isolated namespaces, no secret in output"
+echo "PASS runtime Secret injection and cleanup: isolated DBs, broker/OIDC configuration, exact staging context and redaction"

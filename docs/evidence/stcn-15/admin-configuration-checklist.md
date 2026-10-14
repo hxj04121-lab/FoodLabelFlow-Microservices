@@ -39,6 +39,8 @@ Configure these **variables** from approved owner-controlled sources:
 | `STAGING_GATEWAY_URL` | Approved HTTPS Gateway origin after listener and certificate verification |
 | `STAGING_BASE_URL` | Same HTTPS origin for the operator-driven staging health check |
 | `STAGING_PROTECTED_SMOKE_PATH` | Approved authenticated Gateway smoke endpoint |
+| `RABBITMQ_HOST` | Private RabbitMQ service DNS name |
+| `SPECTRACE_SECURITY_JWKSETURI` | Internal Keycloak realm JWKS URL ending in `/auth/realms/spectrace/protocol/openid-connect/certs` |
 | `MYSQL_HOST` | Private RDS endpoint hostname |
 | `KEYCLOAK_DB_USERNAME` | Dedicated Keycloak runtime database user |
 | `STAGING_DATABASE_SUBNET_CIDRS` | Approved private database subnet CIDRs for NetworkPolicy egress |
@@ -52,6 +54,7 @@ Configure these **secrets** only through the approved secret manager:
 | `FORMULATION_DB_PASSWORD` | Formulation's isolated MySQL account |
 | `COMPLIANCE_DB_PASSWORD` | Compliance's isolated MySQL account |
 | `LABEL_WORKFLOW_DB_PASSWORD` | Label Workflow's isolated MySQL account |
+| `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD` | Runtime broker credentials copied into each service runtime Secret |
 | `KEYCLOAK_DB_PASSWORD` | Keycloak runtime database account |
 | `MYSQL_ADMIN_USER`, `MYSQL_ADMIN_PASSWORD` | One-time database bootstrap only; never service credentials |
 | `STAGING_SMOKE_JWT` | Short-lived identity for the approved Gateway smoke test |
@@ -69,6 +72,8 @@ Configure these **secrets** only through the approved secret manager:
 | Secret | `NVD_API_KEY` | Optional; reduces unauthenticated NVD rate limiting for Dependency-Check |
 
 `GITHUB_TOKEN` is supplied by GitHub Actions and is not manually configured. The workflow sets `AWS_REGION=ap-southeast-1`. Generate database account values as 32–128 characters from `[A-Za-z0-9_-]`. The helper compares the configured target account with the role's STS identity and verifies the Kubernetes context before writing any Secret.
+
+The runtime Secret helper derives `SPECTRACE_SECURITY_ISSUERURI` as `${STAGING_GATEWAY_URL}/auth/realms/spectrace` and sets `SPECTRACE_SECURITY_AUDIENCE=spectrace-api`. Keep `STAGING_GATEWAY_URL` as the HTTPS origin that Keycloak uses in `KC_HOSTNAME`; supply the internal JWKS endpoint separately in `SPECTRACE_SECURITY_JWKSETURI`. The helper copies `RABBITMQ_HOST`, `RABBITMQ_USERNAME`, and `RABBITMQ_PASSWORD` into each `<service>-runtime` Secret, so staging never falls back to the local RabbitMQ defaults. The apply operation fails closed if the issuer, JWKS URL, broker hostname, or generated broker password does not meet the expected format.
 
 For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPROVED=true` only after the protected Environment approval. Its `AVAILABLE_CREDIT_USD` input must use the verified value represented by `STAGING_AVAILABLE_CREDIT_USD`; this flag does not replace GitHub Environment approval.
 
@@ -90,6 +95,7 @@ For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPR
 - The staging EKS API is active and private-only. A local read-only Kubernetes request failed during TLS handshake; workload state and live NetworkPolicy enforcement remain UNKNOWN.
 - The staging database is private and available, but no service login, grant inspection, or cross-database probe was run.
 - The visible load balancer is internal and has no usable HTTPS Gateway listener; no Gateway smoke path is available for this staging window.
+- Per-service Secrets currently have no values installed. Once configured, the protected helper supplies database and RabbitMQ credentials plus the external OIDC issuer, internal JWKS URI, and fixed `spectrace-api` audience; it does not require static AWS credentials.
 - The budget forecast is above the configured monthly limit and eligible credits remain UNKNOWN; keep the staging window closed.
 - GitHub branch, Environment, and OIDC deployment controls need administrator configuration. VPC runner availability remains UNKNOWN.
 - No AWS apply, Kubernetes mutation, Secret injection, deployment, or destroy was performed for this work.
