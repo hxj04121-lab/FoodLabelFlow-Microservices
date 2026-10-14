@@ -102,13 +102,13 @@
   },
   "deployments": [],
   "blockers": [
-    "G1 PR #39 remains Draft and has no main deployment caller. The current Terraform pull-request validation passed; its dispatch-only plan job did not run. No remote state or Terraform plan result is claimed because the backend and plan identity are not configured/verified.",
+    "G1 PR #39 is open, unmerged, and has no main deployment caller. The latest main G1-M3 runbook still marks deployed acceptance NOT RUN. The current Terraform pull-request validation passed; its dispatch-only plan job did not run. No remote state or Terraform plan result is claimed because backend ownership and plan identity are not verified.",
     "Required GitHub branch, Environment, and OIDC deployment protections are incomplete; an owner-verified target account is not yet bound to the deployment workflow.",
     "The budget forecast exceeds the configured monthly limit and eligible credits remain unverified; keep the staging window closed.",
     "The staging EKS API is private and was not reachable from this workstation. Workloads and live NetworkPolicy enforcement remain unknown. The private database has no live service-grant probe, and the current load-balancer configuration does not provide a ready HTTPS Gateway smoke path.",
     "Terraform state ownership is unknown because infra/terraform/backend.hcl is absent; do not initialize a guessed backend.",
     "The AWS OIDC deployment role path is not ready and role trust is unverified. Terraform state ownership and the approved VPC-connected inspection path also need confirmation.",
-    "Draft PR #39 captures an immutable registry digest for Helm, wires the STCN-15 record writer after rollout/Gateway smoke, and configures RabbitMQ detailed per-queue metrics. It remains unmerged and has no main caller or published/deployed image. Its current record-writer call still needs the new publish-image and expected AWS/EKS identity arguments. No deployment record or runtime Kubernetes Secret exists yet.",
+    "Open, unmerged PR #39 captures an immutable registry digest for Helm, wires the STCN-15 record writer after rollout/Gateway smoke, and configures RabbitMQ detailed per-queue metrics. It has no main caller or deployed image. Its current record-writer call still needs the publish-image and expected AWS/EKS identity arguments. No deployment record or runtime Kubernetes Secret exists yet.",
     "No G2 staging deployment, Gateway staging smoke, live NetworkPolicy probe, image-digest-to-Kubernetes-revision binding, staging demo, or authorized project-resource destroy has occurred."
   ],
   "workflow_run": {
