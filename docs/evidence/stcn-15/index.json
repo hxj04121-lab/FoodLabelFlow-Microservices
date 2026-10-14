@@ -84,12 +84,12 @@
   "deployments": [],
   "blockers": [
     "G1-M5 PR #39 remains Draft; Terraform validate passes but plan is skipped for missing plan credentials.",
-    "GitHub staging Environment custom branch policy allows main and has reviewers, but deployment variables/secrets are empty; admin bypass is enabled, self-review status is unknown, and main branch protection is unverified.",
-    "An earlier complete AWS Budget response showed forecast above the configured monthly limit. The latest response had zero actual spend but no comparable forecast/limit values, so current forecast and credits remain unknown pending owner reconciliation.",
+    "GitHub main is currently unprotected. The staging Environment custom branch policy allows main and has one required reviewer, but deployment variables/secrets are empty; admin bypass is enabled and self-review status is unknown.",
+    "The latest live AWS Budget response shows forecast above the configured monthly limit and zero actual spend; eligible credits remain unverified pending owner reconciliation.",
     "The staging Environment has no STAGING_AWS_ACCOUNT_ID variable, so current AWS STS identity cannot be matched to the deployment target.",
     "Staging AWS infrastructure is present, but its ownership/state must be confirmed. EKS is private-only and the current workstation cannot reach its Kubernetes API, so workloads and live NetworkPolicy behavior remain unknown. VPC CNI network-policy-agent state is unknown. Gateway has no listener or public HTTP/HTTPS security-group ingress; RDS 3306 is security-group restricted, but its source-to-node mapping is unknown.",
     "Terraform state ownership is unknown because infra/terraform/backend.hcl is absent; do not initialize a guessed backend.",
-    "The account-level GitHub Actions OIDC provider and current deploy-role trust policy are not verified; the new separate GitHub OIDC roles are Terraform code only and have not been applied.",
+    "The current AWS provider list contains only the EKS OIDC provider; the GitHub Actions OIDC provider and deploy-role trust policy are not configured/verified. The new separate GitHub OIDC roles are Terraform code only and have not been applied.",
     "Draft PR #39 captures an immutable registry digest for Helm, wires the STCN-15 record writer after rollout/Gateway smoke, and configures RabbitMQ detailed per-queue metrics. It remains unmerged and has no main caller or published/deployed image. No deployment record or runtime Kubernetes Secret exists yet.",
     "No G2 staging deployment, Gateway staging smoke, live NetworkPolicy probe, image-digest-to-Kubernetes-revision binding, staging demo, or authorized project-resource destroy has occurred."
   ],

@@ -2,12 +2,21 @@
 
 For GitHub and AWS administrators. Configure names and values directly in the protected systems; never send secret values in chat or commit them to Git.
 
+## Immediate administrator actions (read-only state checked 14 Oct 2026)
+
+1. **Protect `main`.** GitHub currently reports `protected=false`. Require the CI, SWE5001 Helm template, and SWE5001 Compliance contracts checks before merge.
+2. **Repair the `staging` Environment controls.** It currently has one required reviewer, permits administrator bypass, has no variables or secrets, and its custom deployment policy allows `main`. Keep that `main` restriction, disable bypass, enable Prevent self-review, and populate the names listed below. Self-review status is not exposed by the read API.
+3. **Configure AWS OIDC.** The current account's provider list contains only the EKS OIDC provider; GitHub Actions OIDC is absent. Add the GitHub provider and review the separate plan/deploy roles and their trust conditions before use.
+4. **Provide private-cluster access.** EKS is ACTIVE with a private-only API. The repository runner inventory was unavailable to this operator (GitHub API returned 403), so the VPC-connected runner state is UNKNOWN. Reuse or provision an approved restricted runner; do not expose the cluster endpoint.
+5. **Keep staging closed.** The latest live AWS Budget read shows forecast spend above the configured monthly limit, while actual spend is zero. Eligible credits are not verified. The 13–14 Oct re-planned window is a schedule only; it does not authorize spending, access, or extending the window.
+6. **Confirm state ownership.** `infra/terraform/backend.hcl` is absent. The state bucket/backend must be confirmed by its owner before any plan or mutation.
+
 ## GitHub repository settings
 
-- [ ] Protect `main` and require CI, Helm, and Compliance contract checks. Current repository protection is not verified.
+- [x] Read-only status checked: `main` is not protected. An administrator still needs to enable protection and require CI, Helm, and Compliance contract checks.
 - [ ] Keep the `staging` custom deployment branch policy restricted to `main` (the current policy allows `main`).
 - [ ] Require an approver, enable **Prevent self-review**, and disable administrator bypass unless an exception is approved. The current Environment has reviewers configured, administrator bypass enabled, and self-review status is not exposed by the read API.
-- [ ] Provide a restricted self-hosted runner reachable from the staging VPC with labels `self-hosted`, `linux`, and `staging-vpc`.
+- [ ] Provide a restricted self-hosted runner reachable from the staging VPC with labels `self-hosted`, `linux`, and `staging-vpc`. The runner inventory is UNKNOWN because the read API returned 403.
 - [ ] Configure the GitHub Actions OIDC provider in the AWS account, then provision the separate plan and deploy roles from `infra/terraform/modules/github-oidc`. Review their trust conditions and least-privilege policies before use.
 - [ ] Keep `STAGING_WINDOW_OPEN=false` until the account owner approves the budget and staging window.
 
@@ -63,9 +72,9 @@ For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPR
 
 ## AWS owner checks
 
-- [ ] Reconcile the AWS Budget forecast, actual charges, and eligible credits against the configured monthly limit. An earlier complete read showed an over-limit forecast; the latest response returned zero actual spend but no comparable forecast/limit values, so the current forecast is UNKNOWN. Zero actual spend is not a credit balance. Keep the staging window closed until the account owner confirms the current cost basis.
+- [ ] Reconcile the live forecast, actual charges, and eligible credits against the configured monthly limit. The latest read shows forecast above the limit and zero actual spend; eligible credits are UNKNOWN. Keep the staging window closed until the account owner confirms the current cost basis.
 - [ ] Confirm Terraform state ownership and the backend configuration before running a plan or apply. The repository does not contain `infra/terraform/backend.hcl`; do not initialize a guessed backend.
-- [ ] Verify the account-level GitHub Actions OIDC provider and the trust policies for the approved plan and deploy roles.
+- [ ] Add the absent account-level GitHub Actions OIDC provider and verify the trust policies for the approved plan and deploy roles.
 - [ ] Review the deploy role's EKS access scope. The managed EKS edit policy can read and write Kubernetes Secrets in its namespaces; require narrower custom RBAC if that scope is not approved.
 - [ ] Verify the VPC CNI network-policy agent is enabled and provide the approved VPC-connected runner path for live NetworkPolicy and Gateway tests.
 - [ ] Confirm the Gateway HTTPS listener, certificate, target health, and security-group ingress before enabling the smoke test. Permit only the approved HTTPS path.
@@ -78,9 +87,9 @@ For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPR
 - Read-only AWS checks confirmed a non-root assumed identity. The GitHub `staging` Environment has no `STAGING_AWS_ACCOUNT_ID` variable, so the identity cannot currently be matched to the workflow target. The cluster is private-only and this workstation cannot reach its Kubernetes API; workload and network-policy-agent state remain unknown.
 - The private database is available. The Gateway ingress is not ready for a staging smoke test.
 - The load-balancer security group has no public HTTP/HTTPS ingress rule. Database port 3306 is restricted to security-group references, but their worker/node mapping remains unverified.
-- The latest budget response has no comparable forecast/limit values and zero actual spend. An earlier complete read showed an over-limit forecast. Eligible credits and project charges need owner reconciliation.
-- The GitHub Environment custom policy allows `main` and has reviewers, but has zero variables and secrets; administrator bypass is enabled, self-review status is unknown, and `main` branch protection is not verified.
-- The AWS account has no GitHub Actions OIDC provider in the current provider list.
+- The latest budget response shows forecast spend above the configured limit and zero actual spend. Eligible credits and project charges need owner reconciliation.
+- The GitHub Environment custom policy allows `main` and has one required reviewer, but has zero variables and secrets; administrator bypass is enabled, self-review status is unknown, and `main` is currently unprotected.
+- The AWS account's current OIDC provider list contains the EKS provider but no GitHub Actions provider.
 - No AWS apply, Kubernetes mutation, Secret injection, deployment, or destroy was performed for this work.
 
 After configuration, share a pass/fail status and approval evidence. Keep role ARNs, account IDs, endpoint values, and all secret values inside the protected systems.

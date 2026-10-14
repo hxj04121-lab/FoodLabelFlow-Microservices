@@ -1,6 +1,6 @@
 # STCN-15 implementation and gate evidence
 
-The current approved re-plan is G2 Services (Jira Sprint goal updated 11 Oct): four service databases and the G2 service changes, with an integration check on 13 Oct evening. ADR-09 reserves the staging window for G2 close on 16 Oct. No staging resources are created by this change.
+The approved 11 Oct Jira re-plan places G2 Services in Sprint 72 on 13 Oct and combines G2/G3 integration in the 13–14 Oct window; feature freeze is 14 Oct at 23:59. This supersedes the older ADR-09/work-order dates. The schedule is not AWS spend or access approval; the account owner must approve a specific window and cost ceiling. No staging resources are created by this change.
 
 ## Local checks
 
