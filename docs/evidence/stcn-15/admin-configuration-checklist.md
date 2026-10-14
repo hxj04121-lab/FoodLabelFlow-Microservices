@@ -5,8 +5,8 @@ For GitHub and AWS administrators. Configure names and values directly in the pr
 ## GitHub repository settings
 
 - [ ] Protect `main` and require CI, Helm, and Compliance contract checks. Current repository protection is not verified.
-- [ ] Keep the `staging` deployment branch policy restricted to `main`.
-- [ ] Require an approver, enable **Prevent self-review**, and disable administrator bypass unless an exception is approved.
+- [ ] Keep the `staging` custom deployment branch policy restricted to `main` (the current policy allows `main`).
+- [ ] Require an approver, enable **Prevent self-review**, and disable administrator bypass unless an exception is approved. The current Environment has reviewers configured, administrator bypass enabled, and self-review status is not exposed by the read API.
 - [ ] Provide a restricted self-hosted runner reachable from the staging VPC with labels `self-hosted`, `linux`, and `staging-vpc`.
 - [ ] Configure the GitHub Actions OIDC provider in the AWS account, then provision the separate plan and deploy roles from `infra/terraform/modules/github-oidc`. Review their trust conditions and least-privilege policies before use.
 - [ ] Keep `STAGING_WINDOW_OPEN=false` until the account owner approves the budget and staging window.
@@ -26,8 +26,10 @@ Configure these **variables** from approved owner-controlled sources:
 | `STAGING_WINDOW_HOURS`, `STAGING_EXPERIMENT_HOURS`, `STAGING_K6_HOURS` | Approved maximum window, experiment, and load-test durations |
 | `STAGING_AVAILABLE_CREDIT_USD` | Verified eligible credit balance; do not infer from a budget limit or forecast |
 | `STAGING_GATEWAY_URL` | Approved HTTPS Gateway origin after listener and certificate verification |
+| `STAGING_BASE_URL` | Same HTTPS origin for the operator-driven staging health check |
 | `STAGING_PROTECTED_SMOKE_PATH` | Approved authenticated Gateway smoke endpoint |
 | `MYSQL_HOST` | Private RDS endpoint hostname |
+| `KEYCLOAK_DB_USERNAME` | Dedicated Keycloak runtime database user |
 | `STAGING_DATABASE_SUBNET_CIDRS` | Approved private database subnet CIDRs for NetworkPolicy egress |
 | `STAGING_ALB_SUBNET_CIDRS` | Approved load-balancer subnet CIDRs for Gateway ingress |
 
@@ -39,6 +41,7 @@ Configure these **secrets** only through the approved secret manager:
 | `FORMULATION_DB_PASSWORD` | Formulation's isolated MySQL account |
 | `COMPLIANCE_DB_PASSWORD` | Compliance's isolated MySQL account |
 | `LABEL_WORKFLOW_DB_PASSWORD` | Label Workflow's isolated MySQL account |
+| `KEYCLOAK_DB_PASSWORD` | Keycloak runtime database account |
 | `MYSQL_ADMIN_USER`, `MYSQL_ADMIN_PASSWORD` | One-time database bootstrap only; never service credentials |
 | `STAGING_SMOKE_JWT` | Short-lived identity for the approved Gateway smoke test |
 | `PROMETHEUS_URL`, `GRAFANA_CLOUD_METRICS_USER` | Alloy metrics remote-write configuration if used by G1 |
@@ -56,9 +59,11 @@ Configure these **secrets** only through the approved secret manager:
 
 `GITHUB_TOKEN` is supplied by GitHub Actions and is not manually configured. The workflow sets `AWS_REGION=ap-southeast-1`. Generate database account values as 32–128 characters from `[A-Za-z0-9_-]`. The helper compares the configured target account with the role's STS identity and verifies the Kubernetes context before writing any Secret.
 
+For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPROVED=true` only after the protected Environment approval. Its `AVAILABLE_CREDIT_USD` input must use the verified value represented by `STAGING_AVAILABLE_CREDIT_USD`; this flag does not replace GitHub Environment approval.
+
 ## AWS owner checks
 
-- [ ] Reconcile the current AWS Budget forecast, actual charges, and eligible credits against the configured monthly limit. The latest query shows an over-limit forecast; actual spend is zero, which is not a credit balance. Keep the staging window closed until the account owner confirms the current cost basis.
+- [ ] Reconcile the AWS Budget forecast, actual charges, and eligible credits against the configured monthly limit. An earlier complete read showed an over-limit forecast; the latest response returned zero actual spend but no comparable forecast/limit values, so the current forecast is UNKNOWN. Zero actual spend is not a credit balance. Keep the staging window closed until the account owner confirms the current cost basis.
 - [ ] Confirm Terraform state ownership and the backend configuration before running a plan or apply. The repository does not contain `infra/terraform/backend.hcl`; do not initialize a guessed backend.
 - [ ] Verify the account-level GitHub Actions OIDC provider and the trust policies for the approved plan and deploy roles.
 - [ ] Review the deploy role's EKS access scope. The managed EKS edit policy can read and write Kubernetes Secrets in its namespaces; require narrower custom RBAC if that scope is not approved.
@@ -70,11 +75,12 @@ Configure these **secrets** only through the approved secret manager:
 
 ## Current sanitized observations
 
-- Read-only AWS checks confirmed a non-root assumed identity matching the configured staging account. The cluster is private-only and this workstation cannot reach its Kubernetes API; workload and network-policy-agent state remain unknown.
+- Read-only AWS checks confirmed a non-root assumed identity. The GitHub `staging` Environment has no `STAGING_AWS_ACCOUNT_ID` variable, so the identity cannot currently be matched to the workflow target. The cluster is private-only and this workstation cannot reach its Kubernetes API; workload and network-policy-agent state remain unknown.
 - The private database is available. The Gateway ingress is not ready for a staging smoke test.
 - The load-balancer security group has no public HTTP/HTTPS ingress rule. Database port 3306 is restricted to security-group references, but their worker/node mapping remains unverified.
-- The latest budget response shows an over-limit forecast and zero actual spend. Eligible credits and project charges need owner reconciliation.
-- GitHub staging deployment protection exists, but required variables/secrets are not configured and self-review prevention / main branch protection need administrator verification.
+- The latest budget response has no comparable forecast/limit values and zero actual spend. An earlier complete read showed an over-limit forecast. Eligible credits and project charges need owner reconciliation.
+- The GitHub Environment custom policy allows `main` and has reviewers, but has zero variables and secrets; administrator bypass is enabled, self-review status is unknown, and `main` branch protection is not verified.
+- The AWS account has no GitHub Actions OIDC provider in the current provider list.
 - No AWS apply, Kubernetes mutation, Secret injection, deployment, or destroy was performed for this work.
 
 After configuration, share a pass/fail status and approval evidence. Keep role ARNs, account IDs, endpoint values, and all secret values inside the protected systems.
