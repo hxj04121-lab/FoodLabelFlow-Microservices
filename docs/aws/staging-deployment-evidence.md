@@ -40,7 +40,7 @@ The baseline includes general-node desired capacity 1 → 3, launch-template cha
 
 The Compliance foundation plan adds the dedicated Compliance managed node group, its two cluster-autoscaler ASG tags, and the same all-protocol node self-ingress rule. Its 31 updates include the general node group's launch-template/scaling configuration and in-place tag updates to existing network, EKS, RDS, and ALB resources. The node-group changes may roll nodes. It still leaves EKS add-ons disabled and does not deploy operators, services, database users, runtime Secrets, or ingress. Neither plan is approved for Apply; review the exact changes and pass the staging gate first.
 
-The mandatory STCN-37 staging gate was not run: approved deployment, Compliance experiment, and k6 hours plus verified available-credit input were not provided, and the checked-in public pricing metadata is incomplete. No cost estimate/report was generated and the gate was not bypassed.
+The mandatory STCN-37 staging gate was not run: approved deployment, Compliance experiment, and k6 hours plus verified available-credit input were not provided. Public Price List metadata was refreshed and validated without generating a cost estimate/report. The gate was not bypassed.
 
 ## GitHub deployment controls and image evidence
 

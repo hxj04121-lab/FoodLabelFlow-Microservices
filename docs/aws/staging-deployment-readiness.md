@@ -101,4 +101,4 @@ The current main chart still has `example.invalid`/replacement-tag defaults. No 
 - **Add-ons, node sizing, RabbitMQ, Keycloak, and application deployment:** CODE ONLY / UNKNOWN; not installed or accepted live.
 - **Ingress, DNS, HTTPS, frontend, and end-to-end access:** BLOCKED.
 
-No Terraform Apply/Destroy/Import, IAM change, add-on/CRD installation, database/Secret change, Kubernetes deployment, or cleanup was executed. The mandatory staging gate was not run: no approved deployment/experiment/k6 window or verified credit input was supplied, and the checked-in gate pricing metadata is incomplete. No cost estimate/report was generated or gate bypassed.
+No Terraform Apply/Destroy/Import, IAM change, add-on/CRD installation, database/Secret change, Kubernetes deployment, or cleanup was executed. The public Price List metadata was refreshed and validated, but the mandatory staging gate was not run because approved deployment/experiment/k6 hours and verified credit input were not supplied. No cost estimate/report was generated or gate bypassed.

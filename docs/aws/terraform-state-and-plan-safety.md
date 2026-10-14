@@ -39,7 +39,7 @@ This is **not** the full deployment plan. Defaults leave `enable_compliance_node
 ## Apply blockers
 
 1. The exact plan has not been approved after review. In particular, review the all-protocol node self-ingress rule and potential managed-node-group rollout.
-2. The required STCN-37 gate was not run: no approved deployment/experiment/k6 window or verified available-credit input was supplied, and the checked-in pricing metadata is incomplete. No cost estimate/report was generated and the gate was not bypassed.
+2. The required STCN-37 gate was not run because no approved deployment/experiment/k6 hours or verified available-credit input was supplied. Public Price List metadata has been refreshed and validated without generating a cost estimate/report; the gate was not bypassed.
 3. The main branch has no apply-capable workflow. The staging script is only in Draft PR #39 on a feature-branch base; do not deploy from that unmerged branch.
 4. The current EKS deployment role has namespace-scoped Kubernetes access. It cannot install cluster-scoped CRDs/StorageClasses or access the `observability` namespace. See [staging blockers](staging-remaining-blockers.md).
 5. Neither reviewed plan includes EKS add-ons. A full plan still needs reviewed add-on settings; the add-on module also requires an owner-provided domain, certificate, and ingress CIDRs and changes the ALB path.
