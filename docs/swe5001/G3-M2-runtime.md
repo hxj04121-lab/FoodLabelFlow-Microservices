@@ -1,3 +1,4 @@
+> **Current status (14 October 2026):** PR #41's Phase 2, APIs, cache and measurement tooling are merged. PR #51 also merged the Label business-version publisher and ImpactFinding consumer; exact CI passed. The M5 RabbitMQ binding from #42 is still outside main in Draft #39, so no deployed event-to-ReviewTask acceptance is established. Cloud load/failover remain **NOT RUN**. See the [14 October acceptance addendum](evidence/G3-M2-acceptance-update-20261014.md). Older status below is historical.
 # G3 M2 runtime delivery — STCN-95/96/97
 
 Current delivery is Ready main-targeted PR #41; historical #28/#30 commits are preserved there. It supplies Phase 2, the three frozen impact endpoints and a bounded, replica-local immutable version cache. It does not establish staging acceptance or M4 ReviewTask acceptance.
