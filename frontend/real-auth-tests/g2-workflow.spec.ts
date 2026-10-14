@@ -78,6 +78,17 @@ test('real G2 browser workflow validates, resubmits, approves, publishes and rea
     const formula = await createdFormula.json()
     expect((await api(request, makerToken, 'POST', `/api/formulations/formula-versions/${formula.formulaVersionId}/release`,
       { expectedCurrentFormulaVersionId: current })).status()).toBe(200)
+    // Operator observation of this disposable broker only; browser/business calls stay on Gateway.
+    // 60 actual owner seed formulas + this release must reach the Label consumer before draft creation.
+    await expect.poll(async () => {
+      const headers = { Authorization: `Basic ${Buffer.from('spectrace:local-only-rabbitmq').toString('base64')}` }
+      const queue = await request.get('http://localhost:15672/api/queues/%2F/label-workflow.formula-published', { headers, maxRedirects: 0 })
+      const dlq = await request.get('http://localhost:15672/api/queues/%2F/label-workflow.formula-published.dlq', { headers, maxRedirects: 0 })
+      expect(queue.status()).toBe(200); expect(dlq.status()).toBe(200)
+      expect((await dlq.json()).messages, 'Formula replay must not dead-letter').toBe(0)
+      const state = await queue.json()
+      return state.message_stats?.ack >= 61 && state.messages === 0
+    }, { timeout: 30000, intervals: [1000] }).toBe(true)
     // Wait for the real consumer-owned projection, not a guessed sleep or injected database row.
     // Only an explicit 409 LABEL conflict (before insert) is retried; accepted/uncertain writes are never retried.
     let label: { labelVersionId: string; formulaVersionId: string; ruleSetVersionId: string } | undefined

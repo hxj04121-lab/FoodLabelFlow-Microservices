@@ -47,6 +47,9 @@ consumer projections are created by real events rather than direct database
 injection. Existing M1 SeedReplay first emits the immutable baseline events;
 the disposable CI waits for acknowledged specification replay before starting
 formula replay, preserving exact predecessor checks. Separate maker/checker browser sessions exercise validation, request
+The CI operator also waits for the Label queue to acknowledge the 60 seed formulas
+and new release before creating the draft, preventing a timing-dependent old-formula
+binding without weakening the exact-version assertion. Separate maker/checker browser sessions exercise validation, request
 changes, editing/revalidation/resubmission, approval, publication and current-label
 lookup, plus a south manufacturer denial. Its actual run result must be cited from
 the exact source workflow before describing it as passed; it is not deployed acceptance.
