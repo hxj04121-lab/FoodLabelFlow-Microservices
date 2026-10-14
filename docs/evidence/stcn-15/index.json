@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "issue": "STCN-15",
   "updated_at": "2026-10-14",
-  "source_commit": "81a9fddda4c4fc87dda4625c2094a1eaa7625993",
+  "source_commit": "fec201a69fafc5e68abdc2fc1a7269360716d270",
   "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
   "aws_readonly_snapshot": "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
   "latest_aws_observation": "2026-10-14T15:31:00+08:00",
@@ -27,11 +27,12 @@
       ]
     },
     "STCN-85": {
-      "status": "LABEL_TO_COMPLIANCE_RULE_AND_TEST_ADDED_CI_PENDING_LIVE_PROBE_BLOCKED_PRIVATE_EKS_AND_CNI_UNKNOWN",
+      "status": "HELM_AND_CI_PASS_LABEL_TO_COMPLIANCE_RULE_LIVE_PROBE_BLOCKED_PRIVATE_EKS_AND_CNI_UNKNOWN",
       "evidence": [
         "docs/evidence/stcn-15/helm-template-tests.log",
         "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
-        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466906"
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989854",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989806"
       ]
     },
     "STCN-86": {
@@ -72,9 +73,9 @@
     "No G2 staging deployment, Gateway staging smoke, live NetworkPolicy probe, image-digest-to-Kubernetes-revision binding, staging demo, or authorized project-resource destroy has occurred."
   ],
   "workflow_run": {
-    "run_id": 38516466777,
-    "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466777",
-    "commit_sha": "81a9fddda4c4fc87dda4625c2094a1eaa7625993",
+    "run_id": 38528989806,
+    "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989806",
+    "commit_sha": "fec201a69fafc5e68abdc2fc1a7269360716d270",
     "conclusion": "success",
     "checks": [
       "backend",
@@ -90,14 +91,14 @@
     "companion_workflows": [
       {
         "name": "SWE5001 Compliance contracts",
-        "run_id": 38516466818,
-        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466818",
+        "run_id": 38528989797,
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989797",
         "conclusion": "success"
       },
       {
         "name": "SWE5001 Helm template",
-        "run_id": 38516466906,
-        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466906",
+        "run_id": 38528989854,
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38528989854",
         "conclusion": "success"
       }
     ]
