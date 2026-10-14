@@ -95,7 +95,7 @@ are on #54, so the evidence collection can start immediately once the environmen
 | Jira | Delivered in | Evidence |
 |---|---|---|
 | STCN-54/55/56/57/58, STCN-9 | #34, #36, #47 (merged) | G1-M4 Flyway root, operator import, allow-list; realm and starter module on main |
-| STCN-78/79/80/81/82, STCN-14 | #51 (merged, head `4ea7f0f0`) | 42 label-workflow tests, 0 failures/errors, real MySQL/RabbitMQ; SonarCloud gate passed |
+| STCN-78/79/80/81/82, STCN-14 | #51 (merged, head `4ea7f0f0`) | 51 label-workflow tests, 0 failures/errors/skips, real MySQL/RabbitMQ; SonarCloud gate passed. The count and the absence of failures are recorded in M3's exact-head review on #51, which independently downloaded the CI reports; an earlier intermediate head measured 42, which is superseded. |
 | STCN-105 | #51 | [equivalence mapping](../evidence/G3-M4.1-equivalence-mapping.md) |
 | STCN-106 | #51 | `ImpactFindingConsumerTest` (one task on redelivery; none for POTENTIAL/NO_ACTION) |
 | STCN-107 | #51 | publish transaction emits `LabelPublished.v2` in the same transaction |

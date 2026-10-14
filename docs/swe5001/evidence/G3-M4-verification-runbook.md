@@ -7,7 +7,8 @@ what to do. Nothing here is evidence until it is executed and the outputs are ca
 ## Prerequisites to confirm before starting
 
 - Deployed revision is the merge SHA of PR #51, and the platform branch that carries the
-  `label.published.v2` binding (#39) is deployed — without it, step 6 cannot pass.
+  `label.published.v2` binding (#39) is deployed — without it, step 6 (the binding and projection
+  check) cannot pass.
 - Reachable HTTPS Gateway plus issuer/JWKS, and the same correlation id visible end to end.
 - Co-testing identities from the realm: a maker (`*.maker`, LABEL_OFFICER) and a **different**
   checker (`*.checker`, APPROVER + PUBLISHER) in the same organisation, plus one account from
@@ -24,6 +25,7 @@ what to do. Nothing here is evidence until it is executed and the outputs are ca
 | 3 | `POST /api/labels/{id}/submit` as the maker | 200 `LabelDraft` with `lifecycleStatus=PENDING_REVIEW` | response |
 | 4 | `POST /api/labels/{id}/decisions {decision:APPROVE}` as the **checker** | 200 `LabelDecision` with `decisionId`/`decidedAt` | response |
 | 5 | `POST /api/labels/{id}/publish` as the publisher identity | 201 `LabelPublication` (`lifecycleStatus=PUBLISHED`) | response, `publicationRecordId` |
+| 6 | Observe the routed event and the downstream projection: the v2 event reaches `compliance.label-published` and the Compliance label projection carries the same `versionNumber` | message delivered, no DLQ growth, projection row present | queue/DLQ observation plus the projection query output |
 
 ## What each step must prove, and where to look
 
@@ -33,10 +35,21 @@ what to do. Nothing here is evidence until it is executed and the outputs are ca
    `compliance.label-published` (queue depth returns to zero, no DLQ growth).
 2. **Compliance projection**: the label projection row exists with the same `versionNumber`; a
    v1-only route must not be required for it.
-3. **Review task (the team's acceptance point)**: exactly **one** `open` review task exists for the
-   confirmed finding — `SELECT organisation_id, finding_id, count(*) FROM review_task|impact_review_task
-   GROUP BY 1,2 HAVING count(*) <> 1` must return nothing. Redeliver the same
-   `ImpactFinding.v1` (same `eventId`, then a new `eventId`) and re-run the query: still one row.
+3. **Review task (the team's acceptance point)**: exactly **one OPEN** task exists for the confirmed
+   finding. Run this against the deployed Label Workflow schema (the task is created by
+   `ImpactFindingConsumer`, table `impact_review_task`, status column `lifecycle_status`):
+
+   ```sql
+   SELECT organisation_id, finding_id, COUNT(*) AS open_tasks
+   FROM label_workflow.impact_review_task
+   WHERE lifecycle_status = 'OPEN'
+   GROUP BY organisation_id, finding_id
+   HAVING COUNT(*) <> 1;
+   ```
+
+   The query must return **nothing**. Redeliver the same `ImpactFinding.v1` (same `eventId`, then a
+   new `eventId`) and re-run it: still nothing, and
+   `SELECT COUNT(*) FROM label_workflow.impact_review_task WHERE finding_id = :findingId` stays 1.
 4. **POTENTIAL must not create a task**: trigger or replay a `kind=POTENTIAL` finding for the same
    product and confirm the task count is unchanged.
 
