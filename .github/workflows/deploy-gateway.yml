@@ -1,0 +1,186 @@
+name: Protected Gateway staging release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gateway-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, staging-vpc]
+    environment: staging
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-southeast-1
+      AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      GATEWAY_ISSUER: ${{ vars.GATEWAY_ISSUER }}
+      GATEWAY_JWK_SET_URI: ${{ vars.GATEWAY_JWK_SET_URI }}
+      GATEWAY_KEYCLOAK: ${{ vars.GATEWAY_KEYCLOAK }}
+      GATEWAY_SPECIFICATION: ${{ vars.GATEWAY_SPECIFICATION }}
+      GATEWAY_FORMULATION: ${{ vars.GATEWAY_FORMULATION }}
+      GATEWAY_COMPLIANCE: ${{ vars.GATEWAY_COMPLIANCE }}
+      GATEWAY_LABEL_WORKFLOW: ${{ vars.GATEWAY_LABEL_WORKFLOW }}
+      AVAILABLE_CREDIT_USD: ${{ secrets.AVAILABLE_CREDIT_USD }}
+      APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.1
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.0
+      - name: Require protected deploy role and runtime configuration
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test -n "$AWS_ROLE_ARN"
+          test -n "$GATEWAY_ISSUER"
+          test -n "$GATEWAY_JWK_SET_URI"
+          test -n "$GATEWAY_KEYCLOAK"
+          test -n "$GATEWAY_SPECIFICATION"
+          test -n "$GATEWAY_FORMULATION"
+          test -n "$GATEWAY_COMPLIANCE"
+          test -n "$GATEWAY_LABEL_WORKFLOW"
+          python3 -m unittest discover -s tests -p 'test_gateway_deploy_runtime.py' -v
+          python3 platform/gateway/deploy-runtime-values.py > "$RUNNER_TEMP/gateway-runtime-values.json"
+          if ! python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/gateway-budget-gate.log" 2>&1; then
+            echo '::error::The existing fail-closed staging funding/pricing gate did not pass; no cluster write was attempted.'
+            exit 1
+          fi
+          echo 'Approved staging funding and pricing gate passed.'
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify target and first-release-only scope
+        run: |
+          set -euo pipefail
+          identity=$(aws sts get-caller-identity --query 'Arn' --output text)
+          case "$identity" in
+            arn:aws:sts::679857346122:assumed-role/FoodLabelFlowStagingDeploy/*) ;;
+            *) echo '::error::Unexpected AWS deployment identity'; exit 1 ;;
+          esac
+          test "$(aws eks describe-cluster --name spectrace-staging --region "$AWS_REGION" --query 'cluster.status' --output text)" = ACTIVE
+          aws eks update-kubeconfig --name spectrace-staging --region "$AWS_REGION" >/dev/null
+          test "$(kubectl config current-context)" = arn:aws:eks:ap-southeast-1:679857346122:cluster/spectrace-staging
+          kubectl get namespace gateway >/dev/null
+          if helm list --namespace gateway --filter '^gateway$' --output json | python3 -c 'import json,sys; raise SystemExit(bool(json.load(sys.stdin)))'; then
+            :
+          else
+            echo '::error::The gateway Helm release already exists or could not be inspected; refusing first-install workflow.'
+            exit 1
+          fi
+          for resource in deployments services serviceaccounts networkpolicies secrets; do
+            test "$(kubectl auth can-i create "$resource" --namespace gateway)" = yes
+          done
+          for resource in deployments services serviceaccounts networkpolicies secrets pods endpointslices; do
+            for verb in get list watch; do
+              test "$(kubectl auth can-i "$verb" "$resource" --namespace gateway)" = yes
+            done
+          done
+          test "$(kubectl auth can-i create pods/portforward --namespace gateway)" = yes
+          for item in 'GATEWAY_KEYCLOAK:keycloak' 'GATEWAY_SPECIFICATION:specification' 'GATEWAY_FORMULATION:formulation' 'GATEWAY_COMPLIANCE:compliance' 'GATEWAY_LABEL_WORKFLOW:label-workflow'; do
+            name=${item%%:*}; namespace=${item##*:}; uri=${!name}
+            host=$(python3 -c 'from urllib.parse import urlsplit; import sys; print(urlsplit(sys.argv[1]).hostname or "")' "$uri")
+            service=${host%%.*}
+            case "$host" in *."$namespace".svc.cluster.local) ;; *) echo "::error::$name does not target the $namespace cluster Service DNS zone"; exit 1 ;; esac
+            kubectl get namespace "$namespace" >/dev/null
+            kubectl get service "$service" --namespace "$namespace" >/dev/null
+          done
+      - name: Verify actual Keycloak issuer and JWKS
+        env:
+          ISSUER: ${{ vars.GATEWAY_ISSUER }}
+          JWKS_URI: ${{ vars.GATEWAY_JWK_SET_URI }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          issuer=os.environ['ISSUER'].rstrip('/')
+          with urllib.request.urlopen(issuer+'/.well-known/openid-configuration', timeout=10) as response:
+              metadata=json.load(response)
+          if metadata.get('issuer','').rstrip('/') != issuer:
+              raise SystemExit('Keycloak discovery issuer does not match GATEWAY_ISSUER')
+          with urllib.request.urlopen(os.environ['JWKS_URI'], timeout=10) as response:
+              jwks=json.load(response)
+          if not isinstance(jwks.get('keys'),list) or not jwks['keys']:
+              raise SystemExit('Configured JWKS endpoint did not return signing keys')
+          print('Keycloak discovery issuer and JWKS endpoint verified; key material not recorded.')
+          PY
+      - name: Lint and render pinned Gateway chart
+        run: |
+          set -euo pipefail
+          helm lint deploy/helm/spectrace-service --strict --values deploy/helm/values/gateway.yaml --values "$RUNNER_TEMP/gateway-runtime-values.json"
+          helm template gateway deploy/helm/spectrace-service --namespace gateway \
+            --values deploy/helm/values/gateway.yaml --values "$RUNNER_TEMP/gateway-runtime-values.json" \
+            > "$RUNNER_TEMP/gateway-rendered.yaml"
+          grep -Fq 'ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway@sha256:d4190ea6ee31b84e7b67d36ad56e6391612c8bdc4916b8bb14d28b9a17f6ab47' "$RUNNER_TEMP/gateway-rendered.yaml"
+      - name: Install the first Gateway release into the existing namespace
+        run: |
+          set -euo pipefail
+          helm install gateway deploy/helm/spectrace-service --namespace gateway --wait --timeout 10m \
+            --values deploy/helm/values/gateway.yaml --values "$RUNNER_TEMP/gateway-runtime-values.json"
+          kubectl rollout status deployment/gateway-gateway --namespace gateway --timeout=5m
+          kubectl wait --for=condition=Available deployment/gateway-gateway --namespace gateway --timeout=60s
+          kubectl get pods --namespace gateway -l app.kubernetes.io/instance=gateway -o json > "$RUNNER_TEMP/gateway-pods.json"
+          kubectl get service gateway-gateway --namespace gateway -o json > "$RUNNER_TEMP/gateway-service.json"
+          kubectl get endpointslices --namespace gateway -l kubernetes.io/service-name=gateway-gateway -o json > "$RUNNER_TEMP/gateway-endpoints.json"
+          python3 - "$RUNNER_TEMP/gateway-pods.json" "$RUNNER_TEMP/gateway-endpoints.json" <<'PY'
+          import json, sys
+          pods=json.load(open(sys.argv[1]))['items']
+          assert len(pods)==1, f'expected exactly one Gateway Pod, found {len(pods)}'
+          pod=pods[0]
+          assert pod['status'].get('phase')=='Running'
+          statuses=pod['status'].get('containerStatuses',[])
+          assert len(statuses)==1 and statuses[0].get('ready') is True and statuses[0].get('restartCount')==0
+          assert statuses[0].get('imageID','').endswith('@sha256:d4190ea6ee31b84e7b67d36ad56e6391612c8bdc4916b8bb14d28b9a17f6ab47')
+          endpoints=[ep for sl in json.load(open(sys.argv[2]))['items'] for ep in sl.get('endpoints',[]) if ep.get('conditions',{}).get('ready')]
+          assert endpoints, 'no ready EndpointSlice address targets the Gateway Pod'
+          PY
+      - name: Verify in-cluster readiness through the ClusterIP Service
+        run: |
+          set -euo pipefail
+          kubectl port-forward --namespace gateway service/gateway-gateway 18080:8080 > "$RUNNER_TEMP/gateway-port-forward.log" 2>&1 &
+          port_forward_pid=$!
+          trap 'kill "$port_forward_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/actuator/health/readiness > "$RUNNER_TEMP/gateway-readiness.json"; then break; fi
+            sleep 2
+          done
+          python3 -c 'import json,sys; assert json.load(open(sys.argv[1])).get("status")=="UP"' "$RUNNER_TEMP/gateway-readiness.json"
+          mkdir -p "$RUNNER_TEMP/gateway-evidence"
+          python3 - "$RUNNER_TEMP/gateway-pods.json" "$RUNNER_TEMP/gateway-service.json" "$RUNNER_TEMP/gateway-endpoints.json" "$RUNNER_TEMP/gateway-readiness.json" "$RUNNER_TEMP/gateway-evidence/summary.json" <<'PY'
+          import json, sys
+          pods=json.load(open(sys.argv[1]))['items']
+          service=json.load(open(sys.argv[2]))
+          slices=json.load(open(sys.argv[3]))['items']
+          readiness=json.load(open(sys.argv[4]))
+          result={
+              'pod': {'name':pods[0]['metadata']['name'],'phase':pods[0]['status']['phase'],'ready':pods[0]['status']['containerStatuses'][0]['ready'],'image':pods[0]['spec']['containers'][0]['image'],'imageID':pods[0]['status']['containerStatuses'][0]['imageID'],'restartCount':pods[0]['status']['containerStatuses'][0]['restartCount']},
+              'deployment':'gateway-gateway Available',
+              'service':{'name':service['metadata']['name'],'type':service['spec']['type'],'clusterIP':service['spec']['clusterIP']},
+              'readyEndpointAddresses':[ep['addresses'] for sl in slices for ep in sl.get('endpoints',[]) if ep.get('conditions',{}).get('ready')],
+              'readinessHTTP':200,'readiness':readiness,
+              'commit':__import__('os').environ['GITHUB_SHA']
+          }
+          open(sys.argv[5],'w').write(json.dumps(result,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gateway-staging-deployment-${{ github.run_id }}
+          path: ${{ runner.temp }}/gateway-evidence/
+          if-no-files-found: ignore
+          retention-days: 14

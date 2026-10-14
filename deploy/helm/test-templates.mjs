@@ -49,7 +49,7 @@ for(const service of ['compliance','specification','formulation','label-workflow
     assert.equal(docs.find(d=>d.kind==='Service').spec.type,'ClusterIP');
     const np=docs.find(d=>d.kind==='NetworkPolicy');
     assert.deepEqual(np.spec.policyTypes,['Ingress','Egress']);
-    assert.equal(np.spec.egress.length,1,'Default egress is DNS only');
+    assert.equal(np.spec.egress.length,service==='gateway'?6:1,service==='gateway'?'Gateway egress is DNS plus five scoped upstreams':'Default egress is DNS only');
     assert.deepEqual(np.spec.egress[0].ports.map(p=>p.protocol),['UDP','TCP']);
     assert(!docs.some(d=>d.kind==='HorizontalPodAutoscaler'),'Fixed comparison must disable HPA');
     if(service!=='compliance') assert.equal(pod.nodeSelector['eks.amazonaws.com/nodegroup'],'general');
@@ -101,6 +101,33 @@ check('immutable image digest renders by digest',()=>{
   const docs=render('compliance',['--set','image.digest='+digest]);
   const deployment=docs.find(d=>d.kind==='Deployment');
   assert(deployment.spec.template.spec.containers[0].image.endsWith('@'+digest));
+});
+check('first Gateway release pins its verified image and only permits required in-cluster egress',()=>{
+  const docs=render('gateway');
+  const deployment=docs.find(d=>d.kind==='Deployment');
+  const pod=deployment.spec.template.spec;
+  assert.equal(pod.containers[0].image,'ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway@sha256:d4190ea6ee31b84e7b67d36ad56e6391612c8bdc4916b8bb14d28b9a17f6ab47');
+  assert.equal(pod.nodeSelector['eks.amazonaws.com/nodegroup'],'general');
+  assert.equal(pod.topologySpreadConstraints,undefined);
+  const np=docs.find(d=>d.kind==='NetworkPolicy');
+  assert.equal(np.spec.ingress.length,0);
+  assert.equal(np.spec.egress.length,6,'DNS plus the five Gateway upstream services');
+  for(const rule of np.spec.egress.slice(1)) assert.deepEqual(rule.ports,[{port:8080,protocol:'TCP'}]);
+  const env=pod.containers[0].env;
+  assert.equal(env.find(row=>row.name==='GATEWAY_REALM').value,'spectrace');
+  assert.equal(env.find(row=>row.name==='GATEWAY_AUDIENCE').value,'spectrace-api');
+  assert.equal(env.find(row=>row.name==='GATEWAY_ALLOWED_ORIGINS').value,'https://hxj04121-lab.github.io');
+});
+check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-scoped',()=>{
+  const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/deploy-gateway.yml'),'utf8'));
+  assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+  assert.deepEqual(workflow.jobs.deploy['runs-on'],['self-hosted','linux','staging-vpc']);
+  assert.equal(workflow.jobs.deploy.environment,'staging');
+  assert.deepEqual(workflow.jobs.deploy.permissions,{contents:'read','id-token':'write'});
+  const script=workflow.jobs.deploy.steps.map(step=>step.run||'').join('\n');
+  assert.match(script,/kubectl get namespace gateway/);
+  assert.doesNotMatch(script,/create namespace|kubectl create ns|terraform apply/i);
+  assert.match(script,/helm install gateway/);
 });
 check('invalid image digest is rejected',()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'--set','image.digest=sha256:short'],false));
 

@@ -75,7 +75,7 @@ python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hou
 
 The USD 200 value above is an example input only; no remaining account credit is asserted.
 
-Pre-apply callers use `.github/workflows/aws-staging-budget-gate.yml`. This reusable workflow always passes `--require-gate`, regardless of the caller event. Missing/empty or invalid credit exits 2; insufficient credit exits 1; only a finite non-negative balance covering the full estimate exits 0. It has no estimate-only override. The former combined `aws-staging-budget.yml` is now estimate-only; no repository workflow called that old reusable entry point when this correction was prepared. External callers must migrate to the gate path; an unmigrated call to the old estimate-only workflow is rejected by GitHub because it has no `workflow_call` trigger.
+Pre-apply callers use `.github/workflows/aws-staging-budget-gate.yml`. This reusable workflow always passes `--require-gate`, regardless of the caller event. A finite non-negative verified credit balance and a finite non-negative owner-approved spend cap are additive funding sources; either may be omitted, but both omitted or invalid exits 2, and a combined amount below the estimate exits 1. Only the owner should enter the spend cap in a protected GitHub Environment secret; it is an authorization ceiling for this gate, not an AWS billing limit or a claim about credits. The estimate-only workflow remains separate and cannot authorize deployment. External callers should migrate to the gate path; the old estimate-only workflow has no `workflow_call` trigger.
 
 ```yaml
 jobs:
