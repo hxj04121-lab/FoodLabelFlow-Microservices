@@ -81,6 +81,8 @@ public class GatewayConfiguration {
         http.authorizeExchange(rules -> {
             // The ingress allowlist restricts /auth to public OIDC paths, excluding admin and account APIs.
             rules.pathMatchers("/auth/**", "/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness").permitAll();
+            // Accepted Label contract: declaration editing is the sole public PUT operation.
+            rules.pathMatchers(HttpMethod.PUT, "/api/labels/*/declarations").hasRole("LABEL_OFFICER");
             for (String service : GatewayProperties.SERVICES) {
                 String prefix = switch (service) {
                     case "specification" -> "specifications";

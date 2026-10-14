@@ -38,8 +38,10 @@ async function api(request: APIRequestContext, authorization: string, method: 'G
   return response
 }
 async function labelAction(page: Page, button: string, suffix: string, status: number) {
-  const pending = page.waitForResponse(r => new URL(r.url()).pathname.endsWith(suffix) && r.request().method() === 'POST')
-  await page.getByRole('button', { name: button, exact: true }).click()
+  const target = page.getByRole('button', { name: button, exact: true })
+  await expect(target).toBeEnabled({ timeout: 15000 })
+  const pending = page.waitForResponse(r => new URL(r.url()).pathname.endsWith(suffix) && r.request().method() === 'POST', { timeout: 15000 })
+  await target.click()
   const response = await pending
   expect(response.status(), button).toBe(status)
   return response.json()
@@ -117,7 +119,10 @@ test('real G2 browser workflow validates, resubmits, approves, publishes and rea
     await labelAction(checker, 'Request changes', '/decisions', 201)
     await maker.getByRole('button', { name: 'Open label', exact: true }).click()
     await expect(maker.getByText('DRAFT', { exact: true })).toBeVisible()
+    const saved = maker.waitForResponse(r => new URL(r.url()).pathname.endsWith('/declarations') && r.request().method() === 'PUT', { timeout: 15000 })
     await maker.getByRole('button', { name: 'Save declarations', exact: true }).click()
+    expect((await saved).status()).toBe(200)
+    await expect(maker.getByText('Declarations saved. Validate this exact draft again before submitting.', { exact: true })).toBeVisible()
     await expect(maker.getByRole('button', { name: 'Submit for review', exact: true })).toBeDisabled()
     await labelAction(maker, 'Validate draft', '/validations', 201)
     await labelAction(maker, 'Submit for review', '/submit', 200)
