@@ -7,6 +7,22 @@ original independent checkpoint. Current delivery additionally prepares a dispos
 four-service G2 browser CI path in `frontend/real-auth-tests/g2-workflow.spec.ts`;
 cite its exact workflow result separately. Real deployed/human acceptance remains open.
 
+**Verified real-component checkpoint (14 October):** exact source
+`c60f268fc5b75f2a2416ca59ca5e11c9a1892290` passed both real Keycloak/Gateway jobs with
+the current four business services, MySQL and RabbitMQ (five original seed/sign-in
+cases plus one actual G2 browser case per job). The cycle validates and submits,
+requests changes, saves declarations through the accepted PUT, revalidates/resubmits,
+approves as the distinct checker, publishes with the contracted 201, queries the
+exact PUBLISHED current label, and rejects a south manufacturer's access with 403.
+The owner SeedReplay and consumer acknowledgements are observed only in the
+disposable CI broker; they do not certify M5's deployed topology.
+[Trusted workflow](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38524127967),
+[PR workflow](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38524133073),
+[sanitized JSON](evidence/G2-M3-real-workflow-20261014.json),
+[published-label screenshot](evidence/G2-M3-real-published-20261014.png).
+Two actual maker/checker recordings remain in the workflow's real-component
+artifact and the locally downloaded evidence; they are CI videos, not an AWS demo.
+
 Record date: 13 October 2026. Source branch: `XFY`. This records the independently
 implemented reference UI for the [G2-M3 work order](../../.project-control/work-orders/G2/M3-review-approval-publication-ui.yaml).
 Real service integration and human acceptance remain open dependencies. This

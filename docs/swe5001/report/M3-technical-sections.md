@@ -56,8 +56,14 @@ and new release before creating the draft, preventing a timing-dependent old-for
 binding without weakening the exact-version assertion. Separate maker/checker
 browser sessions exercise validation, request
 changes, editing/revalidation/resubmission, approval, publication and current-label
-lookup, plus a south manufacturer denial. Its actual run result must be cited from
-the exact source workflow before describing it as passed; it is not deployed acceptance.
+lookup, plus a south manufacturer denial. This path passed in both the trusted XFY
+and PR real-component jobs at exact code checkpoint `c60f268fc5b75f2a2416ca59ca5e11c9a1892290`
+on 14 October. Each job passed the existing five sign-in/seed cases and the new
+G2 workflow case. This is real disposable CI integration, not deployed acceptance.
+[Trusted XFY run](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38524127967),
+[PR run](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38524133073),
+[sanitized workflow evidence](../evidence/G2-M3-real-workflow-20261014.json),
+[actual published-label screenshot](../evidence/G2-M3-real-published-20261014.png).
 [G2 evidence](../G2-M3-frontend-independent.md).
 
 ## Impact Inbox and Two-Phase Evidence
@@ -94,6 +100,16 @@ applicable checks and published the Gateway digest
 `sha256:4440dd8408c674a707b945c9d4b55698c7364fbd0aab3ba5b3af8aba3f6233a2`.
 That immutable checkpoint must not be relabelled as the later inbox/G2 source.
 [Checkpoint CI](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38426000062).
+
+The later `c60f268` code checkpoint passes all applicable remote checks, including
+both real G2 jobs, Gateway/frontend, backend/platform, containers/security and
+SonarQube/SonarCloud; Pages is conditionally skipped. Local Gateway verification
+passed 41 tests; the frontend fixture suite passed 69 tests, Pages checks seven,
+and deployed/demo config checks three groups. The tested Gateway image at this
+exact SHA has digest `sha256:2434fd52920ffd4cfa02f51fabe9f1c68f55b3437d4cf4e5265be52889c20153`,
+confirmed from downloaded release metadata and the anonymous registry manifest.
+The later documentation-only evidence update preserves this immutable code checkpoint.
+[Full checkpoint CI](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38524133048).
 
 ## Full Demo Path and Runtime Acceptance
 
