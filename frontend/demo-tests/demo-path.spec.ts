@@ -161,7 +161,7 @@ test('STCN-102 deployed public demo path: potential, explicit adoption, confirme
     await checker.getByRole('button', { name: 'Open label', exact: true }).click()
     await action(checker, 'Approve version', `/api/labels/${label.labelVersionId}/decisions`, 201)
     await checker.getByLabel('I have checked this version and want to publish it.', { exact: true }).check()
-    await action(checker, 'Publish version', `/api/labels/${label.labelVersionId}/publish`, 200)
+    await action(checker, 'Publish version', `/api/labels/${label.labelVersionId}/publish`, 201)
     await checker.getByLabel('Current product ID', { exact: true }).fill(product)
     await checker.getByLabel('Current jurisdiction code', { exact: true }).fill(jurisdiction)
     await checker.getByRole('button', { name: 'Load current label', exact: true }).click()

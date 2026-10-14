@@ -192,7 +192,7 @@ test.beforeAll(async () => {
         if (!actorRoles.includes('PUBLISHER') || label.lifecycleStatus !== 'APPROVED') json({ code: 'LABEL_APPROVAL_REQUIRED' }, 409)
         else { label.lifecycleStatus = 'PUBLISHED'; json({ publicationRecordId: 'publication-one',
           labelVersionId: labelScenario === 'wrong-publication' ? 'another-label' : label.labelVersionId,
-          lifecycleStatus: 'PUBLISHED', publishedAt: '2026-10-13T05:01:00Z' }) }
+          lifecycleStatus: 'PUBLISHED', publishedAt: '2026-10-13T05:01:00Z' }, 201) }
       } else json({ code: 'LABEL_NOT_FOUND' }, 404)
     } else if (url.pathname.endsWith('/logout')) {
       res.writeHead(302, { Location: url.searchParams.get('post_logout_redirect_uri')! }); res.end()

@@ -44,6 +44,8 @@ async function labelAction(page: Page, button: string, suffix: string, status: n
   await target.click()
   const response = await pending
   expect(response.status(), button).toBe(status)
+  observed.push({ operation: 'POST ' + new URL(response.url()).pathname, status: response.status(),
+    correlation: response.headers()['x-correlation-id'] })
   return response.json()
 }
 
@@ -130,14 +132,16 @@ test('real G2 browser workflow validates, resubmits, approves, publishes and rea
     await labelAction(checker, 'Approve version', '/decisions', 201)
     await expect(checker.getByRole('button', { name: 'Publish version', exact: true })).toBeDisabled()
     await checker.getByLabel('I have checked this version and want to publish it.', { exact: true }).check()
-    await labelAction(checker, 'Publish version', '/publish', 200)
+    await labelAction(checker, 'Publish version', '/publish', 201)
     await checker.getByLabel('Current product ID', { exact: true }).fill(productId)
     await checker.getByLabel('Current jurisdiction code', { exact: true }).fill('US')
     await checker.getByRole('button', { name: 'Load current label', exact: true }).click()
     await expect(checker.getByText('This is the current published label returned by the service.', { exact: true })).toBeVisible()
     const currentLabel = await api(request, makerToken, 'GET', `/api/labels/current?productId=${productId}&jurisdictionCode=US`)
     expect(currentLabel.status()).toBe(200)
-    expect((await currentLabel.json()).labelVersionId).toBe(label!.labelVersionId)
+    const published = await currentLabel.json()
+    expect(published.labelVersionId).toBe(label!.labelVersionId)
+    expect(published.lifecycleStatus).toBe('PUBLISHED')
     const southContext = await browser.newContext({ baseURL: 'http://localhost:5173' })
     try {
       const southToken = await login(await southContext.newPage(), 'manufacturer.south.maker')
@@ -149,7 +153,7 @@ test('real G2 browser workflow validates, resubmits, approves, publishes and rea
     await checker.screenshot({ path: 'test-results/real-signin/g2-published.png', fullPage: true })
     await writeFile('test-results/real-signin/g2-workflow.json', JSON.stringify({
       scope: 'Real disposable CI Keycloak/Gateway/Specification/Formulation/Compliance/Label; no AWS or G3 ReviewTask acceptance',
-      source: process.env.GITHUB_SHA, productId, label, formulaVersionId: formula.formulaVersionId, specificationVersionId: spec.specificationVersionId,
+      source: process.env.GITHUB_SHA, productId, label: published, formulaVersionId: formula.formulaVersionId, specificationVersionId: spec.specificationVersionId,
       checks: ['PKCE separate maker/checker', 'real rule resolver/validation', 'request changes and resubmit', 'approve/publish/current label', 'foreign label 403'], observed,
     }, null, 2))
   } finally { await supplierContext.close(); await makerContext.close(); await checkerContext.close() }
