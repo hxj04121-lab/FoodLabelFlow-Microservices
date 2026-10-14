@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Layers3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LabelWorkspace } from '@/features/labels/LabelWorkspace'
+import { ImpactInbox } from '@/features/impact/ImpactInbox'
 import { callerClaimsPath, canSignIn, getSession, matchesCaller, publicApiGet, signIn, signOut, startSession, subscribeSession, type CallerIdentity } from './session'
 
 export function SignInWorkspace() {
@@ -12,9 +13,10 @@ export function SignInWorkspace() {
   const [caller, setCaller] = useState<CallerIdentity | null>(null)
   const [callerNotice, setCallerNotice] = useState('')
   const [callerBusy, setCallerBusy] = useState(false)
-  const [view, setView] = useState<'workspace' | 'labels'>('workspace')
+  const [view, setView] = useState<'workspace' | 'labels' | 'impact'>('workspace')
+  const [linkedLabel, setLinkedLabel] = useState('')
   useEffect(() => { void startSession() }, [])
-  useEffect(() => { setProducts(null); setNotice(''); setCaller(null); setCallerNotice(''); setView('workspace') }, [session.status])
+  useEffect(() => { setProducts(null); setNotice(''); setCaller(null); setCallerNotice(''); setView('workspace'); setLinkedLabel('') }, [session.status, session.identity])
   async function verifyCaller() {
     if (!callerClaimsPath) return
     const identity = getSession().identity
@@ -54,8 +56,11 @@ export function SignInWorkspace() {
         <nav className="workspace-navigation" aria-label="Workspace sections">
           <Button variant="ghost" aria-current={view === 'workspace' ? 'page' : undefined} onClick={() => setView('workspace')}>Workspace</Button>
           <Button variant="ghost" aria-current={view === 'labels' ? 'page' : undefined} onClick={() => setView('labels')}>Labels</Button>
+          <Button variant="ghost" aria-current={view === 'impact' ? 'page' : undefined} onClick={() => setView('impact')}>Impact inbox</Button>
         </nav>
-        {view === 'labels' && session.identity ? <LabelWorkspace key={`${session.identity.subject}:${session.identity.organisationId}`} identity={session.identity} /> : <>
+        {view === 'impact' && session.identity ? <ImpactInbox key={`${session.identity.subject}:${session.identity.organisationId}`} identity={session.identity}
+          openLabel={id => { setLinkedLabel(id); setView('labels') }} />
+          : view === 'labels' && session.identity ? <LabelWorkspace key={`${session.identity.subject}:${session.identity.organisationId}:${linkedLabel}`} identity={session.identity} initialLabelId={linkedLabel} /> : <>
         <section className="signin-identity" aria-label="Signed-in identity"><dl>
           <div><dt>Organisation</dt><dd>{session.identity?.organisationId}</dd></div>
           <div><dt>Organisation type</dt><dd>{session.identity?.organisationType}</dd></div>

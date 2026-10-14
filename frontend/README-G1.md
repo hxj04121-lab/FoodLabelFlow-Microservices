@@ -126,6 +126,11 @@ and `g1-deployed.env.example`; its ignored local copy can be loaded with Node's
 
 ## G2 label workspace
 
+The authenticated navigation now includes an **Impact inbox** for manufacturer
+CHANGE_MANAGER users. See [STCN-101 evidence](../docs/swe5001/G3-M3-inbox-independent.md)
+and the separately gated [STCN-102 demo profile](../docs/swe5001/G3-M3-demo-acceptance.md).
+Fixture tests are UI evidence; actual deployed acceptance remains pending.
+
 After signing in, open **Labels** for the independent draft, validation, review
 and publication reference UI. See the [G2 M3 frontend evidence and usage record](../docs/swe5001/G2-M3-frontend-independent.md)
 for role visibility, recovery behavior, fixture test evidence, recording commands

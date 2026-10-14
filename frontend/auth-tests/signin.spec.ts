@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { createServer, type Server } from 'node:http'
 import { createHash, generateKeyPairSync, sign, randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 
 // Protocol fixture only: no real user, password, Keycloak, or business service is simulated as deployed.
 const origin = 'http://127.0.0.1:8191'
@@ -28,6 +29,11 @@ let label = freshLabel()
 let labelRequests: Array<{ method: string; path: string; query: string; body: unknown; authenticated: boolean; correlation: string }> = []
 let labelDeclarations: Array<{ allergenId: string; declarationType: 'CONTAINS'; declarationSource: string; displayText: string | null }> = []
 let draftRevision = 0
+const confirmedImpact = { ...JSON.parse(readFileSync('../contracts/examples/compliance/impact-confirmed-missing.json', 'utf8')).payload,
+  organisationId: 'org-one', labelVersion: { id: 'label-one', versionNumber: 1 } }
+const unresolvedImpact = { ...JSON.parse(readFileSync('../contracts/examples/compliance/impact-unresolved.json', 'utf8')).payload, organisationId: 'org-one' }
+let impactScenario = 'ok'
+let impactRequests: Array<{ path: string; query: string; authenticated: boolean; correlation: string }> = []
 async function saveCoverage(page: Page) {
   if (process.env.VITE_COVERAGE !== 'true' || page.isClosed()) return
   const coverage = await page.evaluate(() => (window as Window & { __coverage__?: unknown }).__coverage__)
@@ -94,6 +100,35 @@ test.beforeAll(async () => {
       expect(req.headers['x-correlation-id']).toBeTruthy()
       json(apiStatus === 200 ? { items: [{ productId: 'product-one', organisationId: mode === 'foreign-product' ? 'another-org' : 'org-one',
         productDescription: 'Organisation product', brandOwner: 'Test manufacturer', normalizedCategory: 'TEST', currentFormulaVersion: null }], nextCursor: null } : {}, apiStatus)
+    } else if (url.pathname.startsWith('/api/compliance/impact-findings')) {
+      impactRequests.push({ path: url.pathname, query: url.search, authenticated: req.headers.authorization === `Bearer ${sentToken}`,
+        correlation: String(req.headers['x-correlation-id']) })
+      res.setHeader('X-Correlation-ID', String(req.headers['x-correlation-id']))
+      if (impactScenario === 'delay') await new Promise(resolve => setTimeout(resolve, 600))
+      if (impactScenario.startsWith('error-')) { json({ code: 'FIXTURE_ERROR', message: 'PRIVATE_IMPACT_MUST_NOT_LEAK' }, Number(impactScenario.slice(6))); return }
+      const item = { ...confirmedImpact }
+      if (impactScenario === 'potential') item.kind = 'POTENTIAL'
+      if (impactScenario === 'no-action') { item.kind = 'POTENTIAL'; item.outcome = 'NO_ACTION'; item.missingAllergens = [] }
+      if (impactScenario === 'foreign-item') item.organisationId = 'another-org'
+      if (impactScenario === 'bad-version') item.formulaVersion = { id: 'formula_001_v2', versionNumber: 0 }
+      if (impactScenario === 'contradiction') item.outcome = 'NO_ACTION'
+      if (impactScenario === 'wrong-detail') item.findingId = 'another-finding'
+      if (url.pathname !== '/api/compliance/impact-findings') json(url.pathname.endsWith('finding_004') ? unresolvedImpact : item)
+      else {
+        const all = impactScenario === 'empty' ? [] : url.searchParams.has('cursor') ? [unresolvedImpact] : [item]
+        const items = impactScenario === 'wrong-filter' ? all : all.filter(f => (!url.searchParams.has('kind') || f.kind === url.searchParams.get('kind'))
+          && (!url.searchParams.has('outcome') || f.outcome === url.searchParams.get('outcome')))
+        json({ organisationId: impactScenario === 'foreign-page' ? 'another-org' : 'org-one', items,
+          nextCursor: impactScenario === 'repeat-cursor' ? url.searchParams.get('cursor') || 'cursor-one'
+            : impactScenario === 'empty' || url.searchParams.has('cursor') ? null : 'opaque +&cursor=' })
+      }
+    } else if (/^\/api\/(specifications\/versions|formulations\/formula-versions)\//.test(url.pathname)) {
+      impactRequests.push({ path: url.pathname, query: url.search, authenticated: req.headers.authorization === `Bearer ${sentToken}`,
+        correlation: String(req.headers['x-correlation-id']) })
+      const spec = url.pathname.includes('/specifications/')
+      const id = url.pathname.split('/').pop()!
+      json({ [spec ? 'specificationVersionId' : 'formulaVersionId']: id, organisationId: spec ? 'supplier-one' : 'org-one',
+        versionNumber: id.endsWith('v1') ? 1 : 2, lifecycleStatus: 'RELEASED' })
     } else if (url.pathname.startsWith('/api/labels/')) {
       let text = ''; for await (const chunk of req) text += chunk
       labelRequests.push({ method: req.method!, path: url.pathname, query: url.search, body: text ? JSON.parse(text) : null,
@@ -167,7 +202,7 @@ test.beforeAll(async () => {
 })
 test.afterAll(async () => { await new Promise<void>(resolve => server.close(() => resolve())) })
 test.beforeEach(() => { mode = 'ok'; apiStatus = 200; observedAuthorization = ''; exchanges = 0; verifiedPkce = false; codes.clear()
-  actorRoles = ['LABEL_OFFICER', 'APPROVER']; actorType = 'MANUFACTURER'; actorSubject = 'test-user'; labelCreator = 'original-maker'; decisionRecorded = false; labelScenario = 'ok'; labelDelay = 0; label = freshLabel(); labelRequests = []; labelDeclarations = []; draftRevision = 0 })
+  actorRoles = ['LABEL_OFFICER', 'APPROVER']; actorType = 'MANUFACTURER'; actorSubject = 'test-user'; labelCreator = 'original-maker'; decisionRecorded = false; labelScenario = 'ok'; labelDelay = 0; label = freshLabel(); labelRequests = []; labelDeclarations = []; draftRevision = 0; impactScenario = 'ok'; impactRequests = [] })
 async function login(page: Page) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Continue with Keycloak', exact: true }).click()
@@ -259,6 +294,131 @@ async function labels(page: Page) {
   await login(page)
   await page.getByRole('button', { name: 'Labels', exact: true }).click()
 }
+
+async function inbox(page: Page) {
+  actorRoles = ['CHANGE_MANAGER', 'LABEL_OFFICER']
+  await login(page)
+  await page.getByRole('button', { name: 'Impact inbox', exact: true }).click()
+  await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click()
+}
+
+test('STCN-101 reads exact confirmed evidence, version references and the linked label', async ({ page }) => {
+  await inbox(page)
+  await page.getByRole('button', { name: 'View finding finding_002', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Finding finding_002', exact: true })).toBeFocused()
+  await expect(page.getByText('all_soy, all_wheat', { exact: true })).toBeVisible()
+  await expect(page.locator('.impact-allergens')).toContainText('Declared allergensall_wheat')
+  await expect(page.locator('.impact-allergens')).toContainText('Missing allergensall_soy')
+  await expect(page.getByText(/Review task delivery must be verified separately/)).toBeVisible()
+  await page.getByRole('button', { name: 'Previous specification:', exact: false }).click()
+  await expect(page.getByRole('status')).toContainText('Previous specification verified: spec_001_v1')
+  await page.getByRole('button', { name: 'Candidate specification:', exact: false }).click()
+  await expect(page.getByRole('status')).toContainText('Candidate specification verified: spec_001_v2')
+  await page.getByRole('button', { name: 'Formula:', exact: false }).click()
+  await expect(page.getByRole('status')).toContainText('Formula verified: formula_001_v2')
+  await page.screenshot({ path: 'test-results/signin/impact-desktop.png', fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.screenshot({ path: 'test-results/signin/impact-mobile.png', fullPage: true })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(impactRequests.every(req => req.authenticated && req.correlation && !req.query.includes('org'))).toBe(true)
+  await page.getByRole('button', { name: 'Open label:', exact: false }).click()
+  await expect(page.getByLabel('Label version ID', { exact: true })).toHaveValue('label-one')
+  await page.getByRole('button', { name: 'Open label', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Label version 1', exact: true })).toBeVisible()
+})
+
+test('STCN-101 keeps opaque pagination and displays unresolved provenance without an invented allergen', async ({ page }) => {
+  await inbox(page)
+  await page.getByRole('button', { name: 'Next page', exact: true }).click()
+  await page.getByRole('button', { name: 'View finding finding_004', exact: true }).click()
+  expect(new URLSearchParams(impactRequests[1].query).get('cursor')).toBe('opaque +&cursor=')
+  await expect(page.getByText('Formula item', { exact: true }).first()).toBeVisible()
+  await expect(page.locator('.impact-unresolved')).toContainText('UNMAPPED')
+  await expect(page.locator('.impact-unresolved')).toContainText('natural flavouring (carrier undisclosed)')
+  await expect(page.locator('.impact-unresolved')).toContainText('spec_003_v2_c02')
+  await expect(page.getByRole('button', { name: 'Next page', exact: true })).toHaveCount(0)
+})
+
+test('STCN-101 changed filters discard previous evidence and restart cursor pagination', async ({ page }) => {
+  await inbox(page)
+  await page.getByRole('button', { name: 'View finding finding_002', exact: true }).click()
+  await page.getByLabel('Finding kind', { exact: true }).selectOption('POTENTIAL')
+  await expect(page.getByRole('heading', { name: 'Finding finding_002', exact: true })).toHaveCount(0)
+  await page.getByLabel('Finding outcome', { exact: true }).selectOption('NO_ACTION')
+  await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('An empty inbox does not establish a NO_ACTION conclusion')
+  const params = new URLSearchParams(impactRequests.at(-1)!.query)
+  expect(params.get('kind')).toBe('POTENTIAL'); expect(params.get('outcome')).toBe('NO_ACTION'); expect(params.has('cursor')).toBe(false)
+})
+test('STCN-101 potential and NO_ACTION findings remain evidence rather than adopted formulas or tasks', async ({ page }) => {
+  impactScenario = 'potential'; await inbox(page)
+  await page.getByRole('button', { name: 'View finding finding_002', exact: true }).click()
+  await expect(page.getByText(/Potential impact only/)).toBeVisible()
+  impactScenario = 'no-action'
+  await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click()
+  await page.getByRole('button', { name: 'View finding finding_002', exact: true }).click()
+  await expect(page.locator('.impact-state')).toContainText('NO_ACTION')
+  await expect(page.locator('.impact-allergens')).toContainText('Missing allergensNone recorded')
+  await expect(page.getByRole('button', { name: /adopt|create review task/i })).toHaveCount(0)
+})
+test('STCN-101 rejects findings that violate the selected filters', async ({ page }) => {
+  await inbox(page)
+  await page.getByLabel('Finding kind', { exact: true }).selectOption('POTENTIAL')
+  impactScenario = 'wrong-filter'
+  await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('outside your selected filters')
+})
+
+for (const scenario of ['foreign-item', 'foreign-page', 'bad-version', 'contradiction']) {
+  test(`STCN-101 hides an entire unreadable inbox for ${scenario}`, async ({ page }) => {
+    impactScenario = scenario; await inbox(page)
+    await expect(page.getByRole('alert')).toContainText('unreadable')
+    await expect(page.getByRole('button', { name: 'View finding finding_002', exact: true })).toHaveCount(0)
+    await expect(page.getByText('all_soy', { exact: true })).toHaveCount(0)
+  })
+}
+test('STCN-101 does not display another exact finding or a repeated cursor', async ({ page }) => {
+  await inbox(page); impactScenario = 'wrong-detail'
+  await page.getByRole('button', { name: 'View finding finding_002', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('different or unreadable')
+  await expect(page.getByRole('heading', { name: /Finding finding/ })).toHaveCount(0)
+  impactScenario = 'repeat-cursor'
+  await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click()
+  await page.getByRole('button', { name: 'Next page', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('cursor repeated')
+})
+for (const status of [403, 404, 422, 429, 503]) {
+  test(`STCN-101 explains ${status} without revealing service internals or retrying`, async ({ page }) => {
+    impactScenario = `error-${status}`; await inbox(page)
+    await expect(page.getByRole('alert')).toBeVisible()
+    await expect(page.locator('body')).not.toContainText('PRIVATE_IMPACT_MUST_NOT_LEAK')
+    expect(impactRequests).toHaveLength(1)
+    await expect(page.getByRole('button', { name: 'Refresh inbox', exact: true })).toBeEnabled()
+  })
+}
+test('STCN-101 a read 401 ends the session and removes all evidence', async ({ page }) => {
+  impactScenario = 'error-401'; await inbox(page)
+  await expect(page.getByRole('heading', { name: 'Sign in to your organisation', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Impact inbox', exact: true })).toHaveCount(0)
+})
+test('STCN-101 supplier and roleless users cannot issue inbox reads', async ({ page }) => {
+  actorRoles = ['CHANGE_MANAGER']; actorType = 'SUPPLIER'; await login(page)
+  await page.getByRole('button', { name: 'Impact inbox', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('require a manufacturer account')
+  await expect(page.getByRole('button', { name: 'Refresh inbox', exact: true })).toHaveCount(0)
+  expect(impactRequests).toHaveLength(0)
+  actorType = 'MANUFACTURER'; actorRoles = []; await login(page)
+  await page.getByRole('button', { name: 'Impact inbox', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('CHANGE_MANAGER')
+  expect(impactRequests).toHaveLength(0)
+})
+test('STCN-101 leaving during a read never restores evidence to another workspace view', async ({ page }) => {
+  impactScenario = 'delay'; await inbox(page)
+  await page.getByRole('button', { name: 'Labels', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Labels', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Impact inbox', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'View finding finding_002', exact: true })).toHaveCount(0)
+})
 async function createDraft(page: Page) {
   await page.getByLabel('Product ID', { exact: true }).fill('product-one')
   await page.getByLabel('Jurisdiction code', { exact: true }).fill('SG')
@@ -449,7 +609,7 @@ for (const scenario of ['lost-response', 'empty-response']) {
   test(`STCN-77 ${scenario} leaves a write unconfirmed and blocks retries`, async ({ page }) => {
     await labels(page); labelScenario = scenario
     await page.evaluate(() => {
-      const tracked = window as Window & { labelPostAttempts: number }
+      const tracked = window as unknown as Window & { labelPostAttempts: number }
       tracked.labelPostAttempts = 0
       const send = window.fetch.bind(window)
       window.fetch = (input, init) => { if (init?.method === 'POST') tracked.labelPostAttempts++; return send(input, init) }
@@ -459,7 +619,7 @@ for (const scenario of ['lost-response', 'empty-response']) {
     await expect(page.getByRole('alert')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Create draft', exact: true })).toBeDisabled()
     await expect(page.getByRole('heading', { name: 'Label version 1', exact: true })).toHaveCount(0)
-    expect(await page.evaluate(() => (window as Window & { labelPostAttempts: number }).labelPostAttempts)).toBe(1)
+    expect(await page.evaluate(() => (window as unknown as Window & { labelPostAttempts: number }).labelPostAttempts)).toBe(1)
     // A browser transport may replay a dropped connection. The application must not issue another fetch.
     expect(new Set(labelRequests.map(request => request.correlation)).size).toBe(1)
   })

@@ -104,7 +104,7 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci && npm run build
+      - run: npm ci && npm run build && npm run test:types
         working-directory: frontend
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
@@ -140,9 +140,9 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Build the real Specification/Formulation services and Gateway
+      - name: Build all four real services and Gateway
         run: |
-          mvn -B -ntp -pl services/specification,services/formulation -am -DskipTests -Djackson-bom.version=3.1.7 package
+          mvn -B -ntp -pl services/specification,services/formulation,services/compliance,services/label-workflow -am -DskipTests -Djackson-bom.version=3.1.7 package
           mvn -B -ntp -f platform/gateway/pom.xml -DskipTests package
       - run: npm ci && npx playwright install --with-deps chromium
         working-directory: frontend
@@ -157,11 +157,12 @@ jobs:
           realm="$PWD/deploy/keycloak/realm/spectrace-realm.json"
           compose="$PWD/deploy/local/compose.yaml"
           docker compose -p m3-real-services -f "$compose" up -d --wait mysql rabbitmq
+          python3 frontend/scripts/prepare-ci-compliance-topology.py
           docker run -d --name m3-real-keycloak -p 127.0.0.1:18180:8080 \
             -e KC_HTTP_RELATIVE_PATH=/auth -e KC_HOSTNAME=http://localhost:18080/auth \
             -v "$realm:/opt/keycloak/data/import/spectrace-realm.json:ro" \
             quay.io/keycloak/keycloak:26.0.7 start-dev --import-realm --hostname-strict=false
-          trap 'kill ${gateway_pid:-} ${caller_pid:-} ${formulation_pid:-} 2>/dev/null || true; docker logs m3-real-keycloak > "$evidence/keycloak.log" 2>&1; docker compose -p m3-real-services -f "$compose" logs > "$evidence/infrastructure.log" 2>&1; docker rm -f m3-real-keycloak; docker compose -p m3-real-services -f "$compose" down -v' EXIT
+          trap 'kill ${gateway_pid:-} ${caller_pid:-} ${formulation_pid:-} ${compliance_pid:-} ${label_pid:-} 2>/dev/null || true; docker logs m3-real-keycloak > "$evidence/keycloak.log" 2>&1; docker compose -p m3-real-services -f "$compose" logs > "$evidence/infrastructure.log" 2>&1; docker rm -f m3-real-keycloak; docker compose -p m3-real-services -f "$compose" down -v' EXIT
           for attempt in $(seq 1 90); do
             if curl -fsS http://localhost:18180/auth/realms/spectrace/.well-known/openid-configuration > /dev/null; then break; fi
             sleep 2
@@ -179,33 +180,51 @@ jobs:
           RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
             java -jar services/formulation/target/app.jar --server.port=18085 > "$evidence/formulation.log" 2>&1 &
           formulation_pid=$!
+          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
+          SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
+          SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/compliance?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
+          RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
+            java -jar services/compliance/target/app.jar --server.port=18086 > "$evidence/compliance.log" 2>&1 &
+          compliance_pid=$!
+          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
+          SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
+          SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/label_workflow?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
+          RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
+            java -jar services/label-workflow/target/app.jar --server.port=18087 \
+            --spectrace.label-workflow.validation-base-url=http://localhost:18086 > "$evidence/label-workflow.log" 2>&1 &
+          label_pid=$!
           GATEWAY_PORT=18080 GATEWAY_REALM=spectrace GATEWAY_ISSUER="$issuer" GATEWAY_JWK_SET_URI="$jwks" GATEWAY_AUDIENCE=spectrace-api \
           GATEWAY_KEYCLOAK=http://localhost:18180 GATEWAY_SPECIFICATION=http://localhost:18084 GATEWAY_FORMULATION=http://localhost:18085 \
-          GATEWAY_COMPLIANCE=http://localhost:18084 GATEWAY_LABEL_WORKFLOW=http://localhost:18084 \
+          GATEWAY_COMPLIANCE=http://localhost:18086 GATEWAY_LABEL_WORKFLOW=http://localhost:18087 \
           GATEWAY_ALLOWED_ORIGINS=http://localhost:5173 GATEWAY_SPECIFICATION_WRITE_ROLES=ADMIN_DATA_MAINTENANCE \
           GATEWAY_FORMULATION_WRITE_ROLES=ADMIN_DATA_MAINTENANCE GATEWAY_COMPLIANCE_WRITE_ROLES=CHANGE_MANAGER GATEWAY_LABEL_WRITE_ROLES=LABEL_OFFICER,APPROVER,PUBLISHER \
             java -jar platform/gateway/target/spectrace-gateway-0.1.0-SNAPSHOT.jar > "$evidence/gateway.log" 2>&1 &
           gateway_pid=$!
           for attempt in $(seq 1 60); do
-            if curl -fsS http://localhost:18084/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18085/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18080/actuator/health/readiness > /dev/null; then break; fi
+            if curl -fsS http://localhost:18084/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18085/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18086/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18087/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18080/actuator/health/readiness > /dev/null; then break; fi
             sleep 2
           done
           curl -fsS http://localhost:18084/actuator/health/readiness
           curl -fsS http://localhost:18085/actuator/health/readiness
+          curl -fsS http://localhost:18086/actuator/health/readiness
+          curl -fsS http://localhost:18087/actuator/health/readiness
           curl -fsS http://localhost:18080/actuator/health/readiness
           cd frontend
-          npx playwright test --config playwright.real-signin.config.ts
+          npx playwright test --config playwright.real-signin.config.ts signin.spec.ts seeded-access.spec.ts
+          npx playwright test --config playwright.real-signin.config.ts g2-workflow.spec.ts --output test-results/real-g2
       - name: Redact local login secrets before evidence upload
         if: always()
         run: |
           python3 frontend/scripts/redact-traces.py --self-check
           python3 frontend/scripts/redact-traces.py frontend/test-results/real-signin
+          python3 frontend/scripts/redact-traces.py frontend/test-results/real-g2
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: m3-real-keycloak-evidence
           path: |
             frontend/test-results/real-signin/**
+            frontend/test-results/real-g2/**
             frontend/test-results/real-services/**
           retention-days: 14
   pages:

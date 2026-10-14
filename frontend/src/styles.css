@@ -297,6 +297,7 @@ th { position:relative; }
 
 /* Authenticated label tasks extend the existing reference workspace. */
 .workspace-navigation { display: flex; gap: 8px; border-bottom: 1px solid #dad8e6; margin: 8px 0 32px; padding-bottom: 8px; }
+.workspace-navigation { flex-wrap: wrap; }
 .workspace-navigation button[aria-current="page"] { color: #563aa5; background: #efecf8; font-weight: 700; }
 .g2-label-entry-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; margin: 28px 0 32px; }
 .g2-label-workspace fieldset { border: 0; padding: 0; min-width: 0; }
@@ -334,4 +335,38 @@ th { position:relative; }
   .g2-label-entry-grid > :last-child { padding-top: 24px; border-top: 1px solid #dad8e6; }
   .g2-label-facts { grid-template-columns: 1fr; }
   .g2-label-actions button { flex: 1 1 180px; }
+}
+
+/* Impact evidence extends the authenticated workspace without inventing task state. */
+.impact-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 20px; margin: 28px 0; }
+.impact-filters label { display: grid; gap: 8px; font-size: 14px; font-weight: 600; }
+.impact-filters select { min-height: 44px; min-width: 180px; padding: 10px 12px; border: 1px solid #9b95ac; border-radius: 6px; background: white; color: #303049; font: inherit; }
+.impact-inbox :is(select, .impact-table-wrap):focus-visible { outline: 3px solid #7155bc; outline-offset: 3px; }
+.impact-inbox ::selection { color: #303049; background: #ded5f5; }
+.impact-table-wrap { overflow-x: auto; margin: 24px 0; scrollbar-color: #9b95ac #eeedf4; }
+.impact-table-wrap table { width: 100%; min-width: 580px; border-collapse: collapse; }
+.impact-table-wrap caption { text-align: left; color: #55556d; padding-bottom: 12px; font-size: 14px; }
+.impact-table-wrap :is(th, td) { padding: 16px 12px; text-align: left; border-bottom: 1px solid #dad8e6; color: #303049; overflow-wrap: anywhere; max-width: 280px; font-size: 14px; }
+.impact-table-wrap th { background: #efecf8; }
+.impact-table-wrap td span { display: block; color: #55556d; margin-top: 6px; }
+.impact-detail { border-top: 1px solid #dad8e6; padding-top: 28px; margin-top: 36px; overflow-wrap: anywhere; }
+.impact-detail h3 { font-size: 21px; font-weight: 650; margin-bottom: 16px; }
+.impact-detail h3:focus { outline: none; }
+.impact-detail h4 { font-size: 18px; font-weight: 650; margin: 28px 0 14px; }
+.impact-inbox .impact-state { font-weight: 650; color: #51407e; }
+.impact-allergens { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding-block: 20px; border-block: 1px solid #dad8e6; }
+.impact-inbox dt { color: #55556d; font-size: 14px; margin-bottom: 8px; }
+.impact-inbox dd { margin: 0; font-size: 16px; font-variant-numeric: tabular-nums; }
+.impact-unresolved { list-style: none; padding: 0; }
+.impact-unresolved li { padding-block: 18px; border-bottom: 1px solid #dad8e6; }
+.impact-unresolved dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.impact-version-links { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+.impact-version-links button { text-align: left; overflow-wrap: anywhere; max-width: 100%; height: auto; padding-block: 12px; }
+.impact-error { color: #812539; background: #fff1f2; border: 1px solid #d995a3; border-radius: 6px; padding: 16px; margin-block: 20px; }
+.impact-error p { color: inherit; margin: 0; }
+.impact-error small { display: block; overflow-wrap: anywhere; margin-top: 8px; }
+@media (max-width: 600px) {
+  .impact-allergens, .impact-unresolved dl { grid-template-columns: 1fr; }
+  .impact-filters label, .impact-filters select, .impact-filters button { width: 100%; }
+  .impact-version-links button { width: 100%; justify-content: start; }
 }

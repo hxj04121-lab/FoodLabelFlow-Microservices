@@ -9,12 +9,12 @@ type WorkspaceAction = LabelAction | 'open' | 'current' | 'saveDeclarations'
 const declarationSources: DeclarationSource[] = ['MIGRATED_PUBLIC_LABEL', 'FORMULA_DERIVED', 'SYSTEM_PROPOSED', 'USER_ENTERED']
 const emptyDeclaration = (): LabelDeclaration => ({ allergenId: '', declarationType: 'CONTAINS', declarationSource: 'USER_ENTERED', displayText: null })
 
-export function LabelWorkspace({ identity }: { identity: Identity }) {
+export function LabelWorkspace({ identity, initialLabelId = '' }: { identity: Identity; initialLabelId?: string }) {
   const [productId, setProductId] = useState('')
   const [jurisdiction, setJurisdiction] = useState('')
   const [currentProductId, setCurrentProductId] = useState('')
   const [currentJurisdiction, setCurrentJurisdiction] = useState('')
-  const [labelId, setLabelId] = useState('')
+  const [labelId, setLabelId] = useState(initialLabelId)
   const [label, setLabel] = useState<LabelDraft | null>(null)
   const [declarations, setDeclarations] = useState<LabelDeclaration[]>([])
   const [validation, setValidation] = useState<LabelValidation | null>(null)
