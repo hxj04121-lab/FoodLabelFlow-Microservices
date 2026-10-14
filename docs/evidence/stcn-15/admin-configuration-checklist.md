@@ -86,12 +86,12 @@ For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPR
 
 ## Current sanitized observations
 
-- The earlier read-only AWS snapshot confirmed a non-root assumed identity, but the GitHub `staging` Environment has no `STAGING_AWS_ACCOUNT_ID` variable to match it to the workflow target. The current AWS CLI has no credentials, so STS identity is not currently verified. The cluster is private-only and this workstation cannot reach its Kubernetes API; workload and network-policy-agent state remain unknown.
-- The private database is available. The Gateway ingress is not ready for a staging smoke test.
-- The load-balancer security group has no public HTTP/HTTPS ingress rule. Database port 3306 is restricted to security-group references, but their worker/node mapping remains unverified.
-- The subsequent read-only Budget console check shows forecast spend above the configured USD 120 monthly limit and zero actual spend. The credits page does not establish eligibility; the AWS CLI currently has no credentials, and the open console session is labelled `root`, so only the Budget page was viewed.
-- The GitHub Environment custom policy allows `main` and has one required reviewer, but has zero variables and secrets; administrator bypass is enabled, `prevent_self_review=false`, and `main` is currently unprotected.
-- The 14 Oct AWS snapshot listed the EKS provider but no GitHub Actions provider; current AWS service state was not rechecked because the CLI has no credentials.
+- The 21:51 CST AWS recheck used the configured non-root SSO/deploy-role chain and matched STS identity to the SSO profile. The GitHub `staging` Environment still lacks `STAGING_AWS_ACCOUNT_ID`, so it cannot be matched to the deployment workflow target.
+- EKS is ACTIVE on Kubernetes 1.36 with a private-only API. No managed EKS add-ons are listed, and the cluster network config has no NetworkPolicy setting. A local kubectl namespace read timed out at the private API, so workloads and any self-managed policy agent remain UNKNOWN.
+- RDS is available, private, encrypted, Multi-AZ MySQL 8.0.46. Its only TCP/3306 ingress source is one security group, verified to match an active EKS node-group instance group; no database login or per-service grants were tested.
+- The internal ALB is active but has no listener; its security group has no ingress. The Gateway staging smoke cannot run yet.
+- AWS Budgets currently reports USD 149.085 forecast against the configured USD 120 monthly limit and USD 0 actual spend. Eligible credits remain UNKNOWN; keep the staging window closed.
+- IAM's current OIDC provider list has no GitHub Actions provider. The GitHub `staging` Environment has zero variables and secrets, one required reviewer, administrator bypass enabled, and `prevent_self_review=false`; `main` branch protection API returns 404. Runner inventory remains UNKNOWN because the API returns 403.
 - No AWS apply, Kubernetes mutation, Secret injection, deployment, or destroy was performed for this work.
 
 After configuration, share a pass/fail status and approval evidence. Keep role ARNs, account IDs, endpoint values, and all secret values inside the protected systems.

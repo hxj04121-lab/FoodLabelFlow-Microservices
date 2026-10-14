@@ -1,22 +1,22 @@
 # Sanitized AWS read-only status — 14 Oct 2026
 
-This public evidence records only the staging readiness decision. Account identifiers, role names and ARNs, resource names, endpoints, and per-account billing values are intentionally omitted. The operator used a non-root assumed identity and made no AWS or Kubernetes changes.
+Checked at 21:51 CST using the configured staging SSO identity and its preconfigured non-root deploy-role chain. The SSO identity matched its configured AWS account; the target account ID and role ARN are intentionally omitted. The login role lacked service-read permissions, so the separate deploy role was used for read-only `Describe`/`List` calls only. No AWS or Kubernetes resources were changed.
 
-## Observed state
+## Fresh AWS observations
 
-- AWS STS returned a non-root assumed identity. The GitHub `staging` Environment has no `STAGING_AWS_ACCOUNT_ID` variable, so the identity cannot currently be matched to the workflow target.
-- The latest live AWS Budgets read shows forecast spend above the configured monthly limit and zero actual spend. Eligible credits and project-attributed charges remain unverified; keep the staging window closed until the account owner reconciles current values.
-- The EKS cluster is active with a private-only API. The workstation could not reach that endpoint, so Kubernetes authorization, workload state, and VPC CNI network-policy-agent state remain UNKNOWN.
-- The private MySQL RDS instance is available. No live database-account grant check was performed.
-- The internal Gateway ingress is not ready for the staging smoke test. The latest read found no listener; an earlier security-group read found no public HTTP/HTTPS ingress rule.
-- RDS port 3306 is limited to security-group references, but the referenced source group could not be verified as an authorized worker/node group. Treat node-only access as UNKNOWN.
-- The GitHub `staging` Environment custom branch policy allows `main` and has one required reviewer, but its deployment variables and secrets are not configured. Administrator bypass is enabled, self-review prevention is UNKNOWN, and the GitHub API reports `main` as unprotected.
-- The account-level GitHub Actions OIDC provider is absent from the current provider list; only the EKS provider is listed. The deploy-role trust policy is not verified. Terraform state ownership and the backend configuration are also UNKNOWN.
+- **Budget:** AWS Budgets reports a USD 120 monthly limit, USD 0 actual spend, and USD 149.085 forecast. Forecast exceeds the configured limit. Eligible credits remain unverified; keep `STAGING_WINDOW_OPEN=false` until the account owner reconciles the budget and approves a window.
+- **EKS:** `spectrace-staging` is ACTIVE on Kubernetes 1.36 with private API access enabled and public API access disabled. No managed EKS add-ons are listed; the cluster network configuration has no NetworkPolicy setting. The managed node group is `general`. A local `kubectl get namespaces` request using the expected cluster context and deploy role timed out at the private API, so workload state and any self-managed VPC CNI policy agent remain UNKNOWN.
+- **RDS:** The staging MySQL instance is available, MySQL 8.0.46, `db.t3.small`, Multi-AZ, encrypted, and not publicly accessible. Its TCP/3306 ingress has one security-group source, no CIDR source, and no world-open rule. The source security group matches an active EKS node-group instance security group. No database login or per-service grant probe was performed.
+- **Gateway ALB:** The load balancer is internal and active, with zero listeners. Its security group has no ingress rules. Gateway HTTPS smoke and public HTTPS behavior are therefore not ready or verified.
+- **OIDC:** IAM's current OIDC-provider list does not include `token.actions.githubusercontent.com`. The GitHub plan/deploy roles are not evidenced as configured in this account.
+- **Terraform state:** State ownership remains UNKNOWN; `infra/terraform/backend.hcl` is absent. Do not initialize a guessed backend.
 
-## Decision
+## Fresh GitHub observations
 
-Do not run Terraform apply, change AWS or Kubernetes resources, inject runtime Secrets, or start the staging window until the account owner reconciles budget and state, an administrator completes the GitHub Environment/OIDC setup, and an authorized VPC-connected path is ready. No Root credentials were used. This file contains no secret values.
+- The `staging` Environment has one required reviewer, a custom deployment branch policy, zero Environment variables, and zero Environment secrets. Administrator bypass is enabled and `prevent_self_review=false`.
+- `main` branch-protection API returns 404. The repository self-hosted-runner inventory API returns 403, so VPC runner presence is UNKNOWN.
+- The Environment does not contain `STAGING_AWS_ACCOUNT_ID`, so the verified AWS profile identity cannot be matched to the deployment workflow target.
 
-## Subsequent read-only check — 14 Oct 2026
+## Decision and limits
 
-The AWS Budgets console later showed the monthly forecast above the configured USD 120 limit, with actual spend at USD 0. The separate credits page showed projected remaining credits, but did not establish that they are eligible for this budget gate. The local AWS CLI currently has no credentials, and the open console session is labelled `root`; only the budget page was viewed in that session. No further AWS service queries or infrastructure changes were made. The earlier assumed-role snapshot above is historical and does not prove the current CLI identity.
+Do not run Terraform apply, change AWS or Kubernetes resources, inject runtime Secrets, or start the staging window until the account owner reconciles budget and state, administrators complete the GitHub Environment/OIDC setup, and a VPC-connected inspection path is approved. No Root credentials were used. No deployment, Gateway smoke, live NetworkPolicy probe, G2 demo, or destroy occurred. This file contains no secret values or account/resource identifiers.
