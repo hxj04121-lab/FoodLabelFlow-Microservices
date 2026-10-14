@@ -7,13 +7,18 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:signin": "playwright test --config playwright.signin.config.ts",
+    "test:pages": "playwright test --config playwright.pages.config.ts",
+    "test:deployed": "playwright test --config playwright.deployed-signin.config.ts",
+    "test:deployed-config": "node --test scripts/check-deployed-config.test.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.42.0",
+    "oidc-client-ts": "3.5.0",
     "radix-ui": "^1.6.7",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

@@ -1,0 +1,15 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ebs-gp3
+provisioner: ebs.csi.aws.com
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  type: gp3
+  encrypted: "true"
+  tagSpecification_1: Project=SpecTrace-CN
+  tagSpecification_2: Environment=staging
+  tagSpecification_3: ManagedBy=EBS-CSI
+  tagSpecification_4: kubernetes.io/cluster/${cluster_name}=owned

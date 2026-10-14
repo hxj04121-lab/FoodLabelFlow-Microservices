@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "chore/**", "feature/**"]
   pull_request:
-    branches: [main, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-1-g0-m1-contracts', 'g0-m4-label-workflow-contracts', 'feature/stcn-45-outbox-consumer', 'feature/stcn-64-*']
+    branches: [main, XFY, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-1-g0-m1-contracts', 'g0-m4-label-workflow-contracts', 'feature/stcn-45-outbox-consumer', 'feature/stcn-64-*', 'feature/g3-m2-mainline', 'feature/g3-m2-experiments']
 
 permissions:
   contents: read
@@ -73,6 +73,13 @@ jobs:
           cache: maven
       - name: Verify starter and service skeletons with MySQL Testcontainers
         run: mvn -B -ntp verify
+      - name: Verify the production matcher from a source archive without Git metadata
+        run: |
+          archive_dir="$(mktemp -d "$RUNNER_TEMP/compliance-source.XXXXXX")"
+          git archive --format=tar HEAD | tar -x -C "$archive_dir"
+          test ! -e "$archive_dir/.git"
+          mvn -B -ntp -f "$archive_dir/pom.xml" -pl services/compliance -am \
+            -Dtest=PerformanceDatasetContractTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Upload platform and service coverage
         uses: actions/upload-artifact@v4
         with:
@@ -112,6 +119,29 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Compose configuration
         run: docker compose config --quiet
+      - name: Verify starter issuer and JWKS match the Keycloak /auth realm
+        run: |
+          docker compose -f deploy/local/compose.yaml config --format json > "$RUNNER_TEMP/local-compose.json"
+          node - "$RUNNER_TEMP/local-compose.json" <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const compose = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const expectedIssuer = process.env.OIDC_ISSUER_URI || 'http://localhost:8180/auth/realms/spectrace';
+          const expectedJwks = 'http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs';
+          const expectedAudience = 'spectrace-api';
+          const expectedHostname = process.env.KEYCLOAK_EXTERNAL_URL || 'http://localhost:8180/auth';
+          assert.ok(expectedIssuer.endsWith('/auth/realms/spectrace'), `issuer must use the /auth realm path: ${expectedIssuer}`);
+          for (const name of ['specification', 'formulation', 'compliance', 'label-workflow']) {
+            const env = compose.services[name]?.environment;
+            assert.ok(env, `missing Compose service ${name}`);
+            assert.equal(env.SPECTRACE_SECURITY_ISSUERURI, expectedIssuer, `${name} issuer mismatch`);
+            assert.equal(env.SPECTRACE_SECURITY_JWKSETURI, expectedJwks, `${name} JWKS mismatch`);
+            assert.equal(env.SPECTRACE_SECURITY_AUDIENCE, expectedAudience, `${name} audience mismatch`);
+          }
+          assert.equal(compose.services.keycloak.environment.KC_HTTP_RELATIVE_PATH, '/auth');
+          assert.equal(compose.services.keycloak.environment.KC_HOSTNAME, expectedHostname);
+          console.log('PASS: all services use the shared /auth issuer/JWKS and spectrace-api audience');
+          NODE
       - name: Build application images
         run: docker compose build
       - uses: actions/setup-node@v4
@@ -192,6 +222,7 @@ jobs:
         run: |
           npx playwright install chromium
           npx playwright test --grep-invert 'captures.*live'
+          npm run test:signin
           npx nyc report --reporter=lcov --reporter=text-summary
       - name: Cache SonarQube packages
         uses: actions/cache@v4

@@ -64,6 +64,10 @@ paths:
           $ref: '#/components/responses/LabelNotFound'
         '409':
           $ref: '#/components/responses/LabelVersionConflict'
+        '422':
+          $ref: '#/components/responses/RuleSetUnavailable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/labels/{labelVersionId}:
@@ -88,6 +92,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LabelDraft'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/LabelNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/labels/current:
+    parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+    get:
+      tags: [labels]
+      operationId: getCurrentPublishedLabel
+      summary: Get the current published label for a product and jurisdiction.
+      description: >-
+        The organisation is taken from the verified JWT and is never accepted as a query or body value.
+        An absent current publication returns 404; a publication owned by another organisation returns 403.
+      parameters:
+        - in: query
+          name: productId
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - in: query
+          name: jurisdictionCode
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: The current published LabelDraft.
+          headers:
+            X-Correlation-ID:
+              required: true
+              schema:
+                type: string
+                minLength: 1
+                maxLength: 128
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelDraft'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '403':
@@ -124,6 +175,49 @@ paths:
           $ref: '#/components/responses/AuthorizationDenied'
         '404':
           $ref: '#/components/responses/LabelNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags: [labels]
+      operationId: replaceLabelDeclarations
+      summary: Replace declarations on an editable draft and advance its private revision.
+      description: >-
+        This additive operation is used after REQUEST_CHANGES. It is restricted to the owning
+        organisation and DRAFT state, replaces the complete declaration set atomically, and
+        increments the server-owned draftRevision. Previous validation records remain historical
+        evidence but cannot authorize submission of the edited revision. The private revision is
+        never returned to the caller.
+      x-required-permission: LABEL.CREATE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceLabelDeclarations'
+      responses:
+        '200':
+          description: Declarations saved for the exact label, formula and rule-set binding.
+          headers:
+            X-Correlation-ID:
+              required: true
+              schema:
+                type: string
+                minLength: 1
+                maxLength: 128
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelDeclarationFacts'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          $ref: '#/components/responses/LabelNotFound'
+        '409':
+          $ref: '#/components/responses/LabelVersionConflict'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/labels/{labelVersionId}/validations:
@@ -301,12 +395,14 @@ paths:
         Label Workflow transaction supersedes the current publication for the
         same product and jurisdiction, publishes the label, records the
         PublicationRecord, resolves the review task, and commits local audit
-        and the LabelPublished.v1 outbox event together. The retired
+        and the LabelPublished.v2 outbox event together. Its payload carries
+        the authoritative business versionNumber while retaining labelVersionId.
+        The retired
         product.current_published_label_version_id is not used.
       x-required-permission: LABEL.PUBLISH
       responses:
         '201':
-          description: Publication committed and LabelPublished.v1 queued in the outbox.
+          description: Publication committed and LabelPublished.v2 queued in the outbox.
           headers:
             X-Correlation-ID:
               required: true
@@ -533,6 +629,42 @@ components:
             message: An unexpected error occurred.
             traceId: null
             evidenceId: null
+    RuleSetUnavailable:
+      description: No active and effective rule set is configured for the requested jurisdiction.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: RULE_SET_UNAVAILABLE
+            message: No effective rule set is available for jurisdiction US.
+            traceId: null
+            evidenceId: null
+    ServiceUnavailable:
+      description: Compliance could not provide a valid effective-rule-set response.
+      headers:
+        X-Correlation-ID:
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: SERVICE_UNAVAILABLE
+            message: The service is temporarily unavailable.
+            traceId: null
+            evidenceId: null
   schemas:
     ApiError:
       $ref: '../../docs/contracts/allergen-validation-api-v1.yaml#/components/schemas/ApiError'
@@ -608,6 +740,15 @@ components:
           enum: [MIGRATED_PUBLIC_LABEL, FORMULA_DERIVED, SYSTEM_PROPOSED, USER_ENTERED]
         displayText:
           type: [string, 'null']
+    ReplaceLabelDeclarations:
+      type: object
+      additionalProperties: false
+      required: [declarations]
+      properties:
+        declarations:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllergenDeclaration'
     LabelValidationRecord:
       type: object
       additionalProperties: false

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: platform-network-policies
+description: Default-deny and explicitly allowed staging traffic for SpecTrace-CN.
+type: application
+version: 0.1.0

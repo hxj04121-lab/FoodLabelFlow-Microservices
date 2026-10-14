@@ -1,0 +1,5 @@
+bucket       = "REPLACE_WITH_PERSISTENT_STATE_BUCKET"
+key          = "spectrace/staging/terraform.tfstate"
+region       = "ap-southeast-1"
+encrypt      = true
+use_lockfile = true

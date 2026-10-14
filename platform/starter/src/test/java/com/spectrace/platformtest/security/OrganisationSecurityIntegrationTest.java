@@ -116,6 +116,20 @@ class OrganisationSecurityIntegrationTest {
     }
 
     @Test
+    @DisplayName("a signed token with username but no native subject returns the canonical 401")
+    void missingNativeSubjectWithUsernameIsCanonical401() throws Exception {
+        String token = tokens.withoutSubject(Caller.of("supplier-alpha-maker", "org-supplier-alpha",
+                "SUPPLIER", "LABEL_OFFICER"));
+        HttpResponse<String> response = get("/api/security/whoami", token, "corr-missing-sub");
+
+        assertEquals(401, response.statusCode(), response.body());
+        JsonNode body = JSON.readTree(response.body());
+        assertEquals("AUTHENTICATION_REQUIRED", body.get("code").asString());
+        assertEquals("corr-missing-sub", body.get("traceId").asString());
+        assertEquals("corr-missing-sub", response.headers().firstValue("X-Correlation-ID").orElseThrow());
+    }
+
+    @Test
     @DisplayName("an actuator endpoint outside the public paths needs a token")
     void actuatorEndpointsOutsideThePublicPathsNeedAToken() throws Exception {
         HttpResponse<String> actuator = get("/actuator/env", null, "corr-actuator");
