@@ -33,6 +33,10 @@ Cost Explorer for 1–15 Oct returned an estimated value of approximately `-USD 
 - Terraform state ownership is still unverified (`infra/terraform/backend.hcl` is not present; only the example backend file is committed). Do not initialize against a guessed state backend.
 - No Terraform plan/apply, AWS resource mutation, Kubernetes write, GitHub Environment change, or destroy was performed. The forecast currently exceeds the monthly limit, and the resources are tagged to STCN-39; cleanup requires the AWS account owner and STCN-39/M1 coordination.
 
+## GitHub deployment gate (observed 14:12 +08:00)
+
+The repository's `staging` Environment was created during this evidence refresh. GitHub reports a required reviewer `hxj04121-lab`, a custom deployment branch policy allowing only `main`, and `can_admins_bypass=true`. The Environment currently has zero variables and zero secrets. The connected GitHub account reports `admin:false` and `maintain:false`, so it cannot add the required values/secrets or adjust protection. The branch-protection REST endpoint for `main` returned HTTP 404; branch protection is therefore not evidenced. No GitHub settings were changed by this check.
+
 ## Reproduction
 
 Use the configured non-root SSO profile and role chain, region `ap-southeast-1`; remove the stale proxy only for the AWS CLI process if it still points at `127.0.0.1:7892`. Read-only calls included STS identity, EKS cluster/node-group descriptions, RDS and ALB descriptions, listener/target-group queries, scoped security-group/VPC/NAT queries, AWS Budgets, and Cost Explorer. Do not copy session tokens or generated kubeconfig contents into evidence.

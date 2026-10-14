@@ -60,7 +60,7 @@
   "deployments": [],
   "blockers": [
     "G1-M5 PR #39 remains Draft; Terraform validate passes but plan is skipped for missing plan credentials.",
-    "GitHub has no staging Environment; the connected account has admin:false and cannot configure protected reviewers, environment variables, or secrets.",
+    "GitHub staging Environment now exists with required reviewer hxj04121-lab and a custom branch policy limited to main; admins can bypass the reviewer rule. Environment variables and secrets are both empty, main branch protection is not evidenced (protection API returned 404), and the connected account has admin:false/maintain:false so it cannot finish configuration.",
     "The target AWS account and configured deploy role are verified by STS. AWS Budget forecasts USD 149.085 against the USD 120 monthly limit; Cost Explorer returned a conflicting estimated near-zero value. Credit balance and actual accrued project charges remain unverified; stop staging changes pending AWS account-owner reconciliation.",
     "EKS/RDS/NAT/internal ALB staging infrastructure is active and tagged to STCN-39/Terraform. The private EKS API cannot be reached from this workstation, so Kubernetes workloads and live NetworkPolicy behavior remain unknown. The ALB has no listeners or target groups; no staging Gateway route was verified.",
     "Terraform state ownership is unknown because infra/terraform/backend.hcl is absent; do not initialize a guessed backend.",
