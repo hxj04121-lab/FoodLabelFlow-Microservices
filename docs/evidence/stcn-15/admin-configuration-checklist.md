@@ -4,19 +4,19 @@ For GitHub and AWS administrators. Configure names and values directly in the pr
 
 ## Immediate administrator actions (read-only state checked 14 Oct 2026)
 
-1. **Protect `main`.** GitHub currently reports `protected=false`. Require the CI, SWE5001 Helm template, and SWE5001 Compliance contracts checks before merge.
-2. **Repair the `staging` Environment controls.** It currently has one required reviewer, permits administrator bypass, has no variables or secrets, and its custom deployment policy allows `main`. The API reports `prevent_self_review=false`. Keep the `main` restriction, disable bypass, enable Prevent self-review, and populate the names listed below.
-3. **Configure AWS OIDC.** The 21:51 CST 14 Oct AWS IAM provider-list check found no GitHub Actions OIDC provider. Add it and review the separate plan/deploy roles and their trust conditions before use.
-4. **Provide private-cluster access.** EKS is ACTIVE with a private-only API. The repository runner inventory was unavailable to this operator (GitHub API returned 403), so the VPC-connected runner state is UNKNOWN. Reuse or provision an approved restricted runner; do not expose the cluster endpoint.
-5. **Keep staging closed.** The latest read-only AWS Budget console view shows forecast spend above the configured monthly limit, while actual spend is zero. Eligible credits are not verified. The 13–14 Oct re-planned window is a schedule only; it does not authorize spending, access, or extending the window.
+1. **Protect `main`.** Required branch protection is not currently evidenced. Require the CI, SWE5001 Helm template, and SWE5001 Compliance contracts checks before merge.
+2. **Harden the `staging` Environment.** Its approval and deployment controls are incomplete, and deployment variables/secrets are not configured. Restrict deployments to the approved branch, disable administrator bypass, enable Prevent self-review, and populate only the names listed below.
+3. **Configure AWS OIDC.** The latest read-only check indicates the GitHub Actions OIDC role path is not ready. Add it and review the separate plan/deploy roles and their trust conditions before use.
+4. **Provide private-cluster access.** The staging EKS API is private. VPC-connected runner availability is UNKNOWN. Reuse or provision an approved restricted runner; do not expose the cluster endpoint.
+5. **Keep staging closed.** The latest read-only budget check shows forecast spend above the configured monthly limit; eligible credits are not verified. Reconfirm an approved staging window with the account owner before use.
 6. **Confirm state ownership.** `infra/terraform/backend.hcl` is absent. The state bucket/backend must be confirmed by its owner before any plan or mutation.
 
 ## GitHub repository settings
 
-- [x] Read-only status checked: `main` is not protected. An administrator still needs to enable protection and require CI, Helm, and Compliance contract checks.
-- [ ] Keep the `staging` custom deployment branch policy restricted to `main` (the current policy allows `main`).
-- [ ] Require an approver, enable **Prevent self-review**, and disable administrator bypass unless an exception is approved. The current Environment has one required reviewer, administrator bypass enabled, and `prevent_self_review=false`.
-- [ ] Provide a restricted self-hosted runner reachable from the staging VPC with labels `self-hosted`, `linux`, and `staging-vpc`. The runner inventory is UNKNOWN because the read API returned 403.
+- [x] Read-only status checked: required `main` branch protection is not evidenced. An administrator still needs to enable protection and require CI, Helm, and Compliance contract checks.
+- [ ] Restrict the `staging` Environment deployment branch to the approved `main` branch.
+- [ ] Require an approver, enable **Prevent self-review**, and disable administrator bypass unless an exception is approved.
+- [ ] Provide a restricted self-hosted runner reachable from the staging VPC with labels `self-hosted`, `linux`, and `staging-vpc`. VPC runner availability is UNKNOWN.
 - [ ] Configure the GitHub Actions OIDC provider in the AWS account, then provision the separate plan and deploy roles from `infra/terraform/modules/github-oidc`. Review their trust conditions and least-privilege policies before use.
 - [ ] Keep `STAGING_WINDOW_OPEN=false` until the account owner approves the budget and staging window.
 
@@ -76,7 +76,7 @@ For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPR
 
 - [ ] Reconcile the live forecast, actual charges, and eligible credits against the configured monthly limit. The latest read shows forecast above the limit and zero actual spend; eligible credits are UNKNOWN. Keep the staging window closed until the account owner confirms the current cost basis.
 - [ ] Confirm Terraform state ownership and the backend configuration before running a plan or apply. The repository does not contain `infra/terraform/backend.hcl`; do not initialize a guessed backend.
-- [ ] Add the absent account-level GitHub Actions OIDC provider and verify the trust policies for the approved plan and deploy roles.
+- [ ] Configure the GitHub Actions OIDC provider and verify the trust policies for the approved plan and deploy roles.
 - [ ] Review the deploy role's EKS access scope. The managed EKS edit policy can read and write Kubernetes Secrets in its namespaces; require narrower custom RBAC if that scope is not approved.
 - [ ] Verify the VPC CNI network-policy agent is enabled and provide the approved VPC-connected runner path for live NetworkPolicy and Gateway tests.
 - [ ] Confirm the Gateway HTTPS listener, certificate, target health, and security-group ingress before enabling the smoke test. Permit only the approved HTTPS path.
@@ -86,12 +86,12 @@ For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPR
 
 ## Current sanitized observations
 
-- The 21:51 CST AWS recheck used the configured non-root SSO/deploy-role chain and matched STS identity to the SSO profile. The GitHub `staging` Environment still lacks `STAGING_AWS_ACCOUNT_ID`, so it cannot be matched to the deployment workflow target.
-- EKS is ACTIVE on Kubernetes 1.36 with a private-only API. No managed EKS add-ons are listed, and the cluster network config has no NetworkPolicy setting. A local kubectl namespace read timed out at the private API, so workloads and any self-managed policy agent remain UNKNOWN.
-- RDS is available, private, encrypted, Multi-AZ MySQL 8.0.46. Its only TCP/3306 ingress source is one security group, verified to match an active EKS node-group instance group; no database login or per-service grants were tested.
-- The internal ALB is active but has no listener; its security group has no ingress. The Gateway staging smoke cannot run yet.
-- AWS Budgets currently reports USD 149.085 forecast against the configured USD 120 monthly limit and USD 0 actual spend. Eligible credits remain UNKNOWN; keep the staging window closed.
-- IAM's current OIDC provider list has no GitHub Actions provider. The GitHub `staging` Environment has zero variables and secrets, one required reviewer, administrator bypass enabled, and `prevent_self_review=false`; `main` branch protection API returns 404. Runner inventory remains UNKNOWN because the API returns 403.
+- The latest read-only identity check succeeded through the configured non-root role chain. The deployment Environment does not yet bind an owner-verified AWS account to the workflow target.
+- The staging EKS API is private and could not be inspected from this workstation. Workload state and live NetworkPolicy enforcement remain UNKNOWN.
+- The staging database is private and available, but no service login, grant inspection, or cross-database probe was run.
+- The current load-balancer configuration does not provide a ready HTTPS Gateway smoke-test path.
+- The budget forecast is above the configured monthly limit and eligible credits remain UNKNOWN; keep the staging window closed.
+- GitHub branch, Environment, and OIDC deployment controls need administrator configuration. VPC runner availability remains UNKNOWN.
 - No AWS apply, Kubernetes mutation, Secret injection, deployment, or destroy was performed for this work.
 
 After configuration, share a pass/fail status and approval evidence. Keep role ARNs, account IDs, endpoint values, and all secret values inside the protected systems.
