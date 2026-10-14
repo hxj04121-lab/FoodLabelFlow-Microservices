@@ -15,7 +15,6 @@ networkPolicy:
     - {namespace: gateway, name: gateway}
     - {namespace: label-workflow, name: label-workflow}
     - {namespace: observability, name: grafana-alloy}
-  ingressFromServices: [gateway, label-workflow]
   egressRules:
     - to:
         - namespaceSelector:

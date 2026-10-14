@@ -54,11 +54,10 @@ for(const service of ['compliance','specification','formulation','label-workflow
     assert(!docs.some(d=>d.kind==='HorizontalPodAutoscaler'),'Fixed comparison must disable HPA');
     if(service!=='gateway') assert.equal(pod.containers[0].envFrom?.[0]?.secretRef?.name,`${service}-runtime`);
     if(service!=='compliance') assert.equal(pod.nodeSelector['eks.amazonaws.com/nodegroup'],'general');
-    const allowedIngress=np.spec.ingress.flatMap(r=>r.from??[]).filter(s=>!s.namespaceSelector).map(s=>s.podSelector?.matchLabels?.['app.kubernetes.io/name']);
-    assert.deepEqual(allowedIngress,service==='gateway'?[]:service==='compliance'?['gateway','label-workflow']:['gateway']);
     const crossNamespace=np.spec.ingress.flatMap(r=>r.from??[]).filter(s=>s.namespaceSelector).map(s=>[s.namespaceSelector.matchLabels['kubernetes.io/metadata.name'],s.podSelector.matchLabels['app.kubernetes.io/name']]);
-    assert(crossNamespace.some(([ns,name])=>ns==='observability'&&name==='grafana-alloy'));
-    if(service==='compliance') assert(crossNamespace.some(([ns,name])=>ns==='label-workflow'&&name==='label-workflow'));
+    const expectedPeers={gateway:[['observability','grafana-alloy']],specification:[['gateway','gateway'],['observability','grafana-alloy']],formulation:[['gateway','gateway'],['observability','grafana-alloy']],compliance:[['gateway','gateway'],['label-workflow','label-workflow'],['observability','grafana-alloy']],'label-workflow':[['gateway','gateway'],['observability','grafana-alloy']]}[service];
+    assert.deepEqual(crossNamespace.sort((a,b)=>a.join('/').localeCompare(b.join('/'))),expectedPeers.sort((a,b)=>a.join('/').localeCompare(b.join('/'))));
+    assert(np.spec.ingress.every(r=>(r.from??[]).every(s=>s.namespaceSelector&&s.podSelector)),'Every pod ingress peer is restricted by namespace and pod labels');
     if(service==='label-workflow') {
       assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='compliance'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='compliance')&&r.ports?.some(p=>p.port===8080)),'Compliance validation is allowed only to the Compliance workload on 8080');
       assert.equal(c.env.find(e=>e.name==='SPECTRACE_LABEL_WORKFLOW_VALIDATION_BASE_URL')?.value,'http://compliance.compliance.svc.cluster.local:8080');
@@ -80,7 +79,7 @@ check('fixed three-replica placement requires c6i.large and compliance group',()
   const host=pod.topologySpreadConstraints.find(t=>t.topologyKey==='kubernetes.io/hostname');
   assert.equal(host.whenUnsatisfiable,'DoNotSchedule');
   const np=docs.find(d=>d.kind==='NetworkPolicy');
-  assert.deepEqual(np.spec.ingress.filter(r=>r.from[0].podSelector&&!r.from[0].namespaceSelector).map(r=>r.from[0].podSelector.matchLabels['app.kubernetes.io/name']),['gateway','label-workflow']);
+  assert.deepEqual(np.spec.ingress.flatMap(r=>r.from??[]).filter(s=>s.namespaceSelector).map(s=>[s.namespaceSelector.matchLabels['kubernetes.io/metadata.name'],s.podSelector.matchLabels['app.kubernetes.io/name']]).sort((a,b)=>a.join('/').localeCompare(b.join('/'))),[['gateway','gateway'],['label-workflow','label-workflow'],['observability','grafana-alloy']].sort((a,b)=>a.join('/').localeCompare(b.join('/'))));
   assert(np.spec.egress.some(r=>r.to?.some(t=>t.podSelector?.matchLabels?.['app.kubernetes.io/name']==='rabbitmq')&&r.ports[0].port===5672));
   writeFileSync(resolve(evidence,'compliance-three-replicas.json'),JSON.stringify(docs,null,2)+'\n');
 });
@@ -103,7 +102,7 @@ for(const [name,args] of [
   ['autoscale range relaxed',['--set','autoscaling.maxReplicas=5']]
 ]) check(`reject ${name}`,()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),...args],false));
 check('empty ingress/egress values render explicit deny rules',()=>{
-  const docs=render('specification',['--set','networkPolicy.allowDNS=false','--set-json','networkPolicy.ingressFromServices=[]','--set-json','networkPolicy.ingressFromPeers=[]','--set-json','networkPolicy.egressRules=[]']);
+  const docs=render('specification',['--set','networkPolicy.allowDNS=false','--set-json','networkPolicy.ingressFromPeers=[]','--set-json','networkPolicy.egressRules=[]']);
   const np=docs.find(d=>d.kind==='NetworkPolicy');
   assert.deepEqual(np.spec.ingress,[]);assert.deepEqual(np.spec.egress,[]);
 });

@@ -1,7 +1,6 @@
 serviceName: gateway
 # M3 supplies the actual ALB-facing ingress selectors at integration.
 networkPolicy:
-  ingressFromServices: []
   ingressFromPeers: [{namespace: observability, name: grafana-alloy}]
   egressRules:
     - to:

@@ -10,16 +10,8 @@ spec:
     matchLabels:
       {{- include "spectrace.selectorLabels" . | nindent 6 }}
   policyTypes: [Ingress, Egress]
-  {{- if or .Values.networkPolicy.ingressFromServices .Values.networkPolicy.ingressFromPeers .Values.networkPolicy.ingressFromCIDRs }}
+  {{- if or .Values.networkPolicy.ingressFromPeers .Values.networkPolicy.ingressFromCIDRs }}
   ingress:
-    {{- range .Values.networkPolicy.ingressFromServices }}
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: {{ . | quote }}
-      ports:
-        - {port: http, protocol: TCP}
-    {{- end }}
     {{- range .Values.networkPolicy.ingressFromPeers }}
     - from:
         - namespaceSelector:

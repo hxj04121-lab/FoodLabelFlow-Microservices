@@ -3,6 +3,11 @@
 Work order: [G1-M4](../../../.project-control/work-orders/G1/M4-keycloak-security-module.yaml)
 (STCN-9, owner M4 Zhu Wenyu, reviewer M3 Xu Feiyang). Recorded 2026-10-12.
 
+The G1-M4.4 assertion recorded below reflects the original 2026-10-12 chart
+contract. On 2026-10-15, STCN-15 removed pod-only ingress selectors and updated
+the current Helm and Java contract tests to require namespace-and-pod peers;
+the historical result below is retained as recorded evidence.
+
 | Subtask | Artifact | Test that fails when it regresses | State |
 |---|---|---|---|
 | G1-M4.1 realm as code | `deploy/keycloak/realm/spectrace-realm.json`, `docker-compose.keycloak.yml`, `claims/sample-access-token-claims.json` | `KeycloakRealmContractTest` (19 tests, backend job) | code complete on `codex/g1-m4.1-realm-as-code`; awaiting review |
@@ -17,7 +22,7 @@ Work order: [G1-M4](../../../.project-control/work-orders/G1/M4-keycloak-securit
 |---|---|
 | access tokens carry `org_id`, `org_type` and `roles` | the `spectrace-identity-claims` scope carries the attribute mappers, the role mappers and the `subject` (`oidc-sub-mapper`) mapper; `claims/sample-access-token-claims.json` records the shape; `verify-token-claims.py` asserts `sub`, `org_id`, `org_type` and the roles against a running Keycloak |
 | legacy `X-Auth-*` headers work only in the local/test profile | `LegacyHeaderBridgeTest`: enabled only with the bridge switch, and the start-up fails unless every active profile is `local` or `test` (a mixed `local,staging` set is refused) |
-| the allow-list covers gateway → services and label-workflow → compliance `/internal/**` only | `HelmNetworkPolicyContractTest` asserts the per-service `ingressFromServices` sets and that compliance is the only service another service may call; the `/internal/**` path scope itself is enforced in the service, which the document states |
+| the allow-list covers gateway → services and label-workflow → compliance `/internal/**` only | `HelmNetworkPolicyContractTest` asserts the per-service ingress peers and that compliance is the only service another service may call; the `/internal/**` path scope itself is enforced in the service, which the document states |
 
 ## Required tests
 

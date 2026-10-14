@@ -235,7 +235,6 @@
       "type": "object",
       "required": [
         "enabled",
-        "ingressFromServices",
         "allowDNS",
         "egressRules"
       ],
@@ -245,13 +244,6 @@
         },
         "allowDNS": {
           "type": "boolean"
-        },
-        "ingressFromServices": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
         },
         "ingressFromPeers": {
           "type": "array",

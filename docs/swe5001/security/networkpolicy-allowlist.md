@@ -5,24 +5,23 @@ Authority: architecture source of truth v3 §11.2 (threat: *gateway bypass* —
 compliance)") and §12.2 (the Helm chart ships the NetworkPolicy stanza). The
 policy is enforced by the EKS VPC CNI; nothing here depends on a service mesh.
 
-The Helm values **are** the allow-list: the chart default
-(`deploy/helm/spectrace-service/values.yaml`) allows the gateway, a service that
-needs more overrides it in `deploy/helm/values/<service>.yaml`, and
+The Helm values **are** the allow-list: every pod peer must name both its
+namespace and pod label in `ingressFromPeers` in
+`deploy/helm/values/<service>.yaml`, and
 `deploy/helm/spectrace-service/templates/networkpolicy.yaml` renders one
 `NetworkPolicy` per release with `policyTypes: [Ingress, Egress]` and a pod
-selector for that service. Everything not listed is denied. Today only
-`compliance` overrides the default (it adds `label-workflow`); the other three
-services inherit it.
+selector for that service. There is no same-namespace pod-only allow rule.
+Everything not listed is denied.
 
 ## Ingress (who may reach a service pod)
 
 | Target | Allowed peers | Port | Why |
 |---|---|---|---|
-| `specification` | `gateway` | `http` (8080) | public API only through the gateway |
-| `formulation` | `gateway` | `http` | public API only through the gateway |
-| `label-workflow` | `gateway` | `http` | public API only through the gateway |
-| `compliance` | `gateway`, `label-workflow` | `http` | public API plus the one synchronous validation call label-workflow makes to `/internal/**` |
-| `gateway` | *(ALB — see open items)* | `http` | north-south edge; the AWS Load Balancer Controller targets the pods |
+| `specification` | `gateway` in `gateway`; Alloy in `observability` | `http` (8080) | public API only through the gateway; metrics scrape |
+| `formulation` | `gateway` in `gateway`; Alloy in `observability` | `http` | public API only through the gateway; metrics scrape |
+| `label-workflow` | `gateway` in `gateway`; Alloy in `observability` | `http` | public API only through the gateway; metrics scrape |
+| `compliance` | `gateway` in `gateway`; `label-workflow` in `label-workflow`; Alloy in `observability` | `http` | public API, the one synchronous validation call to `/internal/**`, and metrics scrape |
+| `gateway` | Alloy in `observability`; *(ALB — see open items)* | `http` | metrics scrape and north-south edge; the AWS Load Balancer Controller targets the pods |
 
 Kubelet probes are not affected: in the VPC CNI they originate from the node
 itself, and the network policy engine does not apply to that traffic.
@@ -73,8 +72,8 @@ mvn -B -ntp -f backend/pom.xml test -Dtest=HelmNetworkPolicyContractTest
 
 1. **ALB → gateway ingress.** The gateway is reached by the AWS Load Balancer
    Controller, not by an in-cluster pod, so it cannot be expressed with
-   `ingressFromServices`. Until M3 supplies the real selector, `gateway.yaml`
-   keeps the list empty — which is default-deny and therefore safe, but the demo
+   `ingressFromPeers`. Until M3 supplies the real selector, `gateway.yaml`
+   has no ALB source rule — which is default-deny and therefore safe, but the demo
    window must add the ALB peers (or allow the ingress-controller namespace).
 2. **Keycloak and RabbitMQ placement.** The rules above assume they run in the
    same cluster with stable labels (the operators from G1-M5). If Keycloak's
