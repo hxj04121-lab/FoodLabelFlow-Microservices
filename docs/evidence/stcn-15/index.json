@@ -5,7 +5,7 @@
   "source_commit": "95351aa3fc9ebfcd7406cf0163025e474e260adb",
   "pull_request": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52",
   "aws_readonly_snapshot": "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
-  "latest_aws_observation": "2026-10-14",
+  "latest_aws_observation": "2026-10-14T22:40:59+08:00",
   "checks": {
     "STCN-83": {
       "status": "LOCAL_PRIVILEGE_TESTS_AND_CI_PASS_LIVE_RDS_PERMISSION_CHECK_PENDING",
@@ -102,14 +102,14 @@
   },
   "deployments": [],
   "blockers": [
-    "G1 PR #39 is open, unmerged, and has no main deployment caller. The latest main G1-M3 runbook still marks deployed acceptance NOT RUN. The current Terraform pull-request validation passed; its dispatch-only plan job did not run. No remote state or Terraform plan result is claimed because backend ownership and plan identity are not verified.",
+    "G1 PR #39 is open and unmerged, has no main deployment caller, and the latest main G1-M3 runbook still marks deployed acceptance NOT RUN. Terraform state ownership and a remote plan remain unverified.",
     "Required GitHub branch, Environment, and OIDC deployment protections are incomplete; an owner-verified target account is not yet bound to the deployment workflow.",
-    "The budget forecast exceeds the configured monthly limit and eligible credits remain unverified; keep the staging window closed.",
-    "The staging EKS API is private and was not reachable from this workstation. Workloads and live NetworkPolicy enforcement remain unknown. The private database has no live service-grant probe, and the current load-balancer configuration does not provide a ready HTTPS Gateway smoke path.",
+    "The live budget forecast exceeds the configured monthly limit and eligible credits remain unverified; keep the staging window closed.",
+    "Read-only AWS queries confirm an active private-only EKS API, an available private MySQL database, and no usable HTTPS Gateway listener on the visible internal load balancer. The local Kubernetes request timed out during TLS handshake; workloads and live NetworkPolicy enforcement remain unknown.",
     "Terraform state ownership is unknown because infra/terraform/backend.hcl is absent; do not initialize a guessed backend.",
-    "The AWS OIDC deployment role path is not ready and role trust is unverified. Terraform state ownership and the approved VPC-connected inspection path also need confirmation.",
-    "Open, unmerged PR #39 captures an immutable registry digest for Helm, wires the STCN-15 record writer after rollout/Gateway smoke, and configures RabbitMQ detailed per-queue metrics. It has no main caller or deployed image. Its current record-writer call still needs the publish-image and expected AWS/EKS identity arguments. No deployment record or runtime Kubernetes Secret exists yet.",
-    "No G2 staging deployment, Gateway staging smoke, live NetworkPolicy probe, image-digest-to-Kubernetes-revision binding, staging demo, or authorized project-resource destroy has occurred."
+    "The AWS OIDC deployment role path and protected Environment configuration still need administrator verification. A VPC-connected inspection path is also required.",
+    "Open, unmerged PR #39 has no main caller or deployed image. Its current evidence-writer call still needs the publish-image and expected AWS/EKS identity arguments. No deployment record or runtime Kubernetes Secret exists yet.",
+    "No G2 staging deployment, Gateway smoke, live NetworkPolicy probe, image-digest-to-Kubernetes-revision binding, staging demo, or authorized project-resource destroy has occurred."
   ],
   "workflow_run": {
     "run_id": 38568520729,

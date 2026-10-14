@@ -1,14 +1,14 @@
 # Sanitized AWS staging readiness — 14 Oct 2026
 
-Read-only status was checked at 21:51 CST through the configured non-root SSO/deploy-role chain. Account IDs, role names, resource identifiers, exact billing figures, and detailed network inventory are intentionally omitted. No AWS or Kubernetes resources were changed.
+Read-only AWS status was checked from the project checkout between 22:38 and 22:41 CST through the configured SSO role chain. STS confirmed an assumed project role rather than root. The initial login session did not have inventory permissions; the configured deployment session permitted the read-only checks below. Account IDs, role names, resource identifiers, endpoints, exact billing figures, and detailed network inventory are intentionally omitted. No AWS or Kubernetes resources were changed.
 
-## Readiness findings
+## Read-only findings
 
-- **Cost gate:** The current forecast exceeds the configured monthly limit, and eligible credits have not been verified. Keep the staging window closed until the account owner reconciles the cost basis and approves the window.
-- **Private cluster:** The staging EKS cluster is active and exposes a private API. A workstation-side Kubernetes read timed out, so workload state and live NetworkPolicy enforcement remain UNKNOWN. An approved VPC-connected inspection path is required.
-- **Database:** The staging MySQL service is private and available. No service-account login, grant-list inspection, or cross-database probe was run against it; those checks require the approved private path and runtime credentials.
-- **Gateway:** The current load-balancer configuration does not provide a ready HTTPS smoke-test path. No Gateway staging smoke was run.
-- **Deployment identity:** The GitHub Actions OIDC-to-AWS role path is not ready for deployment. The protected staging Environment and repository protections also need administrator configuration.
+- **Cost gate:** The live budget forecast exceeds the configured monthly limit. The actual-spend field is not available credit, and eligible credits remain unverified. Keep the staging window closed until the account owner reconciles the cost basis and approves a specific window.
+- **Private cluster:** EKS is active with a private-only API. A temporary kubeconfig was generated locally; the workstation's read-only Kubernetes request failed during TLS handshake. Workload state, Kubernetes authorization, and live NetworkPolicy enforcement remain UNKNOWN. Use an approved VPC-connected inspection path.
+- **Database:** The private MySQL instance is available. No service-account login, grant-list inspection, or cross-database probe was run; those checks require the approved private path and runtime credentials.
+- **Gateway:** The visible load balancer is internal and has no usable listener for an HTTPS Gateway smoke test. No public staging route or Gateway smoke was verified.
+- **Deployment identity:** The AWS read-only role path works, but this does not verify GitHub OIDC trust, Environment approvals, branch protection, or the workflow deployment caller. Administrator configuration remains required.
 - **Terraform state:** State ownership and backend configuration remain UNKNOWN. Do not initialize a guessed backend.
 
 ## Decision and limits
