@@ -60,12 +60,19 @@ test('STCN-102 deployed public demo path: potential, explicit adoption, confirme
   async function inspectFinding(page: Page, kind: string, findingId: string) {
     await page.getByRole('button', { name: 'Impact inbox', exact: true }).click()
     await page.getByLabel('Finding kind', { exact: true }).selectOption(kind)
+    const listResult = () => page.waitForResponse(r => new URL(r.url()).pathname === '/api/compliance/impact-findings'
+      && r.request().method() === 'GET', { timeout: 15000 })
+    let loaded = listResult()
     await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click()
+    expect((await loaded).status()).toBe(200)
+    await expect(page.getByRole('button', { name: 'Refresh inbox', exact: true })).toBeEnabled()
     for (let n = 0; n < 250; n++) {
       const target = page.getByRole('button', { name: `View finding ${findingId}`, exact: true })
-      await expect(page.locator('.impact-inbox').getByText('Loading findings…', { exact: true })).toHaveCount(0)
       if (await target.count()) { await target.click(); break }
+      loaded = listResult()
       await page.getByRole('button', { name: 'Next page', exact: true }).click()
+      expect((await loaded).status()).toBe(200)
+      await expect(page.getByRole('button', { name: 'Refresh inbox', exact: true })).toBeEnabled()
     }
     await expect(page.getByRole('heading', { name: `Finding ${findingId}`, exact: true })).toBeVisible()
     await expect(page.locator('.impact-allergens')).toContainText(env('M3_DEMO_EXPECTED_ALLERGEN_ID'))
@@ -152,9 +159,9 @@ test('STCN-102 deployed public demo path: potential, explicit adoption, confirme
     await checker.getByRole('button', { name: 'Labels', exact: true }).click()
     await checker.getByLabel('Label version ID', { exact: true }).fill(label.labelVersionId)
     await checker.getByRole('button', { name: 'Open label', exact: true }).click()
-    await action(checker, 'Approve', `/api/labels/${label.labelVersionId}/decisions`, 201)
+    await action(checker, 'Approve version', `/api/labels/${label.labelVersionId}/decisions`, 201)
     await checker.getByLabel('I have checked this version and want to publish it.', { exact: true }).check()
-    await action(checker, 'Publish label', `/api/labels/${label.labelVersionId}/publish`, 200)
+    await action(checker, 'Publish version', `/api/labels/${label.labelVersionId}/publish`, 200)
     await checker.getByLabel('Current product ID', { exact: true }).fill(product)
     await checker.getByLabel('Current jurisdiction code', { exact: true }).fill(jurisdiction)
     await checker.getByRole('button', { name: 'Load current label', exact: true }).click()
