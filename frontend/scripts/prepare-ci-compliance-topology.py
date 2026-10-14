@@ -2,6 +2,8 @@
 import base64
 import json
 import os
+import sys
+import time
 import urllib.parse
 import urllib.request
 
@@ -11,6 +13,27 @@ def main():
         raise SystemExit("This bootstrap is restricted to the workflow's disposable CI broker")
     # Fixed loopback broker started by m3-real-services; no staging endpoint/credentials accepted.
     authorization = "Basic " + base64.b64encode(b"spectrace:local-only-rabbitmq").decode()
+
+    if sys.argv[1:] == ['--wait-specification']:
+        # The owner's five baseline SpecificationPublished events must be committed/acked
+        # before Formula replay, whose consumer correctly refuses missing exact predecessors.
+        for _ in range(60):
+            def queue(name):
+                request = urllib.request.Request('http://127.0.0.1:15672/api/queues/%2F/' + name,
+                    headers={'Authorization': authorization})
+                with urllib.request.urlopen(request, timeout=10) as response:
+                    return json.load(response)
+            state = queue('compliance.specification-published')
+            dead = queue('compliance.specification-published.dlq')
+            if dead.get('messages', 0):
+                raise SystemExit('Seed specification replay dead-lettered; inspect the exact owner event')
+            if state.get('message_stats', {}).get('ack', 0) >= 5 and state.get('messages', 0) == 0:
+                print('Five actual owner seed specifications acknowledged before formula replay')
+                return
+            time.sleep(2)
+        raise SystemExit('Owner seed specifications did not reach the real Compliance projection')
+    if sys.argv[1:]:
+        raise SystemExit('Unsupported CI bootstrap mode')
 
     def put(path, data):
         request = urllib.request.Request("http://127.0.0.1:15672/api/" + path,
@@ -24,6 +47,7 @@ def main():
         "compliance.specification-published": ["specification.published.v1"],
         "compliance.formula-published": ["formula.published.v1"],
         "compliance.label-published": ["label.published.v1", "label.published.v2"],
+        "label-workflow.formula-published": ["formula.published.v1"],
     }.items():
         dead = "spectrace.events.dlx." + queue
         put("exchanges/%2F/" + dead, {"type": "fanout", "durable": True, "auto_delete": False, "arguments": {}})

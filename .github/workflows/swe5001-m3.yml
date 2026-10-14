@@ -172,14 +172,9 @@ jobs:
           SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
           SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/specification?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
           RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
-            java -jar services/specification/target/app.jar --server.port=18084 > "$evidence/specification.log" 2>&1 &
+            java -jar services/specification/target/app.jar --server.port=18084 \
+            --spectrace.seed-replay.enabled=true > "$evidence/specification.log" 2>&1 &
           caller_pid=$!
-          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
-          SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
-          SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/formulation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
-          RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
-            java -jar services/formulation/target/app.jar --server.port=18085 > "$evidence/formulation.log" 2>&1 &
-          formulation_pid=$!
           OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
           SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
           SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/compliance?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
@@ -193,6 +188,21 @@ jobs:
             java -jar services/label-workflow/target/app.jar --server.port=18087 \
             --spectrace.label-workflow.validation-base-url=http://localhost:18086 > "$evidence/label-workflow.log" 2>&1 &
           label_pid=$!
+          # Receiver queues are already present; wait for actual owner seed acknowledgements.
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:18084/actuator/health/readiness > /dev/null && curl -fsS http://localhost:18086/actuator/health/readiness > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:18084/actuator/health/readiness
+          curl -fsS http://localhost:18086/actuator/health/readiness
+          python3 frontend/scripts/prepare-ci-compliance-topology.py --wait-specification
+          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
+          SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
+          SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/formulation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
+          RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
+            java -jar services/formulation/target/app.jar --server.port=18085 \
+            --spectrace.seed-replay.enabled=true > "$evidence/formulation.log" 2>&1 &
+          formulation_pid=$!
           GATEWAY_PORT=18080 GATEWAY_REALM=spectrace GATEWAY_ISSUER="$issuer" GATEWAY_JWK_SET_URI="$jwks" GATEWAY_AUDIENCE=spectrace-api \
           GATEWAY_KEYCLOAK=http://localhost:18180 GATEWAY_SPECIFICATION=http://localhost:18084 GATEWAY_FORMULATION=http://localhost:18085 \
           GATEWAY_COMPLIANCE=http://localhost:18086 GATEWAY_LABEL_WORKFLOW=http://localhost:18087 \
