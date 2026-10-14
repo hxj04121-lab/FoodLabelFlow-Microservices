@@ -34,7 +34,7 @@
       ]
     },
     "STCN-86": {
-      "status": "SECRET_REFERENCES_AND_REQUIRED_NAME_LIST_READY_GITHUB_ENVIRONMENT_OIDC_SETUP_BLOCKED",
+      "status": "PROTECTED_ENVIRONMENT_REVIEWER_SET_VARS_SECRETS_EMPTY_RUNTIME_INJECTION_PENDING",
       "evidence": [
         "docs/evidence/stcn-15/README.md",
         "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
@@ -42,10 +42,11 @@
       ]
     },
     "STCN-87": {
-      "status": "EVIDENCE_SCHEMA_READY_DIGEST_TO_DEPLOYMENT_BINDING_PENDING_G1",
+      "status": "EVIDENCE_SCHEMA_AND_G1_DIGEST_PASS_READY_NO_CALLER_OR_DEPLOYMENT_RECORD",
       "evidence": [
         "docs/evidence/stcn-15/deployment-record.schema.json",
         "docs/evidence/stcn-15/aws-readonly-snapshot-2026-10-14.md",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/52"
       ]
     },
@@ -53,6 +54,7 @@
       "status": "PROMTOOL_AND_CI_RULE_TESTS_PASS_LIVE_DLQ_SCRAPE_AND_ALERT_TEST_BLOCKED_G1",
       "evidence": [
         "docs/evidence/stcn-15/alert-rules-validation.log",
+        "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39",
         "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38516466777"
       ]
     }
@@ -64,7 +66,7 @@
     "The target AWS account and configured deploy role are verified by STS. AWS Budget forecasts USD 149.085 against the USD 120 monthly limit; Cost Explorer returned a conflicting estimated near-zero value. Credit balance and actual accrued project charges remain unverified; stop staging changes pending AWS account-owner reconciliation.",
     "EKS/RDS/NAT/internal ALB staging infrastructure is active and tagged to STCN-39/Terraform. The private EKS API cannot be reached from this workstation, so Kubernetes workloads and live NetworkPolicy behavior remain unknown. The ALB has no listeners or target groups; no staging Gateway route was verified.",
     "Terraform state ownership is unknown because infra/terraform/backend.hcl is absent; do not initialize a guessed backend.",
-    "The G1 workflow does not resolve and record a registry SHA-256 digest, create per-service runtime Kubernetes Secrets, or scrape RabbitMQ detailed per-queue DLQ metrics.",
+    "Draft PR #39 implements validated registry digest capture and passes repository@sha256 to Helm, but remains unmerged and has no caller or published/deployed image; deployment-record generation/binding is still absent. Its deploy job does not create per-service runtime Kubernetes Secrets. Its Alloy config scrapes RabbitMQ /metrics rather than /metrics/detailed?family=queue_coarse_metrics.",
     "The current G1 edge module allows ALB TCP/80 from configured ingress CIDRs and forwards plain HTTP when no certificate is configured; require approved HTTPS or redirect-only behavior before public use.",
     "No G2 staging deployment, Gateway staging smoke, live NetworkPolicy probe, image-digest-to-Kubernetes-revision binding, staging demo, or authorized project-resource destroy has occurred."
   ],
