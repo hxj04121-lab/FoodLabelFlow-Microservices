@@ -124,10 +124,12 @@ check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-
   assert.deepEqual(workflow.jobs.deploy['runs-on'],['self-hosted','linux','staging-vpc']);
   assert.equal(workflow.jobs.deploy.environment,'staging');
   assert.deepEqual(workflow.jobs.deploy.permissions,{contents:'read','id-token':'write'});
-  const script=workflow.jobs.deploy.steps.map(step=>step.run||'').join('\n');
+  const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
   assert.match(script,/kubectl get namespace gateway/);
   assert.doesNotMatch(script,/create namespace|kubectl create ns|terraform apply/i);
   assert.match(script,/helm install gateway/);
+  assert.match(script,/anonymous GHCR pull/);
+  assert.match(script,/well-known\/openid-configuration/);
 });
 check('invalid image digest is rejected',()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'--set','image.digest=sha256:short'],false));
 
