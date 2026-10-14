@@ -62,6 +62,14 @@ The internal snapshot adapter is server-owned: JWT org_id -> organisationId; pri
 
 The realm design uses baseline role codes, while M1 descriptions name four service capabilities as roles. Owners must choose explicit aliases to existing permissions or introduce separately reviewed realm roles before the security/starter integration. This repair selects neither policy. Undeclared UI read/edit/current-publication APIs remain a later interface scope; no public operation is invented merely to close G0-M2. Native OpenAPI/event checks and focused HTTP positive/negative checks execute together in the existing contract workflow.
 
+## 13 October G2-M4 PR #51 interface re-review
+
+M2's follow-up aligns Label Workflow with the active-rule, validation and current-label interfaces agreed in the PR discussion. Draft creation calls Compliance's exact effective-rule endpoint and pins the provider's `ruleSetVersionId`; actor JWT and correlation ID are forwarded. Provider 401/403 and no-effective-rule 422 remain distinct, while malformed/outage answers fail closed as 503. The current-label read is `GET /api/labels/current?productId=…&jurisdictionCode=…`: organisation comes only from the verified JWT, current `PUBLISHED` data is tenant-checked, absence is 404, and another organisation is 403. The existing Gateway `/api/labels/**` route already covers this path; M3 still needs to confirm that operation's permission and route contract.
+
+Publication uses the label business `versionNumber` from the committed transaction. The v1 LabelPublished profile remains unchanged; a separate v2 profile adds positive `payload.versionNumber` while retaining `labelVersionId` and canonical envelope `schemaVersion: 1`. `aggregateVersion` remains the envelope sequence, not the label's business version.
+
+The same follow-up adds atomic draft declaration replacement after REQUEST_CHANGES, persists optional decision comments, exposes decision history, and allows resubmission only after validation of the current private draft revision. Provider findings and all echoed snapshot bindings are validated and preserved; malformed or inconsistent results cannot authorize submit. Focused local tests: 17 Java client/resolver tests passed; `npm run check:integration` passed (39 M2, 44 M1, 51 LabelPublished, and 36 Label HTTP compatibility checks). These are local checks. MySQL/Testcontainers HTTP/workflow integration and exact updated-head GitHub CI/reviews must still run; no live staging result is claimed.
+
 
 ## Current-main integration — 8 October 14:49 UTC
 
