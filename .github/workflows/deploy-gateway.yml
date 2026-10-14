@@ -20,7 +20,9 @@ jobs:
       contents: read
       id-token: write
     env:
-      AWS_REGION: ap-southeast-1
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
       AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       GATEWAY_ISSUER: ${{ vars.GATEWAY_ISSUER }}
       AVAILABLE_CREDIT_USD: ${{ secrets.AVAILABLE_CREDIT_USD }}
@@ -40,9 +42,12 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/main
+          test -n "$AWS_ACCOUNT_ID"
+          test -n "$AWS_REGION"
+          test -n "$EKS_CLUSTER_NAME"
           test -n "$AWS_ROLE_ARN"
           test -n "$GATEWAY_ISSUER"
-          python3 -m unittest discover -s tests -p 'test_gateway_deploy_runtime.py' -v
+          python3 -m unittest discover -s tests -p 'test_gateway_deploy_*.py' -v
           python3 platform/gateway/deploy-runtime-values.py > "$RUNNER_TEMP/gateway-runtime-values.json"
           if ! python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/gateway-budget-gate.log" 2>&1; then
             echo '::error::The existing fail-closed staging funding/pricing gate did not pass; no cluster write was attempted.'
@@ -57,13 +62,13 @@ jobs:
         run: |
           set -euo pipefail
           identity=$(aws sts get-caller-identity --query 'Arn' --output text)
-          case "$identity" in
-            arn:aws:sts::679857346122:assumed-role/FoodLabelFlowStagingDeploy/*) ;;
-            *) echo '::error::Unexpected AWS deployment identity'; exit 1 ;;
-          esac
-          test "$(aws eks describe-cluster --name spectrace-staging --region "$AWS_REGION" --query 'cluster.status' --output text)" = ACTIVE
-          aws eks update-kubeconfig --name spectrace-staging --region "$AWS_REGION" >/dev/null
-          test "$(kubectl config current-context)" = arn:aws:eks:ap-southeast-1:679857346122:cluster/spectrace-staging
+          cluster_arn=$(aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --query 'cluster.arn' --output text)
+          test "$(aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --query 'cluster.status' --output text)" = ACTIVE
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" >/dev/null
+          context=$(kubectl config current-context)
+          python3 platform/gateway/validate-deploy-target.py \
+            --account-id "$AWS_ACCOUNT_ID" --role-arn "$AWS_ROLE_ARN" --caller-arn "$identity" \
+            --region "$AWS_REGION" --cluster "$EKS_CLUSTER_NAME" --cluster-arn "$cluster_arn" --context "$context"
           kubectl get namespace gateway >/dev/null
           if helm list --namespace gateway --filter '^gateway$' --output json | python3 -c 'import json,sys; raise SystemExit(bool(json.load(sys.stdin)))'; then
             :

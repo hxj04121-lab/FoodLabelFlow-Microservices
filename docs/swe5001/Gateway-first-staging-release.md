@@ -8,7 +8,10 @@ In **Repository → Settings → Environments → staging**, retain the required
 
 | Variable | Required value |
 | --- | --- |
-| `AWS_DEPLOY_ROLE_ARN` | ARN of the existing `FoodLabelFlowStagingDeploy` role in account `679857346122` |
+| `AWS_ACCOUNT_ID` | Expected 12-digit staging account ID |
+| `AWS_REGION` | Staging region |
+| `EKS_CLUSTER_NAME` | Existing EKS cluster name |
+| `AWS_DEPLOY_ROLE_ARN` | ARN of the existing deployment role in the staging account |
 | `GATEWAY_ISSUER` | Actual externally reachable HTTPS origin plus `/auth/realms/spectrace`, matching the Keycloak `KC_HOSTNAME` configuration |
 
 The runtime renderer derives the JWKS path from this issuer and uses the planned Keycloak Operator default Service name (`spectrace-keycloak` CR → `spectrace-keycloak-service`, namespace `keycloak`). The chart assumes the architecture's internal HTTP/8080 path; M3/M4 must keep the CR's HTTP service binding aligned or provide the actual scheme/port before full E2E. It derives the four business Service DNS names from the shared Helm chart's `<release>-<serviceName>` helper and the reviewed release names. These are routing configuration, not evidence that those Services are deployed. Initial rollout checks only the Gateway process and its HTTP readiness; it does not query Keycloak discovery, fetch JWKS, or require business Services. Authenticated login and upstream business acceptance remain a separate E2E milestone after those workloads are installed.

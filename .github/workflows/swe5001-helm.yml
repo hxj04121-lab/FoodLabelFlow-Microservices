@@ -1,10 +1,10 @@
 name: SWE5001 Helm template
 on:
   pull_request:
-    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/swe5001-helm.yml']
+    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'platform/gateway/**', 'tests/test_gateway_deploy_*.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/swe5001-helm.yml']
   push:
     branches: ['feature/stcn-48-*']
-    paths: ['deploy/helm/**', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/swe5001-helm.yml']
+    paths: ['deploy/helm/**', 'platform/gateway/**', 'tests/test_gateway_deploy_*.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/swe5001-helm.yml']
 permissions:
   contents: read
 jobs:
@@ -26,8 +26,8 @@ jobs:
       - name: Lint and test shared chart locally
         working-directory: deploy/helm
         run: npm ci --ignore-scripts --no-audit --no-fund && npm test
-      - name: Validate protected Gateway runtime configuration
-        run: python3 -m unittest discover -s tests -p 'test_gateway_deploy_runtime.py' -v
+      - name: Validate protected Gateway runtime and target configuration
+        run: python3 -m unittest discover -s tests -p 'test_gateway_deploy_*.py' -v
       - uses: actions/upload-artifact@v4
         if: always()
         with:

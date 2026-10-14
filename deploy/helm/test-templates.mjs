@@ -125,9 +125,15 @@ check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-
   assert.deepEqual(workflow.jobs.deploy['runs-on'],['self-hosted','linux','staging-vpc']);
   assert.equal(workflow.jobs.deploy.environment,'staging');
   assert.deepEqual(workflow.jobs.deploy.permissions,{contents:'read','id-token':'write'});
+  assert.equal(workflow.jobs.deploy.env.AWS_ACCOUNT_ID,'${{ vars.AWS_ACCOUNT_ID }}');
+  assert.equal(workflow.jobs.deploy.env.AWS_REGION,'${{ vars.AWS_REGION }}');
+  assert.equal(workflow.jobs.deploy.env.EKS_CLUSTER_NAME,'${{ vars.EKS_CLUSTER_NAME }}');
+  assert.equal(workflow.jobs.deploy.env.AWS_ROLE_ARN,'${{ vars.AWS_DEPLOY_ROLE_ARN }}');
   const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
   assert.match(script,/kubectl get namespace gateway/);
   assert.doesNotMatch(script,/create namespace|kubectl create ns|terraform apply/i);
+  assert.doesNotMatch(script,/679857346122|spectrace-staging|ap-southeast-1/,'AWS target identifiers must come from the protected Environment');
+  assert.match(script,/validate-deploy-target\.py/);
   assert.match(script,/helm install gateway/);
   assert.match(script,/anonymous GHCR pull/);
   assert.doesNotMatch(script,/well-known\/openid-configuration|kubectl get service "\$service"|for item in 'GATEWAY_KEYCLOAK/,'process readiness does not require Keycloak or business Services to be deployed');
