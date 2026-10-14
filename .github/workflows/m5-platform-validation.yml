@@ -42,6 +42,8 @@ jobs:
         with: {version: v4.3.0}
       - run: helm lint deploy/helm/platform-network-policies deploy/helm/rabbitmq-topology
       - run: python scripts/check_m5_platform.py
+      - name: Verify RabbitMQ per-queue DLQ scrape target
+        run: python3 -m unittest discover -s tests -p 'test_alloy_dlq_scrape.py' -v
       - run: bash -n scripts/staging.sh scripts/verify_eks_addons.sh && bash tests/test_staging_guards.sh
       - uses: azure/setup-kubectl@v4
       - run: kubectl kustomize deploy/operators >/dev/null

@@ -51,7 +51,11 @@ data:
       }
       rule {
         target_label = "__metrics_path__"
-        replacement = "/metrics"
+        replacement = "/metrics/detailed"
+      }
+      rule {
+        target_label = "__param_family"
+        replacement = "queue_coarse_metrics"
       }
     }
 

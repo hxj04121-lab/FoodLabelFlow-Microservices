@@ -289,6 +289,7 @@ jobs:
         env:
           CLUSTER_NAME: ${{ vars.STAGING_EKS_CLUSTER_NAME }}
           NAMESPACE: ${{ inputs.namespace }}
+          SERVICE_NAME: ${{ inputs.service_name }}
           RELEASE: ${{ inputs.service_name }}
           CHART: ${{ inputs.helm_chart }}
           IMAGE: ${{ needs.publish.outputs.image }}
@@ -296,6 +297,7 @@ jobs:
           ENVIRONMENT_VALUES_FILE: ${{ inputs.environment_values_file }}
         run: |
           test -n "$CLUSTER_NAME" && test -n "$IMAGE"
+          test "$NAMESPACE" = "$SERVICE_NAME"
           IMAGE_REPOSITORY="${IMAGE%@*}"
           IMAGE_DIGEST="${IMAGE#*@}"
           [[ "$IMAGE_REPOSITORY" == ghcr.io/* && "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
@@ -333,3 +335,18 @@ jobs:
           assert claims.get("org_id") and claims.get("org_type") and claims.get("roles")
           PY
           curl --fail --silent --show-error -H "Authorization: Bearer $SMOKE_JWT" "$GATEWAY_URL$SMOKE_PATH"
+      - name: Record deployment commit, digest, workflow and revision
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+          IMAGE: ${{ needs.publish.outputs.image }}
+        run: >-
+          python3 scripts/staging/record-deployment-evidence.py
+          --service "$SERVICE_NAME"
+          --image "$IMAGE"
+          --output "$RUNNER_TEMP/stcn-15-deployment-records/$SERVICE_NAME.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stcn-15-deployment-record-${{ inputs.service_name }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/stcn-15-deployment-records/${{ inputs.service_name }}.json
+          if-no-files-found: error
+          retention-days: 90
