@@ -2,11 +2,11 @@
 
 For GitHub and AWS administrators. Configure names and values directly in the protected systems; never send secret values in chat or commit them to Git.
 
-## Immediate administrator actions (read-only state checked 14 Oct 2026)
+## Immediate administrator actions (read-only GitHub/AWS state checked 14 Oct 2026, 22:40–22:44 CST)
 
-1. **Protect `main`.** Required branch protection is not currently evidenced. Require the CI, SWE5001 Helm template, and SWE5001 Compliance contracts checks before merge.
-2. **Harden the `staging` Environment.** Its approval and deployment controls are incomplete, and deployment variables/secrets are not configured. Restrict deployments to the approved branch, disable administrator bypass, enable Prevent self-review, and populate only the names listed below.
-3. **Configure AWS OIDC.** The latest read-only check indicates the GitHub Actions OIDC role path is not ready. Add it and review the separate plan/deploy roles and their trust conditions before use.
+1. **Protect `main`.** The read-only branch-protection API returned 404, so protection is not evidenced. Require the CI, SWE5001 Helm template, and SWE5001 Compliance contracts checks before merge.
+2. **Harden the `staging` Environment.** Its allowed deployment branch is already `main`, but required reviewers are empty and its Variables/Secrets lists are empty. Add the M1 approver, enable Prevent self-review, review administrator bypass, and populate only the names listed below.
+3. **Configure AWS OIDC.** The target account currently has zero GitHub Actions OIDC providers. IAM denied read access to the deployment role trust policy, so its trust is unverified. Add the provider and review separate plan/deploy roles and trust conditions before use.
 4. **Provide private-cluster access.** The staging EKS API is private. VPC-connected runner availability is UNKNOWN. Reuse or provision an approved restricted runner; do not expose the cluster endpoint.
 5. **Keep staging closed.** The latest read-only budget check shows forecast spend above the configured monthly limit; eligible credits are not verified. Reconfirm an approved staging window with the account owner before use.
 6. **Confirm state ownership.** `infra/terraform/backend.hcl` is absent. The state bucket/backend must be confirmed by its owner before any plan or mutation.
@@ -14,11 +14,11 @@ For GitHub and AWS administrators. Configure names and values directly in the pr
 ## GitHub repository settings
 
 - [x] Read-only status checked: required `main` branch protection is not evidenced. An administrator still needs to enable protection and require CI, Helm, and Compliance contract checks.
-- [ ] Restrict the `staging` Environment deployment branch to the approved `main` branch.
-- [ ] Require an approver, enable **Prevent self-review**, and disable administrator bypass unless an exception is approved.
+- [x] Restrict the `staging` Environment deployment branch to `main` (GitHub API currently lists only this branch).
+- [ ] Add the required approver and enable **Prevent self-review**; review administrator bypass. The current Environment API returns no required reviewers.
 - [ ] Provide a restricted self-hosted runner reachable from the staging VPC with labels `self-hosted`, `linux`, and `staging-vpc`. VPC runner availability is UNKNOWN.
-- [ ] Configure the GitHub Actions OIDC provider in the AWS account, then provision the separate plan and deploy roles from `infra/terraform/modules/github-oidc`. Review their trust conditions and least-privilege policies before use.
-- [ ] Keep `STAGING_WINDOW_OPEN=false` until the account owner approves the budget and staging window.
+- [ ] Create the GitHub Actions OIDC provider in the AWS account, then provision the separate plan and deploy roles from `infra/terraform/modules/github-oidc`. The read-only IAM provider query returned zero; `iam:GetRole` was denied, so verify role trust and least-privilege policies as an administrator.
+- [ ] Configure the listed Environment variables and secrets. The current Environment API returns empty Variables and Secrets lists. Keep `STAGING_WINDOW_OPEN=false` until the account owner approves the budget and staging window.
 
 The root Terraform module already wires `infra/terraform/modules/github-oidc`; role creation is disabled while `github_repository` is empty. Set the exact repository, immutable owner/repository IDs, `github_environment=staging`, and `github_branch=main` in the owner-controlled Terraform inputs. The module uses issuer `https://token.actions.githubusercontent.com`, audience `sts.amazonaws.com`, and an immutable repository/environment subject plus `refs/heads/main`. The current account lacks that provider, so `github_create_oidc_provider=true` is needed only after the account owner confirms the target. Review the plan role separately from the deploy role: plan is read-only except scoped Terraform state locking; deploy receives EKS edit access in the five application namespaces, including Kubernetes Secret operations. Set `AWS_PLAN_ROLE_ARN` and `AWS_DEPLOY_ROLE_ARN` from outputs `role_arn` and `deploy_role_arn` as Environment variables; do not configure static AWS access-key secrets.
 
@@ -86,10 +86,10 @@ For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPR
 
 ## Current sanitized observations
 
-- The latest read-only identity check succeeded through the configured non-root role chain. The deployment Environment does not yet bind an owner-verified AWS account to the workflow target.
-- The staging EKS API is private and could not be inspected from this workstation. Workload state and live NetworkPolicy enforcement remain UNKNOWN.
+- The latest read-only identity check succeeded through the configured non-root role chain. GitHub lists only `main` as the Environment deployment branch, but no Environment variables/secrets are present to bind the owner-verified AWS target; the GitHub OIDC provider count is zero.
+- The staging EKS API is active and private-only. A local read-only Kubernetes request failed during TLS handshake; workload state and live NetworkPolicy enforcement remain UNKNOWN.
 - The staging database is private and available, but no service login, grant inspection, or cross-database probe was run.
-- The current load-balancer configuration does not provide a ready HTTPS Gateway smoke-test path.
+- The visible load balancer is internal and has no usable HTTPS Gateway listener; no Gateway smoke path is available for this staging window.
 - The budget forecast is above the configured monthly limit and eligible credits remain UNKNOWN; keep the staging window closed.
 - GitHub branch, Environment, and OIDC deployment controls need administrator configuration. VPC runner availability remains UNKNOWN.
 - No AWS apply, Kubernetes mutation, Secret injection, deployment, or destroy was performed for this work.
