@@ -58,6 +58,6 @@ output "github_plan_role_arn" {
 }
 
 output "github_deploy_role_arn" {
-  description = "Deprecated compatibility alias; this ARN is plan-only and has no Kubernetes edit or Terraform apply permissions."
-  value       = var.github_repository == "" ? null : module.github_oidc[0].role_arn
+  description = "GitHub OIDC deployment role ARN; limited to describing this EKS cluster and namespace-scoped EKS edit access."
+  value       = var.github_repository == "" ? null : module.github_oidc[0].deploy_role_arn
 }

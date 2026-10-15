@@ -10,7 +10,7 @@ Current source/release evidence: [13 October checkpoint](evidence/G1-M3-readines
 | Owner | Concrete input / condition |
 |---|---|
 | M1 | PR48's identity corrections are reviewed; preserve the accepted caller resolver during integration. Existing Spec/Formulation Flyway seeds already supply same-organisation and foreign-organisation resources; no additional local import is required |
-| M4 | Fresh PR37 review; confirm actual imported spectrace realm, public spectrace-web client, native sub, audience spectrace-api and account roles; supply a test identity's expected native sub/org/type/roles through the approved account channel; accept final evidence |
+| M4 | PR37 code is accepted into main; confirm actual imported spectrace realm, public spectrace-web client, native sub, audience spectrace-api and account roles; supply an approved manufacturer test identity through the secret channel; accept final live evidence |
 | M5 | Actual browser-reachable HTTPS Gateway and realm issuer; matching private JWKS/upstreams; TLS certificate and LB `/auth`/`/api` routing/forwarded-header policy; namespace/Keycloak CR/NetworkPolicy bindings; readiness and agreed window/access |
 | Repository owner | Approved PR37 source in main, Actions Pages source and required public variables; enable FRONTEND_PAGES_ENABLED only after actual inputs are confirmed |
 
@@ -22,6 +22,11 @@ or change owners' branches as part of these checks.
 The current Pages job runs only on main after owner enablement. Owners must
 distinguish code integration approval from final deployed acceptance; do not
 create a requirement for a main-only Pages deployment before its source can land.
+
+The exact [M5 input list and administrator steps](G1-M3-M5-inputs.md) are ready.
+The current M3 account lacks repository administration permission, so Pages
+source setup remains an administrator action. Public URLs are not populated with
+placeholders and the deployment flag remains disabled until owners confirm them.
 
 ## Existing local seed resources
 
@@ -81,8 +86,9 @@ Set the public values above in the test process, together with:
 | M3_DEPLOYED_BASE_URL | The actual deployed root callback URL above |
 | M3_TEST_USERNAME / M3_TEST_PASSWORD | M4-approved test account; inject credentials through the approved secret channel, not committed files or PR comments |
 | M3_EXPECTED_SUBJECT | The account's native user ID, different from its username |
-| M3_EXPECTED_ORG_ID / M3_EXPECTED_ORG_TYPE | Expected organisation and SUPPLIER or MANUFACTURER |
+| M3_EXPECTED_ORG_ID / M3_EXPECTED_ORG_TYPE | Expected manufacturer organisation; MANUFACTURER for product ownership checks |
 | M3_EXPECTED_ROLES | Expected nonempty role set, comma-separated; use the approved positive-smoke account |
+| M3_OWN_PRODUCT_ID / M3_FOREIGN_PRODUCT_ID | Distinct agreed products, respectively owned and foreign to this manufacturer |
 
 Run from `frontend` with the approved environment already populated:
 
@@ -98,9 +104,11 @@ Vite/test server, and reuses `real-auth-tests/signin.spec.ts` without route/sess
 mocks. Missing inputs fail before browser execution. For local Edge, set
 `PLAYWRIGHT_CHANNEL=msedge`; otherwise install Playwright Chromium.
 
-The smoke checks real login, native subject/org/type/role equality at the caller
-endpoint, anonymous401, logout to the exact root, and hash-route reload after
-logout. It writes an identity-only `claims.json` and successful-login screenshot
+The smoke first verifies `g1-release.json` against actual test inputs and records
+the published source SHA, then checks discovery/PKCE, real login, native identity,
+owned product200, foreign product403, signature-tampered token401, public private-path
+denial and CORS, anonymous401, logout and hash reload. It writes status/identity-only
+`claims.json` and a successful-login screenshot
 under ignored `frontend/test-results/deployed-signin`. Live trace/video/failure
 screenshots are disabled; credentials and bearer tokens are never included in
 the evidence JSON. Successful JSON is written only after the complete smoke passes.

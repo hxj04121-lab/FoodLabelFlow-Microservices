@@ -1,0 +1,115 @@
+{
+  "scope": "Real disposable CI Keycloak/Gateway/Specification/Formulation/Compliance/Label; no AWS or G3 ReviewTask acceptance",
+  "source": "c60f268fc5b75f2a2416ca59ca5e11c9a1892290",
+  "productId": "prod_usda_1118468",
+  "label": {
+    "labelVersionId": "lbl_ad42df71f21e46f2b0bcc0e53d0e839d",
+    "productId": "prod_usda_1118468",
+    "formulaVersionId": "formula_49d84374-15da-4b87-abbf-07056cda5eeb",
+    "ruleSetVersionId": "ruleset_us_falcpa_demo_v1",
+    "jurisdictionCode": "US",
+    "versionNumber": 1,
+    "lifecycleStatus": "PUBLISHED"
+  },
+  "formulaVersionId": "formula_49d84374-15da-4b87-abbf-07056cda5eeb",
+  "specificationVersionId": "spec_92f3a533-4fe5-4b89-98dc-dd471576ea2a",
+  "checks": [
+    "PKCE separate maker/checker",
+    "real rule resolver/validation",
+    "request changes and resubmit",
+    "approve/publish/current label",
+    "foreign label 403"
+  ],
+  "observed": [
+    {
+      "operation": "POST /api/specifications/versions",
+      "status": 201,
+      "correlation": "5b55e30b-a2d4-442e-8322-2a09be958ab3"
+    },
+    {
+      "operation": "POST /api/specifications/versions/spec_92f3a533-4fe5-4b89-98dc-dd471576ea2a/release",
+      "status": 200,
+      "correlation": "a9df14e7-37d7-4b25-b379-0a45d9d5ddd6"
+    },
+    {
+      "operation": "GET /api/formulations/released-specifications?materialId=mat_chocolate_base&limit=100",
+      "status": 200,
+      "correlation": "ba828aa0-df44-4859-b09e-9321f81389e3"
+    },
+    {
+      "operation": "GET /api/formulations/released-specifications?materialId=mat_chocolate_base&limit=100",
+      "status": 200,
+      "correlation": "2a8475ec-2d98-4710-b898-a81c331c05e1"
+    },
+    {
+      "operation": "GET /api/formulations/released-specifications?materialId=mat_chocolate_base&limit=100",
+      "status": 200,
+      "correlation": "5fb73e3a-5559-4096-bb15-c4e3d5da7f1d"
+    },
+    {
+      "operation": "GET /api/formulations/released-specifications?materialId=mat_chocolate_base&limit=100",
+      "status": 200,
+      "correlation": "abefc69e-7ef7-4b70-ba0b-5165e5278780"
+    },
+    {
+      "operation": "GET /api/formulations/products/prod_usda_1118468",
+      "status": 200,
+      "correlation": "26339c01-ed78-4be5-8c37-618c907bbcb7"
+    },
+    {
+      "operation": "POST /api/formulations/formula-versions",
+      "status": 201,
+      "correlation": "2e443a38-3ab4-474e-ad8f-70f221ebb18d"
+    },
+    {
+      "operation": "POST /api/formulations/formula-versions/formula_49d84374-15da-4b87-abbf-07056cda5eeb/release",
+      "status": 200,
+      "correlation": "81903ab4-106c-4ad5-b3ec-02301116314f"
+    },
+    {
+      "operation": "POST /api/labels/lbl_ad42df71f21e46f2b0bcc0e53d0e839d/validations",
+      "status": 201,
+      "correlation": "4c0666ec-7015-4204-8d6c-8643aea85d8b"
+    },
+    {
+      "operation": "POST /api/labels/lbl_ad42df71f21e46f2b0bcc0e53d0e839d/submit",
+      "status": 200,
+      "correlation": "bd5c3fb7-544b-440c-96be-e4967de17b18"
+    },
+    {
+      "operation": "POST /api/labels/lbl_ad42df71f21e46f2b0bcc0e53d0e839d/decisions",
+      "status": 201,
+      "correlation": "4d1a493d-2c87-4502-b2d8-47a0ae7a4f9f"
+    },
+    {
+      "operation": "POST /api/labels/lbl_ad42df71f21e46f2b0bcc0e53d0e839d/validations",
+      "status": 201,
+      "correlation": "42adbd41-9ce3-4ebf-8763-844557eb10f8"
+    },
+    {
+      "operation": "POST /api/labels/lbl_ad42df71f21e46f2b0bcc0e53d0e839d/submit",
+      "status": 200,
+      "correlation": "96b7e6a2-4ec9-4b3e-8a7f-76bc8448fa42"
+    },
+    {
+      "operation": "POST /api/labels/lbl_ad42df71f21e46f2b0bcc0e53d0e839d/decisions",
+      "status": 201,
+      "correlation": "ba248fb9-aa2c-452d-b7fc-4cd61bb1e483"
+    },
+    {
+      "operation": "POST /api/labels/lbl_ad42df71f21e46f2b0bcc0e53d0e839d/publish",
+      "status": 201,
+      "correlation": "7ef359f4-f7e7-4cdd-b5c1-96445f081389"
+    },
+    {
+      "operation": "GET /api/labels/current?productId=prod_usda_1118468&jurisdictionCode=US",
+      "status": 200,
+      "correlation": "2d50f9c3-ced9-4f16-849d-c1d23309df0b"
+    },
+    {
+      "operation": "GET /api/labels/lbl_ad42df71f21e46f2b0bcc0e53d0e839d",
+      "status": 403,
+      "correlation": "bbd2cfa7-c6b5-423b-ac00-dc5fa5e09253"
+    }
+  ]
+}

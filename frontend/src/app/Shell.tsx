@@ -171,13 +171,14 @@ export function Shell() {
           </div>
           <button
             className="quick-search"
+            aria-label="Find products and formulas"
             onClick={() => navigate('/products')}
           >
             <Search size={16} />
             <span>Find products and formulas</span>
           </button>
         </div>
-        <main id="main">
+        <main id="main" tabIndex={-1}>
           <Routes>
             <Route path="/" element={<CatalogConnection><Overview /></CatalogConnection>} />
             <Route path="/products" element={<CatalogConnection><Catalog /></CatalogConnection>} />

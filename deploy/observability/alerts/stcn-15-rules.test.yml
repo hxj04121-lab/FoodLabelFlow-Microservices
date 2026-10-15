@@ -1,0 +1,46 @@
+rule_files:
+  - stcn-15-rules.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'rabbitmq_detailed_queue_messages{queue="compliance.specification-published.dlq"}'
+        values: '0 0 4 4 4 4 4 4 4 4 4 4 4'
+      - series: 'http_server_requests_seconds_count{service="specification",status="500"}'
+        values: '0 10 20 30 40 50 60 70 80 90 100 110 120'
+      - series: 'http_server_requests_seconds_count{service="specification",status="200"}'
+        values: '0 10 20 30 40 50 60 70 80 90 100 110 120'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: RabbitMQDeadLetterQueueDepth
+        exp_alerts:
+          - exp_labels:
+              queue: compliance.specification-published.dlq
+              severity: warning
+            exp_annotations:
+              summary: RabbitMQ DLQ has messages
+              description: Queue compliance.specification-published.dlq has 4 messages for at least 5 minutes.
+      - eval_time: 12m
+        alertname: ServiceErrorRateSpike
+        exp_alerts:
+          - exp_labels:
+              service: specification
+              severity: warning
+            exp_annotations:
+              summary: Service 5xx rate is elevated
+              description: specification has a 5xx ratio above 5% and more than 0.1 errors/s for 5 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'rabbitmq_detailed_queue_messages{queue="compliance.specification-published.dlq"}'
+        values: '0 0 0 0 0 0 0 0 0 0 0 0 0'
+      - series: 'http_server_requests_seconds_count{service="specification",status="500"}'
+        values: '0 0 0 0 0 0 0 0 0 0 0 0 0'
+      - series: 'http_server_requests_seconds_count{service="specification",status="200"}'
+        values: '0 10 20 30 40 50 60 70 80 90 100 110 120'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: RabbitMQDeadLetterQueueDepth
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ServiceErrorRateSpike
+        exp_alerts: []

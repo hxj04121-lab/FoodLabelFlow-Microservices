@@ -44,7 +44,6 @@ export function Overview() {
     <>
       <div className="page-title">
         <div>
-          <div className="eyebrow">YOUR WORKSPACE, AT A GLANCE</div>
           <h1>
             Overview <span className="hello-dot" />
           </h1>

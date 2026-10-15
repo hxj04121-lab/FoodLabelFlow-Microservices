@@ -18,6 +18,10 @@ Leave `domain_name` and `certificate_arn` empty until the owner selects the FQDN
 
 Existing namespaces or storage classes created outside Terraform need a reviewed adoption/import decision before applying their manifest resources. Do not create duplicate resources or overwrite existing ownership.
 
+The repository has separate plan and EKS workload-deploy OIDC roles, but no Terraform apply role or apply workflow. The plan role grants read-only AWS discovery, staging DB master-secret read for Terraform refresh, exact S3 state read, and write/delete on the state lock object only. The workload-deploy role may describe the target cluster and receives namespace-scoped EKS Edit for the five application namespaces; it cannot modify Terraform state. AWS EKS Edit includes Secret read/write in those namespaces, which requires reviewer acceptance or narrower custom Kubernetes RBAC. See the STCN-15 administrator checklist for the protected `staging` Environment configuration before any deployment.
+
+The current Trivy scan reports one remaining `AWS-0104` finding for EKS node HTTPS egress to `0.0.0.0/0`; private nodes need HTTPS through NAT for AWS APIs and image pulls. Before a stricter production policy, replace this with service-specific VPC endpoints and scoped egress rules, accounting for their recurring cost. Trivy also reports `AWS-0039` because the config omits a customer-managed KMS key; the selected EKS 1.36 control plane uses AWS-owned KMS v2 envelope encryption by default, which EKS documents for Kubernetes 1.28 and later.
+
 ## Validation and execution controls
 
 ```sh
@@ -25,8 +29,10 @@ terraform fmt -check -recursive
 terraform init -backend=false
 terraform validate
 terraform test -filter=tests/deployment-safety.tftest.hcl
+terraform -chdir=modules/github-oidc init -backend=false -input=false
+terraform -chdir=modules/github-oidc test -no-color
 ```
 
 The tests use mock providers and do not prove live deployment. `scripts/check_eks_addons.sh` additionally lints controller charts and rendered manifests. `scripts/verify_eks_addons.sh foundations` checks foundations; `deploy` also checks the existing ALB listener, target-group registration, and target health.
 
-The manual plan workflow runs only from main, on an authorized VPC-connected runner, behind the protected Environment. Configure `AWS_PLAN_ROLE_ARN`, `TF_STATE_BUCKET`, `TF_STATE_KEY`, `TF_WORKSPACE`, and the protected `TF_PLAN_VARS_JSON` Secret. It selects an existing workspace, checks the expected resource addresses, saves the plan and logs privately, and prints only the plan hash. It provides no Apply path. Keep the existing forced gate in place until any paid-account alternative has passed formal review.
+The manual plan workflow runs only from main, on an authorized VPC-connected runner, behind the protected Environment. Configure `AWS_PLAN_ROLE_ARN`, `TF_STATE_BUCKET`, `TF_STATE_KEY`, `TF_WORKSPACE`, and the protected `TF_PLAN_VARS_JSON` Secret. It selects an existing workspace, checks the expected resource addresses, saves the plan and logs privately, and prints only the plan hash. It provides no Apply path. Keep the existing forced gate in place until any paid-account alternative has passed formal review. The plan role cannot modify Terraform state or Kubernetes workloads, and the workload-deploy role cannot apply Terraform or write Terraform state. EKS node egress is limited to in-VPC services and HTTPS through NAT; RDS has no initiated outbound rule.

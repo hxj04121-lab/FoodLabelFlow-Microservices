@@ -143,7 +143,7 @@ test('clears data on product change and ignores a late response from the previou
   await expect(panel(page)).toContainText('0 derived allergen(s)')
   release()
   await expect(panel(page)).not.toContainText('SOY')
-  await page.getByLabel('Product').selectOption({ index: 1 })
+  await page.getByLabel('Product', { exact: true }).selectOption({ index: 1 })
   await expect(panel(page)).toContainText('Create or load a label version')
   await expect(panel(page)).not.toContainText('label_facts_v2')
 })

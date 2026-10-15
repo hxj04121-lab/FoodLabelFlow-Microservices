@@ -8,9 +8,11 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test:e2e": "playwright test",
+    "test:types": "tsc -p tsconfig.tests.json",
     "test:signin": "playwright test --config playwright.signin.config.ts",
     "test:pages": "playwright test --config playwright.pages.config.ts",
     "test:deployed": "playwright test --config playwright.deployed-signin.config.ts",
+    "test:demo": "playwright test --config playwright.demo-path.config.ts",
     "test:deployed-config": "node --test scripts/check-deployed-config.test.mjs"
   },
   "dependencies": {

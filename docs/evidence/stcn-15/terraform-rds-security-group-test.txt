@@ -1,0 +1,6 @@
+tests/security-group.tftest.hcl... in progress
+  run "mysql_ingress_is_limited_to_the_eks_node_security_group"... pass
+tests/security-group.tftest.hcl... tearing down
+tests/security-group.tftest.hcl... pass
+
+Success! 1 passed, 0 failed.

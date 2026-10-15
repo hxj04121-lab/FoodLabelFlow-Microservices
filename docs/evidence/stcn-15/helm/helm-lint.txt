@@ -1,0 +1,24 @@
+==> Linting /Users/shj/Documents/学习/5001 microservices/FoodLabelFlow-Microservices/deploy/helm/spectrace-service
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+
+==> Linting /Users/shj/Documents/学习/5001 microservices/FoodLabelFlow-Microservices/deploy/helm/spectrace-service
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+
+==> Linting /Users/shj/Documents/学习/5001 microservices/FoodLabelFlow-Microservices/deploy/helm/spectrace-service
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+
+==> Linting /Users/shj/Documents/学习/5001 microservices/FoodLabelFlow-Microservices/deploy/helm/spectrace-service
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+
+==> Linting /Users/shj/Documents/学习/5001 microservices/FoodLabelFlow-Microservices/deploy/helm/spectrace-service
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed

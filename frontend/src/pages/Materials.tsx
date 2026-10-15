@@ -30,7 +30,6 @@ export function Materials({ suppliers = false }: { suppliers?: boolean }) {
     <>
       <div className="page-title">
         <div>
-          <div className="eyebrow">SUPPLY CHAIN DIRECTORY</div>
           <h1>{suppliers ? 'Suppliers' : 'Materials & specs'}</h1>
           <p>Follow every link from supplier to specification.</p>
         </div>
@@ -86,15 +85,15 @@ export function Materials({ suppliers = false }: { suppliers?: boolean }) {
             </div>
             <span className="results-count">{filtered.length} materials</span>
           </div>
-          <div className="table-scroll">
+          <div className="table-scroll" role="region" aria-label="Material records" tabIndex={0}>
             <table>
               <thead>
                 <tr>
-                  <th>Supplier material</th>
-                  <th>Suppliers</th>
-                  <th>Specification version</th>
-                  <th>Status</th>
-                  <th>Details</th>
+                  <th scope="col">Supplier material</th>
+                  <th scope="col">Suppliers</th>
+                  <th scope="col">Specification version</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Details</th>
                 </tr>
               </thead>
               <tbody>

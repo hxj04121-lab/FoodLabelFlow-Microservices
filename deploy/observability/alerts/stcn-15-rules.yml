@@ -1,0 +1,26 @@
+groups:
+  - name: spectrace-stcn-15
+    interval: 1m
+    rules:
+      - alert: RabbitMQDeadLetterQueueDepth
+        expr: rabbitmq_detailed_queue_messages{queue=~".+\\.dlq"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ DLQ has messages"
+          description: "Queue {{ $labels.queue }} has {{ $value }} messages for at least 5 minutes."
+      - alert: ServiceErrorRateSpike
+        expr: |
+          (
+            sum by (service) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            / clamp_min(sum by (service) (rate(http_server_requests_seconds_count[5m])), 0.1)
+          ) > 0.05
+          and
+          sum by (service) (rate(http_server_requests_seconds_count{status=~"5.."}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service 5xx rate is elevated"
+          description: "{{ $labels.service }} has a 5xx ratio above 5% and more than 0.1 errors/s for 5 minutes."
