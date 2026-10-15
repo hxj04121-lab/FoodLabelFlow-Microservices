@@ -40,6 +40,11 @@
 STCN-103/104 已 DESCOPED，不补造 partner/Notification onboarding、耗时或测量数据。
 本轮不依据 CI 自动关闭 Jira，也不把其他组员实现计入 M3。
 
+后续推进：#58 已由团队合入 main；M3 已核对配置修复、7 项运行参数/目标测试和 32 项
+Helm 检查。工作流进入 main 只是代码前置条件解除；实际 issuer、Pages 参数、Runner
+Online 确认与发布/验收记录仍待 owner 提供。最新缺口和主线 M3 CI 的录像步骤重试见
+[post58 核对记录](../G1-M3-post58-readiness.md)，不沿用旧版 #58 缺陷判断当前代码。
+
 ## CI 结果应怎样写
 
 - 实现版本 `5beb98a`：M3 push/PR 与 full CI 三份 run 均成功；实际测试数量和链接见报告。

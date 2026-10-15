@@ -215,6 +215,14 @@ readiness result alone cannot establish authenticated business integration.
 No cloud percentage, completion promise or speculative performance measurement is
 used as an acceptance result.
 
+After the initial report snapshot, the team merged PR58 at main a0fc86b. M3
+verified its complete runtime environment with seven parameter/target tests and
+32 shared Helm checks. The protected release workflow is now available, but the
+observed staging issuer and Pages endpoint inputs remain absent. The separate
+post-merge M3 CI video-step timeout and one bounded retry are tracked in the
+[dated post58 readiness note](../G1-M3-post58-readiness.md). This progress does not
+change the earlier immutable test/image evidence or the live NOT RUN entries.
+
 From `frontend`, use `npm run build`, `npm run test:types`, `npm run test:signin`,
 `npm run test:pages` and `npm run test:deployed-config` for independent validation.
 `npm run test:deployed` is the read-only live G1 smoke; `npm run test:demo` is the
