@@ -41,6 +41,7 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
     database_subnet_cidrs       = ["10.0.16.0/24", "10.0.17.0/24"]
     workload_namespaces         = { gateway = "gateway", keycloak = "keycloak", rabbitmq = "rabbitmq", observability = "observability", specification = "specification", formulation = "formulation", compliance = "compliance", label-workflow = "label-workflow" }
     operator_namespaces         = { rabbitmq = "rabbitmq-system", keycloak = "keycloak-system" }
+    deployer_kubernetes_group   = "spectrace-staging-deploy"
     node_groups                 = { general = { asg_name = "test-general", min_size = 1, max_size = 3 }, compliance = { asg_name = "test-compliance", min_size = 1, max_size = 4 } }
   }
   assert {
@@ -61,7 +62,12 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
       toset(one([
         for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Action
         if contains(statement.Action, "elasticloadbalancing:RegisterTargets")
-      ])) == toset(["elasticloadbalancing:RegisterTargets", "elasticloadbalancing:DeregisterTargets"]) &&
+        ])) == toset([
+        "elasticloadbalancing:ModifyTargetGroup",
+        "elasticloadbalancing:ModifyTargetGroupAttributes",
+        "elasticloadbalancing:RegisterTargets",
+        "elasticloadbalancing:DeregisterTargets"
+      ]) &&
       toset(one([
         for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Resource
         if contains(statement.Action, "elasticloadbalancing:RegisterTargets")
@@ -72,7 +78,12 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
         for action in flatten([for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Action]) :
         startswith(action, "ec2:Describe") || startswith(action, "ec2:Get") ||
         startswith(action, "elasticloadbalancing:Describe") ||
-        contains(["elasticloadbalancing:RegisterTargets", "elasticloadbalancing:DeregisterTargets"], action)
+        contains([
+          "elasticloadbalancing:ModifyTargetGroup",
+          "elasticloadbalancing:ModifyTargetGroupAttributes",
+          "elasticloadbalancing:RegisterTargets",
+          "elasticloadbalancing:DeregisterTargets"
+        ], action)
       ])
     )
     error_message = "The TGB-only controller must register targets only on the two approved groups and cannot create or mutate ALB infrastructure."

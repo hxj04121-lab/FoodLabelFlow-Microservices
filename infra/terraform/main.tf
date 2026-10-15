@@ -4,7 +4,8 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  azs = length(var.availability_zones) == 2 ? var.availability_zones : slice(data.aws_availability_zones.available[0].names, 0, 2)
+  azs                       = length(var.availability_zones) == 2 ? var.availability_zones : slice(data.aws_availability_zones.available[0].names, 0, 2)
+  deployer_kubernetes_group = "spectrace-staging-deploy"
 }
 
 resource "aws_acm_certificate" "staging" {
@@ -126,7 +127,8 @@ module "eks_addons" {
     compliance     = "compliance"
     label-workflow = "label-workflow"
   }
-  operator_namespaces = { rabbitmq = "rabbitmq-system", keycloak = "keycloak-system" }
+  operator_namespaces       = { rabbitmq = "rabbitmq-system", keycloak = "keycloak-system" }
+  deployer_kubernetes_group = local.deployer_kubernetes_group
 }
 
 resource "aws_iam_role_policy_attachment" "node_vpc_cni_fallback" {
@@ -152,14 +154,15 @@ module "github_oidc" {
   count  = var.github_repository != "" ? 1 : 0
   source = "./modules/github-oidc"
 
-  repository           = var.github_repository
-  repository_owner_id  = var.github_repository_owner_id
-  repository_id        = var.github_repository_id
-  environment          = var.github_environment
-  branch               = var.github_branch
-  state_bucket_name    = var.state_bucket_name
-  cluster_name         = var.enable_eks ? module.eks[0].cluster_name : ""
-  create_provider      = var.github_create_oidc_provider
-  provider_thumbprints = var.github_oidc_thumbprints
-  tags                 = var.tags
+  repository                = var.github_repository
+  repository_owner_id       = var.github_repository_owner_id
+  repository_id             = var.github_repository_id
+  environment               = var.github_environment
+  branch                    = var.github_branch
+  state_bucket_name         = var.state_bucket_name
+  cluster_name              = var.enable_eks ? module.eks[0].cluster_name : ""
+  create_provider           = var.github_create_oidc_provider
+  provider_thumbprints      = var.github_oidc_thumbprints
+  deployer_kubernetes_group = local.deployer_kubernetes_group
+  tags                      = var.tags
 }

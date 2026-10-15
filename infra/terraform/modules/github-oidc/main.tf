@@ -21,11 +21,12 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 locals {
-  provider_arn     = var.create_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github[0].arn
-  repository_owner = split("/", var.repository)[0]
-  repository_name  = split("/", var.repository)[1]
-  allowed_subject  = "repo:${local.repository_owner}@${var.repository_owner_id}/${local.repository_name}@${var.repository_id}:environment:${var.environment}"
-  state_key        = "spectrace/${var.environment}/terraform.tfstate"
+  provider_arn         = var.create_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github[0].arn
+  repository_owner     = split("/", var.repository)[0]
+  repository_name      = split("/", var.repository)[1]
+  allowed_subject      = "repo:${local.repository_owner}@${var.repository_owner_id}/${local.repository_name}@${var.repository_id}:environment:${var.environment}"
+  workspace_key_prefix = "spectrace"
+  state_key            = "${local.workspace_key_prefix}/${var.environment}/terraform.tfstate"
   github_trust_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -87,10 +88,11 @@ resource "aws_iam_role_policy" "deploy" {
 }
 
 resource "aws_eks_access_entry" "deploy" {
-  count         = var.cluster_name == "" ? 0 : 1
-  cluster_name  = var.cluster_name
-  principal_arn = aws_iam_role.deploy.arn
-  type          = "STANDARD"
+  count             = var.cluster_name == "" ? 0 : 1
+  cluster_name      = var.cluster_name
+  principal_arn     = aws_iam_role.deploy.arn
+  type              = "STANDARD"
+  kubernetes_groups = [var.deployer_kubernetes_group]
 }
 
 resource "aws_eks_access_policy_association" "deploy" {
@@ -150,7 +152,7 @@ resource "aws_iam_role_policy" "state" {
         Effect    = "Allow"
         Action    = ["s3:ListBucket"]
         Resource  = "arn:aws:s3:::${var.state_bucket_name}"
-        Condition = { StringLike = { "s3:prefix" = ["spectrace/${var.environment}/*"] } }
+        Condition = { StringLike = { "s3:prefix" = ["${local.workspace_key_prefix}/", "${local.state_key}*"] } }
       },
       {
         Effect   = "Allow"

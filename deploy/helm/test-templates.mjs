@@ -220,8 +220,9 @@ check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-
   assert.equal(workflow.jobs.deploy.env.AWS_REGION,'${{ vars.AWS_REGION }}');
   assert.equal(workflow.jobs.deploy.env.EKS_CLUSTER_NAME,'${{ vars.EKS_CLUSTER_NAME }}');
   assert.equal(workflow.jobs.deploy.env.AWS_ROLE_ARN,'${{ vars.AWS_DEPLOY_ROLE_ARN }}');
+  assert.equal(workflow.jobs.deploy.env.AVAILABLE_CREDIT_USD,'${{ vars.STAGING_AVAILABLE_CREDIT_USD }}');
   const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
-  assert.match(script,/kubectl get namespace gateway/);
+  assert.match(script,/kubectl get serviceaccount default --namespace gateway/);
   assert.doesNotMatch(script,/create namespace|kubectl create ns|terraform apply/i);
   assert.doesNotMatch(script,/679857346122|spectrace-staging|ap-southeast-1/,'AWS target identifiers must come from the protected Environment');
   assert.match(script,/validate-deploy-target\.py/);
@@ -398,6 +399,106 @@ check('Keycloak NetworkPolicy allows ALB health checks only from configured ALB 
     {from:[{ipBlock:{cidr:'10.20.1.0/24'}}],ports:[{port:8080,protocol:'TCP'}]}
   ]);
   assert(policy.spec.ingress.some(rule=>rule.from?.some(source=>source.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='gateway')),'Gateway-to-Keycloak access remains allowed');
+  const operatorRule=policy.spec.ingress.find(rule=>rule.from?.some(source=>source.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='keycloak-system'));
+  assert.deepEqual(operatorRule.from[0].podSelector.matchLabels,{'app.kubernetes.io/name':'keycloak-operator'});
+  assert.deepEqual(operatorRule.from[1].podSelector.matchLabels,{'job-name':'spectrace-realm'},'Realm import Job may reach Keycloak without opening the namespace');
+});
+
+check('Keycloak Operator CRDs are pinned and the operator RBAC stays in the keycloak namespace',()=>{
+  const manifests=[];
+  for(const path of ['../keycloak/operator/operator.yaml','../keycloak/operator/rbac.yaml']) {
+    const docs=parseAllDocuments(readFileSync(resolve(root,path),'utf8'));
+    for(const doc of docs) { assert.equal(doc.errors.length,0,doc.errors.join('\n')); manifests.push(doc.toJSON()); }
+  }
+  const deployment=manifests.find(d=>d.kind==='Deployment');
+  assert.equal(deployment.metadata.namespace,'keycloak-system');
+  assert.equal(deployment.spec.replicas,1);
+  assert.equal(deployment.spec.template.spec.containers[0].image,'quay.io/keycloak/keycloak-operator:26.0.7');
+  assert.equal(deployment.spec.template.spec.containers[0].resources.requests.memory,'450Mi');
+  assert.equal(deployment.spec.template.spec.containers[0].resources.requests.cpu,'300m');
+  assert.equal(deployment.spec.template.spec.containers[0].env.find(e=>e.name==='KUBERNETES_NAMESPACE').value,'keycloak');
+  assert(!manifests.some(d=>d.kind==='ClusterRole'||d.kind==='ClusterRoleBinding'));
+  const role=manifests.find(d=>d.kind==='Role');
+  const binding=manifests.find(d=>d.kind==='RoleBinding');
+  assert.equal(role.metadata.namespace,'keycloak');
+  assert.equal(binding.metadata.namespace,'keycloak');
+  assert.deepEqual(binding.subjects,[{kind:'ServiceAccount',name:'keycloak-operator',namespace:'keycloak-system'}]);
+  assert(role.rules.every(rule=>rule.apiGroups.every(group=>['','apps','batch','networking.k8s.io','k8s.keycloak.org'].includes(group))));
+  assert(role.rules.every(rule=>rule.resources.every(resource=>resource!=='*')));
+  const kustomization=parse(readFileSync(resolve(root,'../keycloak/operator/crds/kustomization.yaml'),'utf8'));
+  assert.deepEqual(kustomization.resources,[
+    'https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.0.7/kubernetes/keycloaks.k8s.keycloak.org-v1.yml',
+    'https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.0.7/kubernetes/keycloakrealmimports.k8s.keycloak.org-v1.yml'
+  ]);
+  const rendered=spawnSync(process.env.KUBECTL_BIN||'kubectl',['kustomize',resolve(root,'../keycloak/operator/crds')],{encoding:'utf8',timeout:60000});
+  if(rendered.error) throw rendered.error;
+  assert.equal(rendered.status,0,rendered.stderr);
+  const crds=parseAllDocuments(rendered.stdout).map(d=>d.toJSON()).filter(Boolean);
+  assert.deepEqual(crds.map(d=>d.metadata.name).sort(),['keycloakrealmimports.k8s.keycloak.org','keycloaks.k8s.keycloak.org']);
+});
+
+check('staging deploy custom-resource RBAC is namespace-scoped and limited to the existing CRs',()=>{
+  const directory=resolve(repo,'infra/terraform/modules/eks-addons/manifests');
+  const cases=[
+    ['gateway','gateway-gateway',['elbv2.k8s.aws']],
+    ['keycloak','spectrace-keycloak',['k8s.keycloak.org','elbv2.k8s.aws']]
+  ];
+  for(const [namespace,name,groups] of cases) {
+    const role=parse(readFileSync(resolve(directory,`${namespace}-deployer-role.yaml.tmpl`),'utf8').replaceAll('${namespace}',namespace));
+    const binding=parse(readFileSync(resolve(directory,`${namespace}-deployer-rolebinding.yaml.tmpl`),'utf8').replaceAll('${namespace}',namespace).replaceAll('${group}','spectrace-staging-deploy'));
+    assert.equal(role.metadata.namespace,namespace);
+    assert.deepEqual([...new Set(role.rules.map(rule=>rule.apiGroups[0]))].sort(),groups.sort());
+    assert(role.rules.every(rule=>rule.resources.length===1 && rule.resources[0]!=='*'));
+    assert(role.rules.some(rule=>rule.verbs.includes('create')));
+    assert(role.rules.filter(rule=>rule.verbs.some(verb=>['get','patch','watch'].includes(verb))).every(rule=>rule.resourceNames?.includes(name)));
+    assert.equal(binding.kind,'RoleBinding');
+    assert.equal(binding.metadata.namespace,namespace);
+    assert.deepEqual(binding.subjects,[{kind:'Group',name:'spectrace-staging-deploy',apiGroup:'rbac.authorization.k8s.io'}]);
+    assert.equal(binding.roleRef.kind,'Role');
+  }
+  assert.match(readFileSync(resolve(repo,'infra/terraform/modules/github-oidc/main.tf'),'utf8'),/kubernetes_groups\s*=\s*\[var\.deployer_kubernetes_group\]/);
+});
+
+check('Keycloak staging release stays behind main, budget, staging approval, and namespace checks',()=>{
+  const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/deploy-keycloak.yml'),'utf8'));
+  assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+  assert.equal(workflow.jobs.deploy.if,"github.ref == 'refs/heads/main'");
+  assert.deepEqual(workflow.jobs.deploy['runs-on'],['self-hosted','linux','staging-vpc']);
+  assert.equal(workflow.jobs.deploy.environment,'staging');
+  assert.deepEqual(workflow.jobs.deploy.permissions,{contents:'read','id-token':'write'});
+  assert.equal(workflow.jobs.deploy.env.GATEWAY_ISSUER,'${{ vars.GATEWAY_ISSUER }}');
+  assert.equal(workflow.jobs.deploy.env.MYSQL_HOST,'${{ vars.MYSQL_HOST }}');
+  assert.equal(workflow.jobs.deploy.env.AVAILABLE_CREDIT_USD,'${{ vars.STAGING_AVAILABLE_CREDIT_USD }}');
+  const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
+  assert.match(script,/aws_staging_budget\.py --require-gate/);
+  assert.match(script,/kubectl auth can-i/);
+  assert.match(script,/keycloaks\/spectrace-keycloak/);
+  assert.match(script,/targetgroupbindings\/spectrace-keycloak/);
+  assert.match(script,/kubectl get serviceaccount default --namespace keycloak/);
+  assert.doesNotMatch(script,/kubectl get namespace keycloak/);
+  assert.match(script,/keycloak-server\.json/);
+  assert.match(script,/keycloak-targetgroupbinding\.yaml/);
+  assert.doesNotMatch(script,/terraform apply|helm install|create namespace|kubectl create ns/i);
+});
+
+check('Keycloak Operator bootstrap uses a separate, temporary cluster install role and pinned CRDs',()=>{
+  const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/install-keycloak-operator.yml'),'utf8'));
+  assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+  assert.equal(workflow.jobs.install.if,"github.ref == 'refs/heads/main'");
+  assert.deepEqual(workflow.jobs.install['runs-on'],['self-hosted','linux','staging-vpc']);
+  assert.equal(workflow.jobs.install.environment,'staging');
+  assert.deepEqual(workflow.jobs.install.permissions,{contents:'read','id-token':'write'});
+  assert.equal(workflow.jobs.install.env.AWS_ROLE_ARN,'${{ vars.AWS_OPERATOR_INSTALL_ROLE_ARN }}');
+  assert.equal(workflow.jobs.install.env.AVAILABLE_CREDIT_USD,'${{ vars.STAGING_AVAILABLE_CREDIT_USD }}');
+  const script=workflow.jobs.install.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
+  assert.match(script,/aws_staging_budget\.py --require-gate/);
+  assert.match(script,/AWS_ROLE_ARN.*AWS_DEPLOY_ROLE_ARN/);
+  assert.match(script,/kubectl auth can-i "\$verb" customresourcedefinitions\.apiextensions\.k8s\.io/);
+  assert.match(script,/keycloakrealmimports\.k8s\.keycloak\.org/);
+  assert.match(script,/escalate roles\/keycloak-operator/);
+  assert.match(script,/bind roles\/keycloak-operator/);
+  assert.match(script,/kubectl apply -f "\$RUNNER_TEMP\/keycloak-operator-crds\.yaml"/);
+  assert.doesNotMatch(script,/terraform apply|helm install|create namespace|kubectl create ns/i);
 });
 
 console.log(`${count} Helm checks passed. Rendered constraints are not live pod-placement evidence.`);

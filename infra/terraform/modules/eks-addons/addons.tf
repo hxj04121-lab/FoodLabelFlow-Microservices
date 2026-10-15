@@ -159,6 +159,33 @@ resource "kubernetes_manifest" "workload_namespace" {
   }
 }
 
+resource "kubernetes_manifest" "deployer_custom_resource_role" {
+  for_each = {
+    gateway  = var.workload_namespaces.gateway
+    keycloak = var.workload_namespaces.keycloak
+  }
+
+  manifest = yamldecode(templatefile("${path.module}/manifests/${each.key}-deployer-role.yaml.tmpl", {
+    namespace = each.value
+  }))
+
+  depends_on = [kubernetes_manifest.workload_namespace]
+}
+
+resource "kubernetes_manifest" "deployer_custom_resource_rolebinding" {
+  for_each = {
+    gateway  = var.workload_namespaces.gateway
+    keycloak = var.workload_namespaces.keycloak
+  }
+
+  manifest = yamldecode(templatefile("${path.module}/manifests/${each.key}-deployer-rolebinding.yaml.tmpl", {
+    namespace = each.value
+    group     = var.deployer_kubernetes_group
+  }))
+
+  depends_on = [kubernetes_manifest.deployer_custom_resource_role]
+}
+
 resource "kubernetes_manifest" "ebs_gp3_storage_class" {
   manifest = yamldecode(templatefile("${path.module}/../../../../deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl", {
     cluster_name = var.cluster_name

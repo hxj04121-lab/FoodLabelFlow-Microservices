@@ -2,9 +2,9 @@ name: Terraform validation
 
 on:
   push:
-    paths: ["infra/terraform/**", ".github/workflows/terraform-validate.yml", "scripts/*eks_addons.sh", "scripts/terraform_plan_summary.py", "tests/test_verify_eks_addons.py", "tests/test_terraform_plan_summary.py"]
+    paths: ["infra/terraform/**", ".github/workflows/terraform-validate.yml", "scripts/*eks_addons.sh", "scripts/verify_staging_target_network.py", "scripts/terraform_plan_summary.py", "tests/test_verify_eks_addons.py", "tests/test_staging_target_network.py", "tests/test_terraform_plan_summary.py"]
   pull_request:
-    paths: ["infra/terraform/**", ".github/workflows/terraform-validate.yml", "scripts/*eks_addons.sh", "scripts/terraform_plan_summary.py", "tests/test_verify_eks_addons.py", "tests/test_terraform_plan_summary.py"]
+    paths: ["infra/terraform/**", ".github/workflows/terraform-validate.yml", "scripts/*eks_addons.sh", "scripts/verify_staging_target_network.py", "scripts/terraform_plan_summary.py", "tests/test_verify_eks_addons.py", "tests/test_staging_target_network.py", "tests/test_terraform_plan_summary.py"]
   workflow_dispatch:
     inputs:
       run_plan:
@@ -31,7 +31,9 @@ jobs:
       - run: terraform validate
         working-directory: infra/terraform
       - name: Verify read-only readiness checks with offline fixtures
-        run: python3 -m unittest discover -s tests -p test_verify_eks_addons.py -v
+        run: |
+          python3 -m unittest discover -s tests -p test_verify_eks_addons.py -v
+          python3 -m unittest discover -s tests -p test_staging_target_network.py -v
       - name: Verify redacted Terraform plan summary and protected-resource guard
         run: python3 -m unittest discover -s tests -p test_terraform_plan_summary.py -v
       - name: Verify deployment safety without AWS writes
@@ -75,6 +77,8 @@ jobs:
         run: |
           test -n "$AWS_ROLE_ARN" && test -n "$TF_STATE_BUCKET"
           test -n "$TF_STATE_KEY" && test -n "$STAGING_TF_WORKSPACE" && test -n "$TF_PLAN_VARS_JSON"
+          test "$TF_STATE_KEY" = terraform.tfstate
+          test "$STAGING_TF_WORKSPACE" = staging
           umask 077
           printf '%s' "$TF_PLAN_VARS_JSON" > "$RUNNER_TEMP/staging.tfvars.json"
       - uses: aws-actions/configure-aws-credentials@v4
@@ -87,6 +91,7 @@ jobs:
           umask 077
           terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=$TF_STATE_KEY" -backend-config="region=$AWS_REGION" \
+            -backend-config="workspace_key_prefix=spectrace" \
             -backend-config="encrypt=true" -backend-config="use_lockfile=true" > "$RUNNER_TEMP/terraform-init.log" 2>&1
           terraform workspace select "$STAGING_TF_WORKSPACE" > "$RUNNER_TEMP/terraform-workspace.log" 2>&1
           terraform state list > "$RUNNER_TEMP/terraform-state-addresses.txt"

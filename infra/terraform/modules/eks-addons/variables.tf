@@ -100,6 +100,11 @@ variable "operator_namespaces" {
   }
 }
 
+variable "deployer_kubernetes_group" {
+  description = "Kubernetes group mapped to the staging deploy role for narrowly scoped custom-resource access."
+  type        = string
+}
+
 variable "node_groups" {
   description = "Existing managed node groups keyed by general and optional compliance; ASG names and bounds are exported by the EKS module."
   type = map(object({
