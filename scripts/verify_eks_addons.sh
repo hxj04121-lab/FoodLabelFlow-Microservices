@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode="${1:-}"
 cluster_name="${STCN_EKS_CLUSTER_NAME:-}"
 region="${AWS_REGION:-ap-southeast-1}"
