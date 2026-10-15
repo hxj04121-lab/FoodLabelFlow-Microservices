@@ -24,6 +24,15 @@ SERVICE_NAMESPACES = {
     "GATEWAY_COMPLIANCE": "compliance",
     "GATEWAY_LABEL_WORKFLOW": "label-workflow",
 }
+STATIC_ENV = {
+    "GATEWAY_REALM": "spectrace",
+    "GATEWAY_AUDIENCE": "spectrace-api",
+    "GATEWAY_ALLOWED_ORIGINS": "https://hxj04121-lab.github.io",
+    "GATEWAY_SPECIFICATION_WRITE_ROLES": "ADMIN_DATA_MAINTENANCE",
+    "GATEWAY_FORMULATION_WRITE_ROLES": "ADMIN_DATA_MAINTENANCE",
+    "GATEWAY_COMPLIANCE_WRITE_ROLES": "CHANGE_MANAGER",
+    "GATEWAY_LABEL_WRITE_ROLES": "LABEL_OFFICER,APPROVER,PUBLISHER",
+}
 
 
 def validate_url(name, value, required_path):
@@ -45,7 +54,7 @@ def validate_url(name, value, required_path):
 
 
 def build_values(env=os.environ):
-    rows = []
+    rows = [{"name": name, "value": value} for name, value in STATIC_ENV.items()]
     for name, path in URLS.items():
         value = env.get(name, "").strip()
         if not value:

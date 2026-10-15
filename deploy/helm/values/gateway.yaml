@@ -9,14 +9,6 @@ image:
 spread:
   enabled: false
   minimumZones: 1
-env:
-  - {name: GATEWAY_REALM, value: spectrace}
-  - {name: GATEWAY_AUDIENCE, value: spectrace-api}
-  - {name: GATEWAY_ALLOWED_ORIGINS, value: https://hxj04121-lab.github.io}
-  - {name: GATEWAY_SPECIFICATION_WRITE_ROLES, value: ADMIN_DATA_MAINTENANCE}
-  - {name: GATEWAY_FORMULATION_WRITE_ROLES, value: ADMIN_DATA_MAINTENANCE}
-  - {name: GATEWAY_COMPLIANCE_WRITE_ROLES, value: CHANGE_MANAGER}
-  - {name: GATEWAY_LABEL_WRITE_ROLES, value: LABEL_OFFICER,APPROVER,PUBLISHER}
 networkPolicy:
   enabled: true
   ingressFromServices: []

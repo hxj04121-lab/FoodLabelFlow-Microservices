@@ -6,6 +6,7 @@ import {spawnSync} from 'node:child_process';
 import {parse, parseAllDocuments} from 'yaml';
 
 const root=dirname(fileURLToPath(import.meta.url));
+const repo=resolve(root,'../..');
 const helm=process.env.HELM_BIN || 'helm';
 const chart=resolve(root,'spectrace-service');
 const evidence=resolve(process.env.EVIDENCE_DIR || resolve(root,'.evidence'));
@@ -114,10 +115,38 @@ check('first Gateway release pins its verified image and only permits required i
   assert.equal(np.spec.egress.length,6,'DNS plus the five Gateway upstream services');
   assert.deepEqual(np.spec.egress[1].to[0].podSelector.matchLabels,{app:'keycloak'},'Keycloak egress follows the Operator pod label');
   for(const rule of np.spec.egress.slice(1)) assert.deepEqual(rule.ports,[{port:8080,protocol:'TCP'}]);
-  const env=pod.containers[0].env;
-  assert.equal(env.find(row=>row.name==='GATEWAY_REALM').value,'spectrace');
-  assert.equal(env.find(row=>row.name==='GATEWAY_AUDIENCE').value,'spectrace-api');
-  assert.equal(env.find(row=>row.name==='GATEWAY_ALLOWED_ORIGINS').value,'https://hxj04121-lab.github.io');
+});
+check('Gateway render preserves every required env in deploy workflow values order',()=>{
+  const runtime=spawnSync('python3',[resolve(repo,'platform/gateway/deploy-runtime-values.py')],{
+    cwd:repo,encoding:'utf8',env:{...process.env,GATEWAY_ISSUER:'https://id.example.test/auth/realms/spectrace'}
+  });
+  assert.equal(runtime.status,0,runtime.stderr);
+  const runtimePath=resolve(evidence,'gateway-runtime-values.json');
+  writeFileSync(runtimePath,runtime.stdout);
+  const workflow=readFileSync(resolve(repo,'.github/workflows/deploy-gateway.yml'),'utf8');
+  assert.match(workflow,/--values deploy\/helm\/values\/gateway\.yaml --values "\$RUNNER_TEMP\/gateway-runtime-values\.json"/);
+  const rendered=run(['template','gateway',chart,'--namespace','gateway',
+    '--values',resolve(root,'values/gateway.yaml'),'--values',runtimePath]);
+  const docs=parseAllDocuments(rendered.stdout).map(d=>d.toJSON()).filter(Boolean);
+  const deployment=docs.find(d=>d.kind==='Deployment'&&d.metadata.name==='gateway-gateway');
+  const env=deployment.spec.template.spec.containers[0].env;
+  const values=Object.fromEntries(env.map(row=>[row.name,row.value]));
+  assert.equal(env.length,14,'each required Gateway variable appears once');
+  assert.deepEqual(values,{
+    GATEWAY_REALM:'spectrace',GATEWAY_AUDIENCE:'spectrace-api',
+    GATEWAY_ALLOWED_ORIGINS:'https://hxj04121-lab.github.io',
+    GATEWAY_SPECIFICATION_WRITE_ROLES:'ADMIN_DATA_MAINTENANCE',
+    GATEWAY_FORMULATION_WRITE_ROLES:'ADMIN_DATA_MAINTENANCE',
+    GATEWAY_COMPLIANCE_WRITE_ROLES:'CHANGE_MANAGER',
+    GATEWAY_LABEL_WRITE_ROLES:'LABEL_OFFICER,APPROVER,PUBLISHER',
+    GATEWAY_ISSUER:'https://id.example.test/auth/realms/spectrace',
+    GATEWAY_JWK_SET_URI:'http://spectrace-keycloak-service.keycloak.svc.cluster.local:8080/auth/realms/spectrace/protocol/openid-connect/certs',
+    GATEWAY_KEYCLOAK:'http://spectrace-keycloak-service.keycloak.svc.cluster.local:8080',
+    GATEWAY_SPECIFICATION:'http://specification-specification.specification.svc.cluster.local:8080',
+    GATEWAY_FORMULATION:'http://formulation-formulation.formulation.svc.cluster.local:8080',
+    GATEWAY_COMPLIANCE:'http://compliance-compliance.compliance.svc.cluster.local:8080',
+    GATEWAY_LABEL_WORKFLOW:'http://label-workflow-label-workflow.label-workflow.svc.cluster.local:8080'
+  });
 });
 check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-scoped',()=>{
   const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/deploy-gateway.yml'),'utf8'));
