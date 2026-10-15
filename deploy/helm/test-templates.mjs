@@ -391,6 +391,7 @@ check('Keycloak NetworkPolicy allows ALB health checks only from configured ALB 
   const output=run(['template','review',platformChart,'--set-json','cidrs.alb=["10.20.0.0/24","10.20.1.0/24"]']);
   const docs=parseAllDocuments(output.stdout).map(d=>d.toJSON()).filter(Boolean);
   const policy=docs.find(d=>d.kind==='NetworkPolicy'&&d.metadata.name==='stcn-keycloak-flows');
+  assert.deepEqual(policy.spec.podSelector.matchLabels,{app:'keycloak'},'Selector follows the Keycloak Operator server Pod labels');
   const albIngress=policy.spec.ingress.filter(rule=>rule.from?.some(source=>source.ipBlock));
   assert.deepEqual(albIngress,[
     {from:[{ipBlock:{cidr:'10.20.0.0/24'}}],ports:[{port:8080,protocol:'TCP'}]},

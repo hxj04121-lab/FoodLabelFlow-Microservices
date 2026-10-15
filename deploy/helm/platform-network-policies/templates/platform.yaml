@@ -62,7 +62,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: keycloak
+      app: keycloak
   policyTypes: [Ingress, Egress]
   ingress:
     {{- range .Values.cidrs.alb }}
