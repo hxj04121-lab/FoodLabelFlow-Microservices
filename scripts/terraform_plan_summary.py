@@ -6,8 +6,11 @@ import sys
 
 PROTECTED_TYPES = {
     "aws_eks_cluster",
+    "aws_eks_addon",
     "aws_eks_node_group",
     "aws_db_instance",
+    "aws_eip",
+    "aws_internet_gateway",
     "aws_lb",
     "aws_lb_listener",
     "aws_lb_listener_certificate",
@@ -15,6 +18,12 @@ PROTECTED_TYPES = {
     "aws_lb_target_group",
     "aws_lb_target_group_attachment",
     "aws_nat_gateway",
+    "aws_route",
+    "aws_route_table",
+    "aws_security_group",
+    "aws_security_group_rule",
+    "aws_subnet",
+    "aws_vpc",
 }
 
 
