@@ -12,6 +12,7 @@ spread:
 networkPolicy:
   enabled: true
   ingressFromServices: []
+  ingressFromPeers: [{namespace: observability, name: grafana-alloy}]
   allowDNS: true
   egressRules:
     - to:

@@ -14,6 +14,11 @@ mock_provider "aws" {
       region = "ap-southeast-1"
     }
   }
+  mock_data "aws_partition" {
+    defaults = {
+      partition = "aws"
+    }
+  }
 }
 
 run "trusts_only_the_expected_repository_environment_and_branch" {

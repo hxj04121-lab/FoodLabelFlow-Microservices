@@ -1,7 +1,8 @@
 work_order_id: G2-M5
 story_id: ST-G2-M5
 gate: G2
-window: "2026-10-12..2026-10-16"
+# Superseded by the 11 Oct Jira Sprint 72/73 re-plan; this schedule does not authorize spend or access.
+window: "2026-10-13..2026-10-14"
 title: "Per-service databases, green gates, NetworkPolicies and evidence binding"
 owner: "M5 Sun Huajian"
 github: SHJ-SHJ0128

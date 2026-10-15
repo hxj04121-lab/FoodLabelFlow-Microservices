@@ -1,1 +1,33 @@
 serviceName: label-workflow
+env:
+  - name: SPECTRACE_LABEL_WORKFLOW_VALIDATION_BASE_URL
+    value: http://compliance.compliance.svc.cluster.local:8080
+envFrom:
+  - secretRef:
+      name: label-workflow-runtime
+networkPolicy:
+  ingressFromPeers:
+    - {namespace: gateway, name: gateway}
+    - {namespace: observability, name: grafana-alloy}
+  egressRules:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: rabbitmq}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rabbitmq
+      ports: [{port: 5672, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: keycloak}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: compliance}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: compliance
+      ports: [{port: 8080, protocol: TCP}]

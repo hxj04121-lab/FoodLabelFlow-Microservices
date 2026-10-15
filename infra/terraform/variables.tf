@@ -143,7 +143,7 @@ variable "certificate_arn" {
 }
 
 variable "github_repository" {
-  description = "Exact owner/repository allowed to assume the staging plan role; empty disables OIDC role creation."
+  description = "Exact owner/repository allowed to assume staging plan and deploy roles; empty disables OIDC role creation."
   type        = string
   default     = ""
   validation {
@@ -185,7 +185,7 @@ variable "github_oidc_thumbprints" {
 }
 
 variable "github_create_oidc_provider" {
-  description = "Create the GitHub OIDC provider when the plan-role module is enabled; set false to reuse an existing provider."
+  description = "Create the GitHub OIDC provider when the plan/deploy role module is enabled; set false to reuse an existing provider."
   type        = bool
   default     = true
 }

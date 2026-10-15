@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
+import { verifyDeployedBuild, verifyDeployedAccess } from './deployed-checks'
 
 // Real Keycloak, Gateway and the current checkout's Specification service with MySQL/RabbitMQ.
 test('real PKCE login reaches the Specification caller-claims endpoint', async ({ page, request }, testInfo) => {
@@ -14,6 +15,10 @@ test('real PKCE login reaches the Specification caller-claims endpoint', async (
   const roles = deployed ? process.env.M3_EXPECTED_ROLES!.split(',').map(role => role.trim())
     : ['ADMIN_DATA_MAINTENANCE', 'CHANGE_MANAGER', 'LABEL_OFFICER']
   const evidence = deployed ? 'test-results/deployed-signin' : 'test-results/real-signin'
+  const deployedCommit = deployed ? await verifyDeployedBuild(request, {
+    site: testInfo.project.use.baseURL!, gateway: gatewayOrigin, callerPath,
+    authority: String(testInfo.config.metadata.authority), audience: String(testInfo.config.metadata.audience),
+  }) : undefined
   await page.goto('./')
   await page.getByRole('button', { name: 'Continue with Keycloak', exact: true }).click()
   await expect(page.locator('#username')).toBeVisible()
@@ -35,6 +40,10 @@ test('real PKCE login reaches the Specification caller-claims endpoint', async (
   expect(callerResponse.org_type).toBe(orgType)
   expect(callerResponse.subject).toBe(subject)
   expect([...callerResponse.roles].sort()).toEqual([...new Set(roles)].sort())
+  const deployedAccess = deployed ? await verifyDeployedAccess(request, {
+    gateway: gatewayOrigin, site: testInfo.project.use.baseURL!, orgId, callerPath,
+    ownProduct: String(testInfo.config.metadata.ownProduct), foreignProduct: String(testInfo.config.metadata.foreignProduct),
+  }, response.request().headers().authorization) : undefined
   const denied = await request.get(new URL(callerPath, gatewayOrigin).href)
   expect(denied.status()).toBe(401)
   expect((await denied.json()).code).toBe('AUTHENTICATION_REQUIRED')
@@ -43,7 +52,8 @@ test('real PKCE login reaches the Specification caller-claims endpoint', async (
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Sign in to your organisation', exact: true })).toBeVisible({ timeout: 30000 })
   await expect(page.getByRole('button', { name: 'Continue with Keycloak', exact: true })).toBeEnabled()
-  await expect(page).toHaveURL(new URL(testInfo.project.use.baseURL!).href)
+  // Compare as a boolean so a failed logout cannot print a URL containing an id_token_hint.
+  await expect.poll(() => page.url() === new URL(testInfo.project.use.baseURL!).href).toBe(true)
   if (deployed) {
     await page.goto(`${testInfo.project.use.baseURL}#/overview`)
     await page.reload()
@@ -51,9 +61,9 @@ test('real PKCE login reaches the Specification caller-claims endpoint', async (
     await expect(page.getByRole('button', { name: 'Continue with Keycloak', exact: true })).toBeEnabled()
   }
   await writeFile(`${evidence}/claims.json`, JSON.stringify({
-    scope: deployed ? 'deployed browser login/caller/anonymous/logout smoke only; cross-organisation and final acceptance require separate evidence'
+    scope: deployed ? 'deployed build/discovery, browser login, caller, own/foreign product, tampered token, private route/CORS and logout smoke; owner/private-service/limits/window acceptance remains separate'
       : 'real local Keycloak/Gateway with current-checkout Specification service and MySQL/RabbitMQ; no AWS LB acceptance',
-    site: testInfo.project.use.baseURL, gatewayOrigin, callerPath,
+    site: testInfo.project.use.baseURL, gatewayOrigin, callerPath, deployedCommit, deployedAccess,
     caller: { subject: callerResponse.subject, org_id: callerResponse.org_id,
       org_type: callerResponse.org_type, roles: callerResponse.roles },
     checks: { caller: 200, anonymous: denied.status(), logoutCallback: true, hashReload: deployed || undefined },

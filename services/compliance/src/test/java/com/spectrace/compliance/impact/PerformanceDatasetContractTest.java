@@ -28,7 +28,7 @@ class PerformanceDatasetContractTest {
         // This temporary fixture is not a source-provenance claim. Call the pure generator so the
         // production-matcher test also works in source archives without Git metadata or Git installed.
         // The public dataset CLI still requires a real, existing source commit for deliverable artifacts.
-        Process generation = new ProcessBuilder(System.getenv().getOrDefault("PYTHON_BIN", "python"),
+        Process generation = new ProcessBuilder(System.getenv().getOrDefault("PYTHON_BIN", "python3"),
                 "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
                         + "from experiment import dataset; dataset(sys.argv[2], '0' * 40)",
                 root.resolve("perf/g3").toString(), directory.toString())

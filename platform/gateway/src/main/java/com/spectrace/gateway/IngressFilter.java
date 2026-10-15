@@ -35,7 +35,7 @@ public class IngressFilter implements WebFilter {
         bucket = Bucket.builder().addLimit(b -> b.capacity(p.burst())
                 .refillGreedy(p.requestsPerSecond(), Duration.ofSeconds(1))).build();
         cors.setAllowedOrigins(p.allowedOrigins());
-        cors.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        cors.setAllowedMethods(List.of("GET", "POST", "PUT", "OPTIONS"));
         cors.setAllowedHeaders(List.of("Authorization", "Content-Type", GatewayErrors.CORRELATION));
         cors.setExposedHeaders(List.of(GatewayErrors.CORRELATION, "Retry-After"));
         cors.setAllowCredentials(false);
@@ -94,6 +94,11 @@ public class IngressFilter implements WebFilter {
                 && "navigate".equals(x.getRequest().getHeaders().getFirst("Sec-Fetch-Mode"))
                 && org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED.isCompatibleWith(
                         x.getRequest().getHeaders().getContentType());
+        boolean declarationWrite = path.matches("/api/labels/[^/]+/declarations");
+        if (CorsUtils.isPreFlightRequest(x.getRequest())
+                && HttpMethod.PUT.equals(x.getRequest().getHeaders().getAccessControlRequestMethod()) && !declarationWrite) {
+            return GatewayErrors.write(x, 403, "CORS_REJECTED", "PUT is only supported for label declarations");
+        }
         if (!idpForm && !corsProcessor.process(cors, x)) return GatewayErrors.write(x, 403, "CORS_REJECTED", "The origin, method or headers are not allowed");
         if (path.matches("(?i).*%(2f|5c|2e|25|3b).*" ) || path.contains(";") || path.contains("\\")
                 || path.contains("//") || path.matches(".*(?:^|/)\\.\\.?(?:/|$).*")) {
@@ -109,7 +114,8 @@ public class IngressFilter implements WebFilter {
             return GatewayErrors.write(x, 401, "AUTHENTICATION_REQUIRED", "Exactly one access token is required");
         }
         HttpMethod method = x.getRequest().getMethod();
-        if (!(method == HttpMethod.GET || (!health && method == HttpMethod.POST))) {
+        if (!(method == HttpMethod.GET || (!health && method == HttpMethod.POST)
+                || (declarationWrite && method == HttpMethod.PUT))) {
             return GatewayErrors.write(x, 405, "METHOD_NOT_ALLOWED", "Method is not allowed");
         }
         if (!health) {

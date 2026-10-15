@@ -135,7 +135,7 @@ test('switching label or product clears old data and ignores a late response', a
   await expect(panel(page)).toContainText('0 declaration(s)')
   release()
   await expect(panel(page)).not.toContainText('Contains: Soy')
-  await page.getByLabel('Product').selectOption({ index: 1 })
+  await page.getByLabel('Product', { exact: true }).selectOption({ index: 1 })
   await expect(panel(page)).toContainText('Create or load a label version')
   await expect(panel(page)).not.toContainText('label_decl_v2')
 })

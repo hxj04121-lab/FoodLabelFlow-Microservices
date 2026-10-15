@@ -34,11 +34,11 @@ import org.yaml.snakeyaml.Yaml;
 class HelmNetworkPolicyContractTest {
 
     private static final Map<String, Set<String>> EXPECTED_POD_INGRESS = Map.of(
-            "specification", Set.of("gateway"),
-            "formulation", Set.of("gateway"),
-            "compliance", Set.of("gateway", "label-workflow"),
-            "label-workflow", Set.of("gateway"),
-            "gateway", Set.of());
+            "specification", Set.of("gateway/gateway", "observability/grafana-alloy"),
+            "formulation", Set.of("gateway/gateway", "observability/grafana-alloy"),
+            "compliance", Set.of("gateway/gateway", "label-workflow/label-workflow", "observability/grafana-alloy"),
+            "label-workflow", Set.of("gateway/gateway", "observability/grafana-alloy"),
+            "gateway", Set.of("observability/grafana-alloy"));
 
     private static Path valuesDirectory;
 
@@ -69,7 +69,7 @@ class HelmNetworkPolicyContractTest {
             assertTrue(Boolean.TRUE.equals(policy.get("allowDNS")),
                     service + " must be allowed to resolve names (kube-dns on 53)");
             assertEquals(new TreeSet<>(expected.getValue()),
-                    new TreeSet<>(strings(policy, "ingressFromServices")),
+                    new TreeSet<>(strings(policy, "ingressFromPeers")),
                     service + " must accept pod ingress from exactly " + expected.getValue()
                             + "; every other peer stays blocked");
         }
@@ -79,10 +79,11 @@ class HelmNetworkPolicyContractTest {
     @DisplayName("no service other than compliance is reachable from another service")
     void onlyComplianceAcceptsServiceToServiceIngress() throws IOException {
         for (String service : EXPECTED_POD_INGRESS.keySet()) {
-            Set<String> peers = new TreeSet<>(strings(effectivePolicy(service), "ingressFromServices"));
-            peers.remove("gateway");
+            Set<String> peers = new TreeSet<>(strings(effectivePolicy(service), "ingressFromPeers"));
+            peers.remove("gateway/gateway");
+            peers.remove("observability/grafana-alloy");
             if (service.equals("compliance")) {
-                assertEquals(new TreeSet<>(Set.of("label-workflow")), peers,
+                assertEquals(new TreeSet<>(Set.of("label-workflow/label-workflow")), peers,
                         "compliance is the only service another service may call "
                                 + "(label-workflow for /internal/**), and it is the only exception");
             } else {
@@ -101,7 +102,7 @@ class HelmNetworkPolicyContractTest {
         for (String required : List.of(
                 "kind: NetworkPolicy",
                 "policyTypes: [Ingress, Egress]",
-                ".Values.networkPolicy.ingressFromServices",
+                ".Values.networkPolicy.ingressFromPeers",
                 "podSelector",
                 "port: http")) {
             assertTrue(text.contains(required),
@@ -145,10 +146,14 @@ class HelmNetworkPolicyContractTest {
         if (value == null) {
             return List.of();
         }
-        assertTrue(value instanceof List, key + " must be a list of service names");
+        assertTrue(value instanceof List, key + " must be a list");
         List<String> result = new java.util.ArrayList<>();
         for (Object entry : (List<?>) value) {
-            result.add(String.valueOf(entry));
+            assertTrue(entry instanceof Map, key + " entries must include namespace and pod name");
+            Map<?, ?> peer = (Map<?, ?>) entry;
+            assertTrue(peer.get("namespace") instanceof String && peer.get("name") instanceof String,
+                    key + " entries must include namespace and pod name");
+            result.add(peer.get("namespace") + "/" + peer.get("name"));
         }
         return result;
     }
