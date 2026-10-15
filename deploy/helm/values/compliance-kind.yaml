@@ -1,0 +1,4 @@
+# Kind has one zone; EKS values/compliance.yaml keeps the two-zone contract.
+kindTest: true
+spread:
+  minimumZones: 1

@@ -1,0 +1,17 @@
+{
+  "id": null,
+  "uid": "spectrace-staging-overview",
+  "title": "SpecTrace Staging Overview",
+  "tags": ["spectrace", "staging"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {"id": 1, "type": "timeseries", "title": "Gateway and service scrape health", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "targets": [{"expr": "up{service=~\"gateway|specification|formulation|compliance|label-workflow\"}", "legendFormat": "{{service}}"}]},
+    {"id": 2, "type": "timeseries", "title": "Gateway HTTP requests", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "targets": [{"expr": "sum by (status) (rate(http_server_requests_seconds_count{service=\"gateway\"}[5m]))", "legendFormat": "{{status}}"}]},
+    {"id": 3, "type": "timeseries", "title": "Ready nodes", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}, "targets": [{"expr": "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})", "legendFormat": "ready"}]},
+    {"id": 4, "type": "timeseries", "title": "RabbitMQ messages ready", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}, "targets": [{"expr": "sum(rabbitmq_detailed_queue_messages_ready)", "legendFormat": "ready"}, {"expr": "sum(rabbitmq_detailed_queue_messages_unacked)", "legendFormat": "unacked"}]},
+    {"id": 5, "type": "timeseries", "title": "Dead-letter queue depth", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}, "targets": [{"expr": "sum by (queue) (rabbitmq_detailed_queue_messages_ready{queue=~\".*\\\\.dlq\"})", "legendFormat": "{{queue}}"}]}
+  ]
+}

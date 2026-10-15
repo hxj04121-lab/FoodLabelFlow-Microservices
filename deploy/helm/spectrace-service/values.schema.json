@@ -12,6 +12,7 @@
     "resources",
     "nodeSelector",
     "tolerations",
+    "kindTest",
     "spread",
     "autoscaling",
     "probes",
@@ -150,6 +151,9 @@
       "items": {
         "type": "object"
       }
+    },
+    "kindTest": {
+      "type": "boolean"
     },
     "spread": {
       "type": "object",
@@ -353,9 +357,6 @@
             "properties": {
               "enabled": {
                 "const": true
-              },
-              "minimumZones": {
-                "const": 2
               }
             }
           },
@@ -381,6 +382,32 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "allOf": [
+          {"properties": {"serviceName": {"const": "compliance"}}},
+          {"properties": {"kindTest": {"const": false}}, "required": ["kindTest"]}
+        ]
+      },
+      "then": {
+        "properties": {"spread": {"properties": {"minimumZones": {"const": 2}}}}
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {"properties": {"serviceName": {"const": "compliance"}}},
+          {"properties": {"kindTest": {"const": true}}, "required": ["kindTest"]}
+        ]
+      },
+      "then": {
+        "properties": {"spread": {"properties": {"minimumZones": {"const": 1}}}}
+      }
+    },
+    {
+      "if": {"properties": {"kindTest": {"const": true}}, "required": ["kindTest"]},
+      "then": {"properties": {"serviceName": {"const": "compliance"}}}
     },
     {
       "if": {

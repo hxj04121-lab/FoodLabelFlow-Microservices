@@ -1,0 +1,32 @@
+name: Compliance image and kind readiness
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/compliance-kind-ci.yml'
+      - '.github/workflows/service-cicd-reusable.yml'
+      - 'contracts/**'
+      - 'deploy/helm/**'
+      - 'deploy/kind/**'
+      - 'platform/**'
+      - 'services/compliance/**'
+      - 'pom.xml'
+
+permissions:
+  contents: read
+
+jobs:
+  compliance:
+    uses: ./.github/workflows/service-cicd-reusable.yml
+    with:
+      service_name: compliance
+      service_path: services/compliance
+      build_context: .
+      maven_reactor_project: services/compliance
+      helm_chart: deploy/helm/spectrace-service
+      values_file: deploy/helm/values/compliance.yaml
+      kind_values_file: deploy/helm/values/compliance-kind.yaml
+      kind_node_labels: eks.amazonaws.com/nodegroup=compliance,node.kubernetes.io/instance-type=c6i.large,topology.kubernetes.io/zone=kind
+      kind_node_taints: dedicated=compliance:NoSchedule
+      namespace: compliance
+    secrets: inherit
