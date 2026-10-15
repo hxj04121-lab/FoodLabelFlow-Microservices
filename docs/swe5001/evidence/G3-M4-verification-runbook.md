@@ -36,20 +36,26 @@ what to do. Nothing here is evidence until it is executed and the outputs are ca
 2. **Compliance projection**: the label projection row exists with the same `versionNumber`; a
    v1-only route must not be required for it.
 3. **Review task (the team's acceptance point)**: exactly **one OPEN** task exists for the confirmed
-   finding. Run this against the deployed Label Workflow schema (the task is created by
-   `ImpactFindingConsumer`, table `impact_review_task`, status column `lifecycle_status`):
+   finding. The task is created by `ImpactFindingConsumer` in the Label Workflow schema, table
+   `impact_review_task` (`organisation_id`, `finding_id`, `lifecycle_status IN ('OPEN','CLOSED')`,
+   unique on `(organisation_id, finding_id)`). Use a scalar query that **always returns one row**, so a
+   missing task cannot pass the check vacuously:
 
    ```sql
-   SELECT organisation_id, finding_id, COUNT(*) AS open_tasks
-   FROM label_workflow.impact_review_task
-   WHERE lifecycle_status = 'OPEN'
-   GROUP BY organisation_id, finding_id
-   HAVING COUNT(*) <> 1;
+   -- Run before redelivery, after same-eventId redelivery, and after new-eventId redelivery.
+   -- Always returns exactly one row; every run must show open_tasks = 1 and all_tasks = 1.
+   SELECT
+     (SELECT COUNT(*) FROM label_workflow.impact_review_task
+       WHERE organisation_id = :organisationId AND finding_id = :findingId
+         AND lifecycle_status = 'OPEN') AS open_tasks,
+     (SELECT COUNT(*) FROM label_workflow.impact_review_task
+       WHERE organisation_id = :organisationId AND finding_id = :findingId) AS all_tasks;
    ```
 
-   The query must return **nothing**. Redeliver the same `ImpactFinding.v1` (same `eventId`, then a
-   new `eventId`) and re-run it: still nothing, and
-   `SELECT COUNT(*) FROM label_workflow.impact_review_task WHERE finding_id = :findingId` stays 1.
+   All three runs must show `open_tasks = 1, all_tasks = 1`. A grouped `HAVING COUNT(*) <> 1` query is
+   **not** acceptable here: with zero tasks it returns no group and would read as a pass. Sanity-check
+   the same query for the POTENTIAL finding from the negative list: it must show
+   `open_tasks = 0, all_tasks = 0`.
 4. **POTENTIAL must not create a task**: trigger or replay a `kind=POTENTIAL` finding for the same
    product and confirm the task count is unchanged.
 
