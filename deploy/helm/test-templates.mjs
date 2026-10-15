@@ -137,7 +137,8 @@ check('first Gateway release pins its verified image and only permits required i
   assert.equal(pod.nodeSelector['eks.amazonaws.com/nodegroup'],'general');
   assert.equal(pod.topologySpreadConstraints,undefined);
   const np=docs.find(d=>d.kind==='NetworkPolicy');
-  assert.equal(np.spec.ingress.length,0);
+  assert.deepEqual(np.spec.ingress.flatMap(r=>r.from).map(s=>[s.namespaceSelector.matchLabels['kubernetes.io/metadata.name'],s.podSelector.matchLabels['app.kubernetes.io/name']]),
+    [['observability','grafana-alloy']],'Only the Alloy metrics scraper may reach Gateway pods in-cluster');
   assert.equal(np.spec.egress.length,6,'DNS plus the five Gateway upstream services');
   assert.deepEqual(np.spec.egress[1].to[0].podSelector.matchLabels,{app:'keycloak'},'Keycloak egress follows the Operator pod label');
   for(const rule of np.spec.egress.slice(1)) assert.deepEqual(rule.ports,[{port:8080,protocol:'TCP'}]);
