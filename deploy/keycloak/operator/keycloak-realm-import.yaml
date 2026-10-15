@@ -8,7 +8,7 @@ apiVersion: k8s.keycloak.org/v2alpha1
 kind: KeycloakRealmImport
 metadata:
   name: spectrace-realm
-  namespace: spectrace
+  namespace: keycloak
 spec:
   # Name of the Keycloak custom resource in the same namespace.
   keycloakCRName: spectrace-keycloak
@@ -79,7 +79,7 @@ spec:
         "spectrace.realm.claims.contract": "org_id, org_type, roles and aud in the access token",
         "spectrace.identity.audience": "spectrace-api",
         "spectrace.identity.issuer.local": "http://localhost:8080/auth/realms/spectrace",
-        "spectrace.identity.issuer.note": "The issuer is the externally visible Keycloak URL, so the gateway can front the IdP on /auth. Keycloak must run with KC_HTTP_RELATIVE_PATH=/auth and KC_HOSTNAME set to the external origin; the value above is the local development origin. Staging uses the ALB hostname, which M5 supplies."
+        "spectrace.identity.issuer.note": "The issuer is the externally visible Keycloak URL, so the gateway can front the IdP on /auth. Keycloak must run with KC_HTTP_RELATIVE_PATH=/auth and KC_HOSTNAME must include the /auth path (KC_HTTP_RELATIVE_PATH alone leaves the issuer without it; observed on Keycloak 26.0.7); the value above is the local development origin. Staging uses the ALB hostname, which M5 supplies."
       },
       "roles": {
         "realm": [
