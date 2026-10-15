@@ -32,6 +32,8 @@ env: []
 envFrom: []
 networkPolicy:
   enabled: true
-  ingressFromServices: [gateway]
+  ingressFromPeers: []
+  ingressFromCIDRs: []
   allowDNS: true
   egressRules: []
+  databaseCidrs: []

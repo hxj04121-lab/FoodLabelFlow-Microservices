@@ -1,0 +1,28 @@
+
+> test
+> node test-templates.mjs
+
+PASS strict lint for every service values file
+PASS compliance uses the same chart, probes and ClusterIP policy
+PASS specification uses the same chart, probes and ClusterIP policy
+PASS formulation uses the same chart, probes and ClusterIP policy
+PASS label-workflow uses the same chart, probes and ClusterIP policy
+PASS gateway uses the same chart, probes and ClusterIP policy
+PASS fixed three-replica placement requires c6i.large and compliance group
+PASS optional Should HPA preserves 1–4 range and fixed per-pod limits
+PASS reject CPU limit changed
+PASS reject memory request changed
+PASS reject general node group selected
+PASS reject wrong instance type
+PASS reject obsolete workload taint key
+PASS reject spread disabled
+PASS reject network policy disabled
+PASS reject autoscale range relaxed
+PASS empty ingress/egress values render explicit deny rules
+PASS database egress is restricted to configured private subnet CIDRs and MySQL port
+PASS reject invalid RDS CIDR values
+PASS ALB ingress is accepted only from an explicit CIDR allow-list
+PASS reject invalid ALB CIDR values
+PASS immutable image digest renders by digest
+PASS invalid image digest is rejected
+23 Helm checks passed. Rendered constraints are not live pod-placement evidence.

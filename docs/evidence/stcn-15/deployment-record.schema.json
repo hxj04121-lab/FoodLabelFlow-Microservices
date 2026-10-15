@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "STCN-15 immutable deployment evidence record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["service", "commit_sha", "workflow_run_id", "workflow_run_url", "conclusion", "image", "deployment_revision"],
+  "properties": {
+    "service": {"enum": ["specification", "formulation", "compliance", "label-workflow", "gateway"]},
+    "commit_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "workflow_run_id": {"type": "integer", "minimum": 1},
+    "workflow_run_url": {"type": "string", "format": "uri"},
+    "conclusion": {"const": "success"},
+    "image": {"type": "string", "pattern": "^.+@sha256:[a-f0-9]{64}$"},
+    "deployment_revision": {"type": "integer", "minimum": 1},
+    "namespace": {"type": "string", "minLength": 1}
+  }
+}

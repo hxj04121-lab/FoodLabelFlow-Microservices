@@ -10,6 +10,47 @@ permissions:
   contents: read
 
 jobs:
+  database-privileges:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start an isolated MySQL 8.4.11 and verify idempotent bootstrap grants
+        run: bash scripts/test-service-database-bootstrap.sh | tee database-bootstrap.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: service-database-grants
+          path: database-bootstrap.log
+          if-no-files-found: error
+
+  runtime-secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate protected, per-service Kubernetes Secret injection and cleanup
+        run: bash tests/test-runtime-secrets.sh
+
+  deployment-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate staging deployment evidence capture
+        run: python3 -m unittest discover -s tests -p 'test_deployment_record.py' -v
+
+  observability-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate and exercise DLQ and service error alerts
+        run: |
+          docker run --rm --entrypoint=/bin/promtool -v "$PWD/deploy/observability/alerts:/etc/prometheus:ro" prom/prometheus:v3.7.3 \
+            check rules /etc/prometheus/stcn-15-rules.yml
+          docker run --rm --entrypoint=/bin/promtool -v "$PWD/deploy/observability/alerts:/etc/prometheus:ro" prom/prometheus:v3.7.3 \
+            test rules /etc/prometheus/stcn-15-rules.test.yml
+
   backend:
     runs-on: ubuntu-latest
     steps:

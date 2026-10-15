@@ -30,6 +30,18 @@ jobs:
         working-directory: infra/terraform
       - run: terraform validate
         working-directory: infra/terraform
+      - run: terraform init -backend=false -input=false
+        working-directory: infra/terraform/modules/github-oidc
+      - run: terraform test -no-color
+        working-directory: infra/terraform/modules/github-oidc
+      - name: Test edge security group and HTTPS listener policy
+        run: |
+          terraform -chdir=infra/terraform/modules/edge init -backend=false -input=false
+          terraform -chdir=infra/terraform/modules/edge test -no-color
+      - name: Test RDS security group source restriction
+        run: |
+          terraform -chdir=infra/terraform/modules/rds init -backend=false -input=false
+          terraform -chdir=infra/terraform/modules/rds test -no-color
 
   plan:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_plan }}
