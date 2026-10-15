@@ -1,25 +1,15 @@
-# EKS add-ons (STCN-59)
+# EKS foundations
 
-The staging Terraform root includes this child module when `enable_eks_addons=true`. It consumes the existing EKS cluster, OIDC provider, Cluster Autoscaler role, node groups, VPC and ACM certificate; it creates no second VPC, cluster, NAT gateway or static ALB. Enabling the module replaces the G0 static ALB with the LBC-managed Gateway ALB. Keep it disabled until an issued `ap-southeast-1` ACM certificate, domain, reviewed ALB source CIDRs, staging window and budget gate are ready.
+This module reuses the existing EKS cluster, VPC, OIDC provider, node groups, and autoscaler role. It installs missing EBS CSI, Load Balancer Controller, Cluster Autoscaler, metrics-server, workload namespaces, and NetworkPolicies. It creates no VPC, EKS cluster, static ALB, listener, or application workload.
 
-The module installs the AWS Load Balancer Controller, EBS CSI managed add-on, Cluster Autoscaler, metrics-server, and VPC CNI NetworkPolicy enforcement. It creates exact-subject IRSA roles for LBC, EBS CSI and `aws-node`; Cluster Autoscaler reuses the existing EKS module role and ASG discovery tags. Add-on versions are selected for the configured EKS version; Helm charts are pinned. AWS provider credentials remain the existing profile/SSO or OIDC chain, and Helm/Kubernetes providers request short-lived tokens through `aws eks get-token`.
+The root retains its existing ALB and target group. The Gateway service chart can render a TargetGroupBinding for that existing target group, after LBC and its CRD are Ready. HTTPS remains a separately reviewed listener/certificate/DNS change. Do not use a controller-owned Ingress to create a duplicate edge.
 
-The EKS module exposes autoscaler ranges of general 1–3 and optional compliance 1–4. The root keeps the existing node-role CNI policy until this child module is ready, then removes it; the managed VPC CNI add-on uses the `aws-node` IRSA role. Node groups and their project tags remain owned by G0 Terraform.
+`manage_vpc_cni=false` is the default. This preserves the healthy self-managed CNI and node-role fallback permission. Strict NetworkPolicy enforcement must still be verified and, when disabled, enabled through an approved parameter patch after the policy-endpoint CRD and traffic policies are present. Set `manage_vpc_cni=true` only for an explicitly reviewed managed-add-on migration; that path overwrites self-managed fields and must not be used as an implicit reinstall.
 
-## Storage and HTTPS
+IRSA roles restrict trust to exact ServiceAccount subjects. EBS CSI uses the AWS driver policy; LBC uses the policy corresponding to the pinned controller version. EBS CSI creation rejects ownership conflicts. AWS resolves driver compatibility against the cluster minor version; the exact selected version must be recorded in the approved plan. Helm controller charts are pinned, autoscaler overrides the chart image to the cluster minor, and controller requests/replicas are declared for capacity planning.
 
-`ebs-gp3` is encrypted, waits for first consumer, and deletes volumes when staging claims are deleted. RabbitMQ's 8 GiB claims remain owned by STCN-60. Delete the claims and wait for their EBS volumes to disappear before `staging-down`.
+The encrypted gp3 StorageClass uses `WaitForFirstConsumer` for AZ placement and `Delete` reclaim semantics. Existing namespace/StorageClass ownership must be inspected and adopted through separately approved state operations when needed. Never delete existing PVC data during installation or rollback.
 
-The Gateway Ingress uses only HTTPS 443, the existing ACM certificate, the configured domain, the existing two public subnet tags, and explicit ALB inbound CIDRs. Terraform's graph deletes the Ingress before removing LBC, then removes the add-ons before EKS. The project-tagged ALB is checked by the cleanup verifier.
+Install traffic policies before enabling strict enforcement. Verify all controller webhooks and APIService backends, DNS, kubelet, messaging peer ports, database access, and actual workload labels before narrowing existing rules.
 
-## Network policies
-
-The Helm chart creates default-deny ingress and egress policies for eight workload namespaces and the RabbitMQ/Keycloak operator namespaces. Explicit policies permit ALB-to-Gateway, Gateway-to-services/Keycloak, app-to-RabbitMQ/Keycloak/MySQL/OTLP, Keycloak-to-MySQL, RabbitMQ peer/app/metrics, operator webhooks, DNS, metrics-server-to-kubelets, and required kube-system/API traffic. Database egress is restricted to the two private subnet CIDRs; Gateway ALB ingress is restricted to the supplied reviewed CIDRs.
-
-The policies are installed before Terraform enables strict VPC CNI NetworkPolicy mode. Service labels and operator ports must be compared with the owning M2/M5.2 chart values before the first staging window; those service releases are not part of STCN-59. Strict mode affects all non-hostNetwork pods, including kube-system.
-
-## Validation and lifecycle
-
-Run `scripts/check_eks_addons.sh` for Terraform validate, Helm lint and rendered YAML validation; set `KUBECONFORM_BIN` for strict Kubernetes schema validation. Run `scripts/verify_eks_addons.sh deploy` only against an authorized staging context and supply `STCN_ACM_CERTIFICATE_ARN`. After the normal staging teardown, run `scripts/verify_eks_addons.sh cleanup` to confirm the cluster and tagged staging resources are gone. The separate Terraform state bucket is excluded.
-
-This branch integrates the module into Terraform apply/destroy dependency ordering. The G0 branch has no staging apply/destroy script or apply workflow; STCN-37's fail-closed budget gate, G0 account readiness and an approved staging window remain prerequisites. Static validation does not prove that AWS accepts the selected add-on schema, IRSA succeeds, the ALB target is healthy, RabbitMQ mounts EBS, policies permit live traffic, or cleanup leaves no AWS resources.
+Run `scripts/check_eks_addons.sh` and the mocked Terraform safety tests offline. Run `scripts/verify_eks_addons.sh foundations` on the authorized VPC path, then `deploy` with the issued certificate and existing ALB/target-group inputs. Static tests, Ready core pods, and a saved plan are separate from live storage, policy, ingress, and application acceptance.

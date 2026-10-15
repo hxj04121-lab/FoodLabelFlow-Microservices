@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "chore/**", "feature/**"]
   pull_request:
-    branches: [main, XFY, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-1-g0-m1-contracts', 'g0-m4-label-workflow-contracts', 'feature/stcn-45-outbox-consumer', 'feature/stcn-64-*', 'feature/g3-m2-mainline', 'feature/g3-m2-experiments']
+    branches: [main, 'codex/aws-eks-full-deployment-readiness', XFY, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-1-g0-m1-contracts', 'g0-m4-label-workflow-contracts', 'feature/stcn-45-outbox-consumer', 'feature/stcn-64-*', 'feature/g3-m2-mainline', 'feature/g3-m2-experiments']
 
 permissions:
   contents: read
@@ -120,6 +120,12 @@ jobs:
           NODE
       - name: Build application images
         run: docker compose build
+      - name: Build every EKS workload image for x86 workers
+        run: |
+          for service in specification formulation compliance label-workflow; do
+            docker build --platform linux/amd64 -f "services/$service/Dockerfile" .
+          done
+          docker build --platform linux/amd64 -f platform/gateway/Dockerfile platform/gateway
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

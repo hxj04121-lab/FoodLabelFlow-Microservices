@@ -61,7 +61,7 @@ module "rds" {
 }
 
 module "edge" {
-  count  = var.enable_alb && !var.enable_eks_addons ? 1 : 0
+  count  = var.enable_alb ? 1 : 0
   source = "./modules/edge"
 
   name            = "spectrace-${var.environment}"
@@ -70,6 +70,7 @@ module "edge" {
   subnet_ids      = module.network.public_subnet_ids
   ingress_cidrs   = var.alb_ingress_cidrs
   certificate_arn = var.certificate_arn
+  internal        = var.alb_internal
   tags            = var.tags
 }
 
@@ -113,11 +114,8 @@ module "eks_addons" {
   public_subnet_cidrs         = [for index in range(2) : cidrsubnet(var.vpc_cidr, 4, index)]
   private_subnet_cidrs        = [for index in range(2) : cidrsubnet(var.vpc_cidr, 4, index + 4)]
   database_subnet_cidrs       = [for index in range(2) : cidrsubnet(var.vpc_cidr, 4, index + 4)]
-  acm_certificate_arn         = var.certificate_arn
-  staging_domain              = var.domain_name
-  gateway_service_name        = var.gateway_service_name
+  manage_vpc_cni              = var.manage_vpc_cni
   node_groups                 = module.eks[0].autoscaler_node_groups
-  alb_ingress_cidrs           = var.alb_ingress_cidrs
   workload_namespaces = {
     gateway        = "gateway"
     keycloak       = "keycloak"
@@ -132,11 +130,22 @@ module "eks_addons" {
 }
 
 resource "aws_iam_role_policy_attachment" "node_vpc_cni_fallback" {
-  count      = var.enable_eks && !var.enable_eks_addons ? 1 : 0
+  count      = var.enable_eks && !(var.enable_eks_addons && var.manage_vpc_cni) ? 1 : 0
   role       = module.eks[0].node_role_name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
 
   depends_on = [module.eks_addons]
+}
+
+resource "aws_security_group_rule" "gateway_from_alb" {
+  count                    = var.enable_eks && var.enable_alb ? 1 : 0
+  type                     = "ingress"
+  description              = "Existing ALB to Gateway pod targets"
+  security_group_id        = module.eks[0].node_security_group_id
+  source_security_group_id = module.edge[0].security_group_id
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
 }
 
 module "github_oidc" {

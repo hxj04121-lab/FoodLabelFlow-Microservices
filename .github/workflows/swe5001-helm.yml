@@ -1,7 +1,7 @@
 name: SWE5001 Helm template
 on:
   pull_request:
-    paths: ['deploy/helm/**', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/swe5001-helm.yml']
+    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/swe5001-helm.yml']
   push:
     branches: ['feature/stcn-48-*']
     paths: ['deploy/helm/**', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/swe5001-helm.yml']
@@ -12,6 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.1
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

@@ -31,6 +31,7 @@ serviceAccount:
     eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/stcn-validation-lbc
 YAML
 cat > "$tmp_dir/autoscaler-values.yaml" <<'YAML'
+fullnameOverride: cluster-autoscaler
 cloudProvider: aws
 awsRegion: ap-southeast-1
 image:
@@ -67,13 +68,8 @@ done
 
 "$helm_bin" template stcn-network-policies "$repo_root/deploy/helm/platform-network-policies" > "$tmp_dir/network-policies.yaml"
 
-sed \
-  -e 's|${namespace}|gateway|' \
-  -e 's|${certificate_arn}|arn:aws:acm:ap-southeast-1:000000000000:certificate/00000000-0000-0000-0000-000000000000|' \
-  -e 's|${domain}|staging.example.invalid|' \
-  -e 's|${ingress_cidrs}|203.0.113.0/24|' \
-  -e 's|${service_name}|gateway|' \
-  "$repo_root/deploy/kubernetes/staging/gateway-ingress.yaml.tmpl" > "$tmp_dir/gateway-ingress.yaml"
+"$helm_bin" template gateway "$repo_root/deploy/helm/spectrace-service" -f "$repo_root/deploy/helm/values/gateway.yaml" \
+  --set-string 'targetGroupArn=arn:aws:elasticloadbalancing:ap-southeast-1:000000000000:targetgroup/test-gateway/0123456789abcdef' > "$tmp_dir/gateway-routing.yaml"
 sed 's|${cluster_name}|stcn-validation|' "$repo_root/deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl" > "$tmp_dir/ebs-gp3-storageclass.yaml"
 ruby -ryaml -e '
   ARGV.each do |path|
@@ -87,8 +83,8 @@ ruby -ryaml -e '
       end
     end
   end
-' "$tmp_dir/network-policies.yaml" "$tmp_dir/gateway-ingress.yaml" "$tmp_dir/ebs-gp3-storageclass.yaml"
+' "$tmp_dir/network-policies.yaml" "$tmp_dir/gateway-routing.yaml" "$tmp_dir/ebs-gp3-storageclass.yaml"
 if [[ -n "${KUBECONFORM_BIN:-}" ]]; then
-  "$KUBECONFORM_BIN" -strict -summary -kubernetes-version "${KUBERNETES_VERSION:-1.36.0}" "$tmp_dir/network-policies.yaml" "$tmp_dir/gateway-ingress.yaml" "$tmp_dir/ebs-gp3-storageclass.yaml"
+  "$KUBECONFORM_BIN" -strict -summary -kubernetes-version "${KUBERNETES_VERSION:-1.36.0}" "$tmp_dir/network-policies.yaml" "$tmp_dir/ebs-gp3-storageclass.yaml"
 fi
 echo "Terraform validate, four Helm chart lints, rendered Kubernetes YAML checks passed; kubeconform ran when configured."

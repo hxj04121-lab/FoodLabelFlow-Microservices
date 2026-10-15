@@ -1,4 +1,5 @@
 data "aws_eks_addon_version" "vpc_cni" {
+  count              = var.manage_vpc_cni ? 1 : 0
   addon_name         = "vpc-cni"
   kubernetes_version = var.cluster_version
   most_recent        = true
@@ -11,9 +12,10 @@ data "aws_eks_addon_version" "ebs_csi" {
 }
 
 resource "aws_eks_addon" "vpc_cni" {
+  count                    = var.manage_vpc_cni ? 1 : 0
   cluster_name             = var.cluster_name
   addon_name               = "vpc-cni"
-  addon_version            = data.aws_eks_addon_version.vpc_cni.version
+  addon_version            = data.aws_eks_addon_version.vpc_cni[0].version
   service_account_role_arn = aws_iam_role.addons["vpc_cni"].arn
   configuration_values = jsonencode({
     enableNetworkPolicy = "true"
@@ -36,7 +38,7 @@ resource "aws_eks_addon" "ebs_csi" {
   addon_name                  = "aws-ebs-csi-driver"
   addon_version               = data.aws_eks_addon_version.ebs_csi.version
   service_account_role_arn    = aws_iam_role.addons["ebs_csi"].arn
-  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_create = "NONE"
   resolve_conflicts_on_update = "PRESERVE"
   tags = {
     Project     = "SpecTrace-CN"
@@ -58,6 +60,7 @@ resource "helm_release" "load_balancer_controller" {
     region       = var.aws_region
     vpcId        = var.vpc_id
     replicaCount = 2
+    resources    = { requests = { cpu = "100m", memory = "128Mi" }, limits = { cpu = "500m", memory = "512Mi" } }
     serviceAccount = {
       create = true
       name   = "aws-load-balancer-controller"
@@ -78,8 +81,10 @@ resource "helm_release" "cluster_autoscaler" {
   namespace  = "kube-system"
 
   values = [yamlencode({
-    cloudProvider = "aws"
-    awsRegion     = var.aws_region
+    fullnameOverride = "cluster-autoscaler"
+    resources        = { requests = { cpu = "100m", memory = "256Mi" }, limits = { cpu = "500m", memory = "512Mi" } }
+    cloudProvider    = "aws"
+    awsRegion        = var.aws_region
     image = {
       tag = "v1.${split(".", var.cluster_version)[1]}.0"
     }
@@ -112,6 +117,7 @@ resource "helm_release" "metrics_server" {
 
   values = [yamlencode({
     replicas            = 2
+    resources           = { requests = { cpu = "100m", memory = "200Mi" }, limits = { cpu = "200m", memory = "400Mi" } }
     podDisruptionBudget = { enabled = true, minAvailable = 1 }
     args                = ["--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname"]
   })]
@@ -159,16 +165,4 @@ resource "kubernetes_manifest" "ebs_gp3_storage_class" {
   }))
 
   depends_on = [aws_eks_addon.ebs_csi]
-}
-
-resource "kubernetes_manifest" "gateway_ingress" {
-  manifest = yamldecode(templatefile("${path.module}/../../../../deploy/kubernetes/staging/gateway-ingress.yaml.tmpl", {
-    certificate_arn = var.acm_certificate_arn
-    domain          = var.staging_domain
-    namespace       = var.workload_namespaces["gateway"]
-    service_name    = var.gateway_service_name
-    ingress_cidrs   = join(",", var.alb_ingress_cidrs)
-  }))
-
-  depends_on = [helm_release.load_balancer_controller, kubernetes_manifest.workload_namespace]
 }

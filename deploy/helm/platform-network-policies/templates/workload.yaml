@@ -61,7 +61,7 @@ spec:
               kubernetes.io/metadata.name: {{ $rabbitmqNS | quote }}
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: rabbitmq
+              app.kubernetes.io/name: spectrace
       ports:
         - {protocol: TCP, port: 5672}
     - to:
