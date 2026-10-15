@@ -65,6 +65,12 @@ spec:
       app.kubernetes.io/name: keycloak
   policyTypes: [Ingress, Egress]
   ingress:
+    {{- range .Values.cidrs.alb }}
+    - from:
+        - ipBlock: {cidr: {{ . | quote }}}
+      ports:
+        - {protocol: TCP, port: 8080}
+    {{- end }}
     - from:
         - namespaceSelector:
             matchLabels:

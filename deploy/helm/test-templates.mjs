@@ -386,4 +386,17 @@ check('staged RabbitMQ bundle renders placement patch and quorum PDB',()=>{
   assert.deepEqual(pdb.spec.selector,term.labelSelector);
 });
 
+check('Keycloak NetworkPolicy allows ALB health checks only from configured ALB subnets',()=>{
+  const platformChart=resolve(root,'platform-network-policies');
+  const output=run(['template','review',platformChart,'--set-json','cidrs.alb=["10.20.0.0/24","10.20.1.0/24"]']);
+  const docs=parseAllDocuments(output.stdout).map(d=>d.toJSON()).filter(Boolean);
+  const policy=docs.find(d=>d.kind==='NetworkPolicy'&&d.metadata.name==='stcn-keycloak-flows');
+  const albIngress=policy.spec.ingress.filter(rule=>rule.from?.some(source=>source.ipBlock));
+  assert.deepEqual(albIngress,[
+    {from:[{ipBlock:{cidr:'10.20.0.0/24'}}],ports:[{port:8080,protocol:'TCP'}]},
+    {from:[{ipBlock:{cidr:'10.20.1.0/24'}}],ports:[{port:8080,protocol:'TCP'}]}
+  ]);
+  assert(policy.spec.ingress.some(rule=>rule.from?.some(source=>source.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='gateway')),'Gateway-to-Keycloak access remains allowed');
+});
+
 console.log(`${count} Helm checks passed. Rendered constraints are not live pod-placement evidence.`);
