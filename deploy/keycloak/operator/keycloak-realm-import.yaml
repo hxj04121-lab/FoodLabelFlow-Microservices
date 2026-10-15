@@ -313,7 +313,8 @@ spec:
           "requiredActions": [],
           "realmRoles": [
             "LABEL_OFFICER",
-            "ADMIN_DATA_MAINTENANCE"
+            "ADMIN_DATA_MAINTENANCE",
+            "default-roles-spectrace"
           ]
         },
         {
@@ -342,7 +343,8 @@ spec:
           "requiredActions": [],
           "realmRoles": [
             "APPROVER",
-            "PUBLISHER"
+            "PUBLISHER",
+            "default-roles-spectrace"
           ]
         },
         {
@@ -371,7 +373,8 @@ spec:
           "requiredActions": [],
           "realmRoles": [
             "LABEL_OFFICER",
-            "ADMIN_DATA_MAINTENANCE"
+            "ADMIN_DATA_MAINTENANCE",
+            "default-roles-spectrace"
           ]
         },
         {
@@ -400,7 +403,8 @@ spec:
           "requiredActions": [],
           "realmRoles": [
             "APPROVER",
-            "PUBLISHER"
+            "PUBLISHER",
+            "default-roles-spectrace"
           ]
         },
         {
@@ -430,7 +434,8 @@ spec:
           "realmRoles": [
             "ADMIN_DATA_MAINTENANCE",
             "CHANGE_MANAGER",
-            "LABEL_OFFICER"
+            "LABEL_OFFICER",
+            "default-roles-spectrace"
           ]
         },
         {
@@ -459,7 +464,8 @@ spec:
           "requiredActions": [],
           "realmRoles": [
             "APPROVER",
-            "PUBLISHER"
+            "PUBLISHER",
+            "default-roles-spectrace"
           ]
         },
         {
@@ -489,7 +495,8 @@ spec:
           "realmRoles": [
             "ADMIN_DATA_MAINTENANCE",
             "CHANGE_MANAGER",
-            "LABEL_OFFICER"
+            "LABEL_OFFICER",
+            "default-roles-spectrace"
           ]
         },
         {
@@ -518,7 +525,8 @@ spec:
           "requiredActions": [],
           "realmRoles": [
             "APPROVER",
-            "PUBLISHER"
+            "PUBLISHER",
+            "default-roles-spectrace"
           ]
         },
         {
@@ -546,7 +554,8 @@ spec:
           ],
           "requiredActions": [],
           "realmRoles": [
-            "AUDITOR"
+            "AUDITOR",
+            "default-roles-spectrace"
           ]
         },
         {
@@ -573,7 +582,9 @@ spec:
             }
           ],
           "requiredActions": [],
-          "realmRoles": []
+          "realmRoles": [
+            "default-roles-spectrace"
+          ]
         }
       ],
       "components": {

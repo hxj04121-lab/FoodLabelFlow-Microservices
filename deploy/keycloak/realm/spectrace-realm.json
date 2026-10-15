@@ -257,7 +257,8 @@
       "requiredActions": [],
       "realmRoles": [
         "LABEL_OFFICER",
-        "ADMIN_DATA_MAINTENANCE"
+        "ADMIN_DATA_MAINTENANCE",
+        "default-roles-spectrace"
       ]
     },
     {
@@ -286,7 +287,8 @@
       "requiredActions": [],
       "realmRoles": [
         "APPROVER",
-        "PUBLISHER"
+        "PUBLISHER",
+        "default-roles-spectrace"
       ]
     },
     {
@@ -315,7 +317,8 @@
       "requiredActions": [],
       "realmRoles": [
         "LABEL_OFFICER",
-        "ADMIN_DATA_MAINTENANCE"
+        "ADMIN_DATA_MAINTENANCE",
+        "default-roles-spectrace"
       ]
     },
     {
@@ -344,7 +347,8 @@
       "requiredActions": [],
       "realmRoles": [
         "APPROVER",
-        "PUBLISHER"
+        "PUBLISHER",
+        "default-roles-spectrace"
       ]
     },
     {
@@ -374,7 +378,8 @@
       "realmRoles": [
         "ADMIN_DATA_MAINTENANCE",
         "CHANGE_MANAGER",
-        "LABEL_OFFICER"
+        "LABEL_OFFICER",
+        "default-roles-spectrace"
       ]
     },
     {
@@ -403,7 +408,8 @@
       "requiredActions": [],
       "realmRoles": [
         "APPROVER",
-        "PUBLISHER"
+        "PUBLISHER",
+        "default-roles-spectrace"
       ]
     },
     {
@@ -433,7 +439,8 @@
       "realmRoles": [
         "ADMIN_DATA_MAINTENANCE",
         "CHANGE_MANAGER",
-        "LABEL_OFFICER"
+        "LABEL_OFFICER",
+        "default-roles-spectrace"
       ]
     },
     {
@@ -462,7 +469,8 @@
       "requiredActions": [],
       "realmRoles": [
         "APPROVER",
-        "PUBLISHER"
+        "PUBLISHER",
+        "default-roles-spectrace"
       ]
     },
     {
@@ -490,7 +498,8 @@
       ],
       "requiredActions": [],
       "realmRoles": [
-        "AUDITOR"
+        "AUDITOR",
+        "default-roles-spectrace"
       ]
     },
     {
@@ -517,7 +526,9 @@
         }
       ],
       "requiredActions": [],
-      "realmRoles": []
+      "realmRoles": [
+        "default-roles-spectrace"
+      ]
     }
   ],
   "components": {
