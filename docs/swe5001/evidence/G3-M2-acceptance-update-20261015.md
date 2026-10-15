@@ -1,0 +1,45 @@
+# G3 M2 acceptance update — 15 October 2026 (Asia/Shanghai)
+
+This update supersedes the 14 October acceptance matrix and older staging estimates. It separates merged code and CI from live service acceptance and measured cloud results. The repository main head checked for this update is `0aa6be0ff865c29f6bad75a7a3f455d592966e46`.
+
+## M2 implementation and CI
+
+- [PR #41](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/41) is merged to main. It delivers the Phase 2 matcher, impact APIs/cache and the fixed load, failover and analysis tooling. Its CI was green at the reviewed merge head.
+- [PR #51](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/51) is merged as `356f9b8c`. It publishes the authoritative Label business `versionNumber` in `LabelPublished.v2`, exposes the current published Label lookup and consumes impact findings. The exact [CI run 38418507273](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38418507273) completed successfully for head `4ea7f0ff`; the CI used MySQL/RabbitMQ Testcontainers. This is CI evidence, not a deployed trace.
+- [PR #58](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/58) merged to main as `a0fc86b`. It fixes final Helm Gateway environment rendering and adds a protected, manual staging release path. The workflow has not been run. A merge does not configure the staging environment or prove an application deployment.
+- [PR #59](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/59) merged as `0f25d8b`; it adds M4's report section and a prepared Label → ReviewTask runbook. The exact-head tests are CI evidence only; no live Label publication or ReviewTask observation is claimed.
+- [PR #65](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/65) merged as `0aa6be0`; it places the Keycloak realm import in namespace `keycloak` and corrects the `/auth` issuer note. This is a manifest/documentation merge, not proof that Keycloak or application routes are deployed.
+- M5 [PR #61](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/61) is open and dirty against main; M2 requested changes on its current head for conflicts and the Keycloak Operator pod-label mismatch. PRs [#39](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/39) and [#55](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/55) were closed on 15 October. The open main-targeted [PR #63](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/63) carries the `label.published.v2` binding and declares the Keycloak CR as `metadata.name: spectrace`; M4's merged #65 RealmImport references `keycloakCRName: spectrace-keycloak`. M2 flagged this mismatch on #63 for alignment before the CR is applied. M2 also requested changes on #63 because the Compliance kind caller does not grant the reusable workflow's required permissions. No deployed route, readiness or staging acceptance is inferred from these PRs.
+
+## Acceptance status
+
+| Jira | Code and tooling | Live acceptance / measurements |
+|---|---|---|
+| [STCN-95](https://hxj04121.atlassian.net/browse/STCN-95) | Phase 2 findings and outbox code are merged; exact CI passed. | **BLOCKED / NOT RUN:** no observed deployed `LabelPublished.v2` → `CONFIRMED REVIEW_REQUIRED` → exactly-one-ReviewTask trace. |
+| [STCN-96](https://hxj04121.atlassian.net/browse/STCN-96) | Tenant-guarded preview/inbox APIs are merged and tested. | **BLOCKED:** no deployed Gateway/Compliance path with issuer/JWKS and same-organisation/foreign-organisation traces. |
+| [STCN-97](https://hxj04121.atlassian.net/browse/STCN-97) | Immutable-version cache and correctness tests are merged. | Performance benefit remains unmeasured. |
+| [STCN-98](https://hxj04121.atlassian.net/browse/STCN-98) | Frozen 1-vs-3 replica workload protocol and analyzers are merged. | **NOT RUN:** no authorized window, usable private path, accepted dataset/tokens, deployed services or telemetry. Frozen SLOs are unchanged. |
+| [STCN-99](https://hxj04121.atlassian.net/browse/STCN-99) | Pod-failover runner and recovery analyzer are merged. | **NOT RUN:** no accepted load result; no Pod was deleted. A separate explicit approval is required before deleting a verified Deployment-owned Pod. |
+| [STCN-100](https://hxj04121.atlassian.net/browse/STCN-100) | Bottleneck measurement framework is merged. | **NOT RUN:** no raw workload or Grafana measurements exist; no bottleneck is claimed. |
+| [STCN-117](https://hxj04121.atlassian.net/browse/STCN-117) | The M2 report draft and evidence links are in main. | Draft contribution is current; measured results remain **NOT RUN** pending staging acceptance. |
+
+The fixed targets and thresholds in the G0-M2 test plan have not been relaxed. No throughput, p95 latency or recovery time is fabricated or inferred from local/CI results.
+
+## Staging blockers from M5's 15 October read-only evidence and M1's review
+
+The sanitized [AWS snapshot](../../evidence/stcn-15/aws-readonly-snapshot-2026-10-15.md) and [administrator checklist](../../evidence/stcn-15/admin-configuration-checklist.md) report:
+
+- M5's sanitized snapshot records a USD 120 monthly budget, USD 149.085 forecast, USD 0 actual spend, and unverified eligible credits; M1 confirms credits are not treated as a funding source. M1's [review of this PR](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/64#pullrequestreview-5533116065) reports that the protected GitHub `staging` Environment now has `AWS_ACCOUNT_ID`, `AWS_REGION`, `EKS_CLUSTER_NAME`, and `AWS_DEPLOY_ROLE_ARN` variables, plus the owner-approved `APPROVED_STAGING_SPEND_USD` secret and a one-week approval window; M1 also reports that the existing gate passes locally with those inputs. The secret value is not exposed in this report, and no evidence currently records the approved dollar ceiling or exact UTC start/end; those details still need a sanitized decision record before a run.
+- EKS is active but private-only; this workstation could not reach its API. Workloads and live policy enforcement remain unknown. Public TLS is available, but the tested `/auth/**` and `/api/**` routes returned 503 as described below.
+- A read-only DNS lookup on 15 October resolves `_3b451d5f1e423ebfb909bdbd16d50e5f.staging.52zzx.top` to the requested ACM target `_37c330b9be2d6ae66d122de76bfe9ef6.wzccmgtwzk.acm-validations.aws`; the observed TTL is 600 seconds, not the requested 300. A public HTTPS check on 15 October verified TLS (`curl` SSL verification result 0) at `staging.52zzx.top`, but GET requests to `/auth/realms/spectrace/.well-known/openid-configuration` and `/api/health` both returned HTTP 503. M4 reports Keycloak is not deployed and Gateway path forwarding is not configured. The certificate/ALB are reachable; the application routes are not healthy.
+- M1's review reports that the protected GitHub `staging` Environment is restricted to `main` with M1 as required reviewer, and that `foodlabelflow-staging-vpc` (`self-hosted`, `Linux`, `X64`, `staging-vpc`) is online. M5 reports the runner can reach GitHub and the private EKS API over TLS, but it has not run a job; OIDC role trust and actual deploy permission therefore remain unverified until a protected Gateway workflow executes. `GATEWAY_ISSUER` is still missing, and `prevent_self_review` is false. GitHub reports that `main` has no branch protection. These settings do not clear the staging gate.
+- Terraform state ownership remains unknown because `infra/terraform/backend.hcl` is absent. Do not initialize a guessed backend or run a remote plan until its owner confirms it.
+- No deployment, service-grant probe, NetworkPolicy probe, Gateway smoke, demo, load test, failover test, AWS write or resource cleanup was performed in this update.
+
+## External inputs before M2 can finish G3
+
+- **M5 / account owner:** provide sanitized evidence for the exact approved UTC window and dollar ceiling (the staging Environment variables/secret and one-week approval are reported as configured); verify OIDC/deploy access through the first protected run; set `GATEWAY_ISSUER` after Keycloak is reachable; confirm Terraform state and the restricted VPC inspection path; repair the 503 application routes; and deliver a reviewed main-targeted platform branch with required event routes, compatible NetworkPolicies, and a Keycloak CR name matching the merged RealmImport.
+- **M1/M4:** provide a real current published Label with its `labelVersionId` and business `versionNumber`, approved test identities/credentials and an observable release scenario. M1's imported formulas are not a substitute for published Labels or tested JWT identities.
+- **M4:** observe and record the deployed `LabelPublished.v2` → impact finding → exactly-one ReviewTask result using the runbook's non-vacuous count query.
+
+After those gates are met, M2 can run the unchanged 1-vs-3 replica test, save placement/image/latency/throughput/telemetry evidence, assess the actual bottleneck, and seek separate approval for the failover Pod deletion. Until then, STCN-17 and STCN-117 remain In Progress.
