@@ -61,8 +61,8 @@ class KeycloakOperatorRealmImportContractTest {
                 "the operator imports realms through this kind only");
         Map<String, Object> metadata = section(importDocument, "metadata");
         assertEquals("spectrace-realm", metadata.get("name"));
-        assertFalse(String.valueOf(metadata.get("namespace")).isBlank(),
-                "the resource belongs to the namespace that runs Keycloak");
+        assertEquals("keycloak", metadata.get("namespace"),
+                "the resource and Keycloak instance run in the M4 keycloak namespace");
         String keycloakCRName = String.valueOf(section(importDocument, "spec").get("keycloakCRName"));
         assertTrue(keycloakCRName.startsWith("spectrace-"),
                 "the resource must name the Keycloak custom resource it belongs to, was " + keycloakCRName);

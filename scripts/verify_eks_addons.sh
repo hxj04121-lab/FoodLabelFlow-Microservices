@@ -9,6 +9,11 @@ gateway_binding="${STCN_GATEWAY_BINDING:-gateway-gateway}"
 target_group_arn="${STCN_ALB_TARGET_GROUP_ARN:-}"
 load_balancer_arn="${STCN_ALB_ARN:-}"
 certificate_arn="${STCN_ACM_CERTIFICATE_ARN:-}"
+keycloak_namespace="${STCN_KEYCLOAK_NAMESPACE:-keycloak}"
+keycloak_binding="${STCN_KEYCLOAK_BINDING:-spectrace-keycloak}"
+keycloak_target_group_arn="${STCN_KEYCLOAK_TARGET_GROUP_ARN:-}"
+vpc_id="${STCN_VPC_ID:-}"
+
 if [[ "$region" != "ap-southeast-1" || -z "$cluster_name" ]]; then
   echo "set STCN_EKS_CLUSTER_NAME and use AWS_REGION=ap-southeast-1" >&2
   exit 2
@@ -34,13 +39,28 @@ case "$mode" in
     kubectl get apiservice v1beta1.metrics.k8s.io -o json | jq -e 'any(.status.conditions[]; .type == "Available" and .status == "True")' >/dev/null
     kubectl get storageclass ebs-gp3 -o json | jq -e '.provisioner == "ebs.csi.aws.com" and .volumeBindingMode == "WaitForFirstConsumer" and .reclaimPolicy == "Delete" and .parameters.type == "gp3" and .parameters.encrypted == "true" and .allowVolumeExpansion == true' >/dev/null
     if [[ "$mode" == "deploy" ]]; then
-      [[ "$certificate_arn" == arn:aws:acm:ap-southeast-1:*:certificate/* && -n "$target_group_arn" && -n "$load_balancer_arn" ]] || { echo "set issued certificate, existing ALB and target-group ARNs" >&2; exit 2; }
-      kubectl -n "$gateway_namespace" get targetgroupbinding "$gateway_binding" -o json | jq -e --arg arn "$target_group_arn" '.spec.targetGroupARN == $arn and .spec.targetType == "ip"' >/dev/null
-      aws elbv2 describe-listeners --region "$region" --load-balancer-arn "$load_balancer_arn" --output json | jq -e --arg cert "$certificate_arn" --arg tg "$target_group_arn" 'any(.Listeners[]; .Protocol == "HTTPS" and .Port == 443 and any(.Certificates[]; .CertificateArn == $cert) and any(.DefaultActions[]; .Type == "forward" and .TargetGroupArn == $tg))' >/dev/null
-      aws elbv2 describe-target-health --region "$region" --target-group-arn "$target_group_arn" --output json | jq -e '.TargetHealthDescriptions | length > 0 and all(.[]; .TargetHealth.State == "healthy")' >/dev/null
+      [[ "$certificate_arn" == arn:aws:acm:ap-southeast-1:*:certificate/* && -n "$target_group_arn" && -n "$keycloak_target_group_arn" && -n "$load_balancer_arn" && "$vpc_id" == vpc-* ]] || { echo "set issued certificate, existing ALB, both target-group ARNs and the staging VPC ID" >&2; exit 2; }
+      kubectl -n "$gateway_namespace" get targetgroupbinding "$gateway_binding" -o json | jq -e --arg arn "$target_group_arn" '.spec.targetGroupARN == $arn and .spec.targetType == "ip" and .spec.serviceRef.name == "gateway-gateway" and .spec.serviceRef.port == 8080' >/dev/null
+      kubectl -n "$keycloak_namespace" get targetgroupbinding "$keycloak_binding" -o json | jq -e --arg arn "$keycloak_target_group_arn" '.spec.targetGroupARN == $arn and .spec.targetType == "ip" and .spec.serviceRef.name == "spectrace-keycloak-service" and .spec.serviceRef.port == 8080' >/dev/null
+      listener_arn="$(aws elbv2 describe-listeners --region "$region" --load-balancer-arn "$load_balancer_arn" --output json | jq -er --arg cert "$certificate_arn" '[.Listeners[] | select(.Protocol == "HTTPS" and .Port == 443 and any(.Certificates[]; .CertificateArn == $cert))] | if length == 1 then .[0].ListenerArn else error("expected one HTTPS listener with the supplied certificate") end')"
+      aws elbv2 describe-rules --region "$region" --listener-arn "$listener_arn" --output json | jq -e --arg keycloak "$keycloak_target_group_arn" --arg gateway "$target_group_arn" '
+        any(.Rules[]; any(.Conditions[]?; .Field == "path-pattern" and any(.Values[]?; . == "/auth/*")) and any(.Actions[]?; .Type == "forward" and .TargetGroupArn == $keycloak)) and
+        any(.Rules[]; any(.Conditions[]?; .Field == "path-pattern" and any(.Values[]?; . == "/api/*")) and any(.Actions[]?; .Type == "forward" and .TargetGroupArn == $gateway))
+      ' >/dev/null
+      aws elbv2 describe-target-groups --region "$region" --target-group-arns "$target_group_arn" "$keycloak_target_group_arn" --output json | jq -e --arg vpc "$vpc_id" --arg gateway "$target_group_arn" --arg keycloak "$keycloak_target_group_arn" '
+        (.TargetGroups | length == 2) and
+        all(.TargetGroups[]; .TargetType == "ip" and .VpcId == $vpc and (.TargetGroupArn == $gateway or .TargetGroupArn == $keycloak)) and
+        any(.TargetGroups[]; .TargetGroupArn == $gateway) and any(.TargetGroups[]; .TargetGroupArn == $keycloak)
+      ' >/dev/null
+      for group_arn in "$target_group_arn" "$keycloak_target_group_arn"; do
+        aws elbv2 describe-target-health --region "$region" --target-group-arn "$group_arn" --output json | jq -e '.TargetHealthDescriptions | length > 0 and all(.[]; .TargetHealth.State == "healthy")' >/dev/null || {
+          echo "target group has missing or unhealthy targets: $group_arn" >&2
+          exit 1
+        }
+      done
     fi
     kubectl get networkpolicy -A -o json | jq -e 'any(.items[]; .metadata.name == "stcn-kube-system-required-traffic") and any(.items[]; .metadata.name == "stcn-default-deny-gateway")' >/dev/null
-    echo "EKS foundations are ready; existing-ALB HTTPS routing was checked in deploy mode."
+    echo "EKS foundations are ready; both existing-ALB path routes and target groups were checked in deploy mode."
     ;;
   cleanup)
     error_file="$(mktemp)"

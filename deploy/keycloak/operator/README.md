@@ -32,10 +32,16 @@ The Keycloak operator and the `Keycloak` custom resource belong to M5 (G1-M5); `
 and `spec.keycloakCRName` must match that install before applying.
 
 ```bash
-kubectl -n spectrace apply -f deploy/keycloak/operator/keycloak-realm-import.yaml
-kubectl -n spectrace wait --for=condition=Done keycloakrealmimport/spectrace-realm --timeout=300s
-kubectl -n spectrace logs job/spectrace-realm   # the import log when the condition is HasErrors
+kubectl -n keycloak apply -f deploy/keycloak/operator/keycloak-realm-import.yaml
+kubectl -n keycloak wait --for=condition=Done keycloakrealmimport/spectrace-realm --timeout=300s
+kubectl -n keycloak logs job/spectrace-realm   # the import log when the condition is HasErrors
 ```
+
+Apply deploy/kubernetes/staging/keycloak-targetgroupbinding.yaml only after the
+Keycloak Service has ready endpoints and the AWS Load Balancer Controller CRD is
+established. A TargetGroupBinding manages target registration for that target
+group; applying it before the Keycloak Pod is ready can leave /auth/* without
+healthy targets.
 
 Then verify the running issuer exactly like the local profile:
 
