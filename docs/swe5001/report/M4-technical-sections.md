@@ -2,7 +2,7 @@
 > `4ea7f0f0`, all checks and the SonarCloud quality gate green) is merged on `main`. The deployed
 > Label → ReviewTask acceptance and the staging security evidence remain **BLOCKED / NOT RUN**: no
 > deployment has run yet (zero GitHub deployment records; the platform PRs that carry the deployment
-> path and the `label.published.v2` binding — #39/#55/#58 — are still open), the protected `staging`
+> path and the `label.published.v2` binding — #39/#55 - #58 (the protected staging release workflow) is merged, and the public entry is live and resolving (ACM issued, ALB created, HTTPS validating); Keycloak and Gateway path forwarding are the remaining gap, so realm discovery answers 503 — are still open), the protected `staging`
 > environment still lacks its variables and secrets, the OIDC deploy role and a VPC runner, and no
 > window (spend ceiling, destroy time) is approved. M5 verified the AWS identity and the private
 > cluster path in its 14 October read-only check; no application workload is deployed. No value in
@@ -90,7 +90,7 @@ The 401/403/cross-organisation matrix, NetworkPolicy enforcement and the secret 
 deployed environment. Blockers, recorded on STCN-108: the protected `staging` environment (created
 on 14 October, `main` only, with M1 as the required reviewer) still needs its variables and secrets,
 the OIDC deploy role and a VPC runner; no window (spend ceiling and destroy time) is approved; and the
-platform PRs that carry the deployment path and the `label.published.v2` binding (#39/#55/#58) are
+platform PRs that carry the deployment path and the `label.published.v2` binding (#39/#55 - #58 (the protected staging release workflow) is merged, and the public entry is live and resolving (ACM issued, ALB created, HTTPS validating); Keycloak and Gateway path forwarding are the remaining gap, so realm discovery answers 503) are
 still open. M5's 14 October read-only check verified the AWS identity and private cluster
 reachability, but no application workload is deployed. **Nothing was run and no local substitute is
 presented as staging evidence.** The deployment inputs are on #39 and the co-testing identities and
