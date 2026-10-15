@@ -55,6 +55,28 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
     condition     = yamldecode(helm_release.cluster_autoscaler.values[0]).fullnameOverride == "cluster-autoscaler" && yamldecode(helm_release.cluster_autoscaler.values[0]).image.tag == "v1.36.0" && yamldecode(helm_release.load_balancer_controller.values[0]).replicaCount == 2
     error_message = "The controllers must use stable names, matching Kubernetes minor version, and declared replicas."
   }
+  assert {
+    condition = (
+      length(jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement) == 2 &&
+      toset(one([
+        for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Action
+        if contains(statement.Action, "elasticloadbalancing:RegisterTargets")
+      ])) == toset(["elasticloadbalancing:RegisterTargets", "elasticloadbalancing:DeregisterTargets"]) &&
+      toset(one([
+        for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Resource
+        if contains(statement.Action, "elasticloadbalancing:RegisterTargets")
+        ])) == toset([
+        "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-keycloak/6c9f10642dd79519",
+        "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-gateway/b8c46985507e8b58"
+        ]) && alltrue([
+        for action in flatten([for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Action]) :
+        startswith(action, "ec2:Describe") || startswith(action, "ec2:Get") ||
+        startswith(action, "elasticloadbalancing:Describe") ||
+        contains(["elasticloadbalancing:RegisterTargets", "elasticloadbalancing:DeregisterTargets"], action)
+      ])
+    )
+    error_message = "The TGB-only controller must register targets only on the two approved groups and cannot create or mutate ALB infrastructure."
+  }
 }
 
 run "https_does_not_expose_or_replace_internal_edge" {
