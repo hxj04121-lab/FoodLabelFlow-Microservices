@@ -165,7 +165,13 @@ class KeycloakRealmContractTest {
     void reusesTheSeededBusinessRoleVocabulary() {
         Set<String> roles = new TreeSet<>();
         for (JsonNode role : realm.path("roles").path("realm")) {
-            roles.add(role.path("name").asText());
+            String name = role.path("name").asText();
+            if (name.startsWith("default-roles-")) {
+                // Keycloak's built-in realm default role is infrastructure, not a business role; the
+                // realm declares it so imported users inherit the account client roles.
+                continue;
+            }
+            roles.add(name);
         }
         assertEquals(new TreeSet<>(BUSINESS_ROLES), roles,
                 "realm roles must match V3__baseline_seed.sql role codes");
