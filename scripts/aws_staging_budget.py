@@ -190,7 +190,7 @@ def under_budget(final_cost, available_credit):
     return cost <= credit
 
 
-def report(data, hours, experiment_hours, k6_hours, credit, require_gate=False):
+def report(data, hours, experiment_hours, k6_hours, credit, approved_spend=None, require_gate=False):
     rows, raw, margin, final = estimate(data, hours, experiment_hours, k6_hours)
     print("AWS Staging Budget Check")
     print(f"Region: {REGION}")
@@ -203,17 +203,19 @@ def report(data, hours, experiment_hours, k6_hours, credit, require_gate=False):
     print(f"\nRaw estimated cost:        ${raw:.2f}")
     print(f"Safety margin (20%):       ${margin:.2f}")
     print(f"Final estimated cost:      ${final:.2f}")
-    if credit is None:
+    if credit is None and approved_spend is None:
         print("Available AWS credit:      UNVERIFIED")
         print("Gate result:               UNVERIFIED")
         return 2 if require_gate else 0
-    amount = decimal(credit, "available credit")
-    if amount < 0:
-        raise ValueError("available credit must be non-negative")
-    remaining = amount - final
-    passed = under_budget(final, amount)
-    print(f"Available AWS credit:      ${amount:.2f} (explicit input)")
-    print(f"Remaining after window:    ${remaining:.2f}")
+    credit_amount = Decimal("0") if credit is None else decimal(credit, "available credit")
+    spend_amount = Decimal("0") if approved_spend is None else decimal(approved_spend, "owner-approved spend limit")
+    if credit_amount < 0 or spend_amount < 0:
+        raise ValueError("available credit and owner-approved spend limit must be non-negative")
+    remaining = credit_amount + spend_amount - final
+    passed = final <= credit_amount + spend_amount
+    print("Available AWS credit:      UNVERIFIED" if credit is None else f"Available AWS credit:      ${credit_amount:.2f} (explicit input)")
+    print("Owner-approved spend:      $0.00 (not configured)" if approved_spend is None else f"Owner-approved spend:      ${spend_amount:.2f} (explicit authorization)")
+    print(f"Remaining authorized:      ${remaining:.2f}")
     print(f"Gate result:               {'PASS' if passed else 'FAIL'}")
     return 0 if passed else 1
 
@@ -225,7 +227,9 @@ def main():
     parser.add_argument("--experiment-hours", type=Decimal)
     parser.add_argument("--k6-hours", type=Decimal)
     parser.add_argument("--available-credit-usd", type=Decimal, default=os.getenv("AVAILABLE_CREDIT_USD") or None)
-    parser.add_argument("--require-gate", action="store_true", help="fail unless available credit is supplied and the cost fits")
+    parser.add_argument("--approved-spend-usd", type=Decimal, default=os.getenv("APPROVED_STAGING_SPEND_USD") or None,
+                        help="owner-approved spend limit; does not imply credit or change AWS billing")
+    parser.add_argument("--require-gate", action="store_true", help="fail unless verified credit or approved spend covers the estimate")
     parser.add_argument("command", nargs="?", choices=("estimate", "quota", "refresh-pricing"), default="estimate")
     args = parser.parse_args()
     try:
@@ -241,7 +245,8 @@ def main():
         hours = args.hours if args.hours is not None else Decimal(str(defaults["hours"]))
         experiment_hours = args.experiment_hours if args.experiment_hours is not None else Decimal(str(defaults["experiment_hours"]))
         k6_hours = args.k6_hours if args.k6_hours is not None else Decimal(str(defaults["k6_hours"]))
-        return report(data, hours, experiment_hours, k6_hours, args.available_credit_usd, args.require_gate)
+        return report(data, hours, experiment_hours, k6_hours, args.available_credit_usd,
+                      args.approved_spend_usd, args.require_gate)
     except (OSError, KeyError, TypeError, ValueError, csv.Error) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
