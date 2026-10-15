@@ -1,40 +1,47 @@
 serviceName: gateway
-# M3 supplies the actual ALB-facing ingress selectors at integration.
+replicaCount: 1
+image:
+  repository: ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway
+  tag: 573de46
+  digest: sha256:d4190ea6ee31b84e7b67d36ad56e6391612c8bdc4916b8bb14d28b9a17f6ab47
+  pullPolicy: IfNotPresent
+# The current staging cluster has a single general node; multi-zone spread would block scheduling.
+spread:
+  enabled: false
+  minimumZones: 1
 networkPolicy:
+  enabled: true
+  ingressFromServices: []
   ingressFromPeers: [{namespace: observability, name: grafana-alloy}]
+  allowDNS: true
   egressRules:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: keycloak}
+          podSelector:
+            matchLabels: {app: keycloak}
+      ports: [{port: 8080, protocol: TCP}]
     - to:
         - namespaceSelector:
             matchLabels: {kubernetes.io/metadata.name: specification}
           podSelector:
-            matchLabels:
-              app.kubernetes.io/name: specification
+            matchLabels: {app.kubernetes.io/name: specification}
       ports: [{port: 8080, protocol: TCP}]
     - to:
         - namespaceSelector:
             matchLabels: {kubernetes.io/metadata.name: formulation}
           podSelector:
-            matchLabels:
-              app.kubernetes.io/name: formulation
+            matchLabels: {app.kubernetes.io/name: formulation}
       ports: [{port: 8080, protocol: TCP}]
     - to:
         - namespaceSelector:
             matchLabels: {kubernetes.io/metadata.name: compliance}
           podSelector:
-            matchLabels:
-              app.kubernetes.io/name: compliance
+            matchLabels: {app.kubernetes.io/name: compliance}
       ports: [{port: 8080, protocol: TCP}]
     - to:
         - namespaceSelector:
             matchLabels: {kubernetes.io/metadata.name: label-workflow}
           podSelector:
-            matchLabels:
-              app.kubernetes.io/name: label-workflow
-      ports: [{port: 8080, protocol: TCP}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: keycloak}
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: keycloak
+            matchLabels: {app.kubernetes.io/name: label-workflow}
       ports: [{port: 8080, protocol: TCP}]

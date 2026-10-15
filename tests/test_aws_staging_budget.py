@@ -109,11 +109,14 @@ class AwsStagingBudgetTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, 'invalid'):
                         estimate(fixture(), *values)
 
-    def run_cli(self, *args, credit_env=None):
+    def run_cli(self, *args, credit_env=None, spend_env=None):
         env = dict(os.environ)
         env.pop('AVAILABLE_CREDIT_USD', None)
+        env.pop('APPROVED_STAGING_SPEND_USD', None)
         if credit_env is not None:
             env['AVAILABLE_CREDIT_USD'] = credit_env
+        if spend_env is not None:
+            env['APPROVED_STAGING_SPEND_USD'] = spend_env
         return subprocess.run([sys.executable, 'scripts/aws_staging_budget.py', *args],
                               cwd=CONFIG.parents[1], env=env, capture_output=True, text=True)
 
@@ -135,6 +138,30 @@ class AwsStagingBudgetTests(unittest.TestCase):
         p = self.run_cli('--require-gate', credit_env=str(final))
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertIn('Gate result:               PASS', p.stdout)
+
+    def test_gate_cli_owner_approved_spend_covers_no_credit(self):
+        final = estimate(fixture(), 24, 4, 2)[3]
+        p = self.run_cli('--require-gate', spend_env=str(final))
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn('Available AWS credit:      UNVERIFIED', p.stdout)
+        self.assertIn('Owner-approved spend:', p.stdout)
+        self.assertIn('Gate result:               PASS', p.stdout)
+
+    def test_gate_cli_credit_and_spend_can_cover_separate_parts(self):
+        final = estimate(fixture(), 24, 4, 2)[3]
+        p = self.run_cli('--require-gate', credit_env=str(final / 2), spend_env=str(final / 2))
+        self.assertEqual(p.returncode, 0, p.stderr)
+
+    def test_gate_cli_insufficient_approved_spend_fails(self):
+        final = estimate(fixture(), 24, 4, 2)[3]
+        p = self.run_cli('--require-gate', spend_env=str(final - Decimal('0.01')))
+        self.assertEqual(p.returncode, 1, p.stderr)
+        self.assertIn('Gate result:               FAIL', p.stdout)
+
+    def test_gate_cli_invalid_approved_spend_blocks(self):
+        for value in ('NaN', 'Infinity', '-Infinity', '-1'):
+            with self.subTest(value=value):
+                self.assertEqual(self.run_cli('--require-gate', spend_env=value).returncode, 2)
 
     def test_gate_cli_invalid_balance_blocks(self):
         for value in ('NaN', 'Infinity', '-Infinity', '-1'):
