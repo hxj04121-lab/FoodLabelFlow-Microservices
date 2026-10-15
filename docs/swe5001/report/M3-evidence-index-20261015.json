@@ -1,0 +1,382 @@
+{
+  "schemaVersion": 1,
+  "recordType": "M3_REPORT_EVIDENCE_SNAPSHOT",
+  "reportDateSingapore": "2026-10-15",
+  "verifiedAt": "2026-10-15T06:53:29.208294+00:00",
+  "implementationCheckpoint": "5beb98a5b2fe56f1b30d7ada54d145bac9d5ad02",
+  "reportBaseMain": "afc90e0838d57eba09c7922fae44e3e78ae14ade",
+  "implementationRuns": [
+    {
+      "id": 38532363300,
+      "name": "CI",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363300",
+      "jobs": [
+        {
+          "name": "backend",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363300/job/115746990350",
+          "id": 115746990350
+        },
+        {
+          "name": "security",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363300/job/115746990777",
+          "id": 115746990777
+        },
+        {
+          "name": "frontend",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363300/job/115746990820",
+          "id": 115746990820
+        },
+        {
+          "name": "platform-services",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363300/job/115746990839",
+          "id": 115746990839
+        },
+        {
+          "name": "containers",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363300/job/115748174911",
+          "id": 115748174911
+        },
+        {
+          "name": "SonarQube analysis",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363300/job/115748704727",
+          "id": 115748704727
+        }
+      ]
+    },
+    {
+      "id": 38532363285,
+      "name": "SWE5001 M3 gateway and sign-in",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363285",
+      "jobs": [
+        {
+          "name": "frontend",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363285/job/115746991191",
+          "id": 115746991191
+        },
+        {
+          "name": "gateway",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363285/job/115746991227",
+          "id": 115746991227
+        },
+        {
+          "name": "real-keycloak",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363285/job/115748049061",
+          "id": 115748049061
+        },
+        {
+          "name": "pages",
+          "status": "completed",
+          "conclusion": "skipped",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363285/job/115748051647",
+          "id": 115748051647
+        },
+        {
+          "name": "publish-gateway",
+          "status": "completed",
+          "conclusion": "skipped",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532363285/job/115749248122",
+          "id": 115749248122
+        }
+      ]
+    },
+    {
+      "id": 38532352262,
+      "name": "SWE5001 M3 gateway and sign-in",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532352262",
+      "jobs": [
+        {
+          "name": "gateway",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532352262/job/115746957694",
+          "id": 115746957694
+        },
+        {
+          "name": "frontend",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532352262/job/115746958012",
+          "id": 115746958012
+        },
+        {
+          "name": "real-keycloak",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532352262/job/115747917276",
+          "id": 115747917276
+        },
+        {
+          "name": "pages",
+          "status": "completed",
+          "conclusion": "skipped",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532352262/job/115747919517",
+          "id": 115747919517
+        },
+        {
+          "name": "publish-gateway",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38532352262/job/115749134420",
+          "id": 115749134420
+        }
+      ]
+    }
+  ],
+  "mainObservation": {
+    "sha": "afc90e0838d57eba09c7922fae44e3e78ae14ade",
+    "runs": [
+      {
+        "id": 38694436918,
+        "name": "AWS staging window estimate",
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436918",
+        "jobs": [
+          {
+            "name": "budget",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436918/job/116287592779",
+            "id": 116287592779
+          }
+        ]
+      },
+      {
+        "id": 38694437004,
+        "name": "Terraform validation",
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694437004",
+        "jobs": [
+          {
+            "name": "validate",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694437004/job/116287593073",
+            "id": 116287593073
+          },
+          {
+            "name": "plan",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694437004/job/116287874481",
+            "id": 116287874481
+          }
+        ]
+      },
+      {
+        "id": 38694436953,
+        "name": "CI",
+        "event": "push",
+        "status": "in_progress",
+        "conclusion": null,
+        "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436953",
+        "jobs": [
+          {
+            "name": "runtime-secrets",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436953/job/116287593162",
+            "id": 116287593162
+          },
+          {
+            "name": "database-privileges",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436953/job/116287593291",
+            "id": 116287593291
+          },
+          {
+            "name": "platform-services",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436953/job/116287593324",
+            "id": 116287593324
+          },
+          {
+            "name": "backend",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436953/job/116287593374",
+            "id": 116287593374
+          },
+          {
+            "name": "frontend",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436953/job/116287593421",
+            "id": 116287593421
+          },
+          {
+            "name": "deployment-evidence",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436953/job/116287593495",
+            "id": 116287593495
+          },
+          {
+            "name": "security",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436953/job/116287593567",
+            "id": 116287593567
+          },
+          {
+            "name": "observability-alerts",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436953/job/116287593580",
+            "id": 116287593580
+          },
+          {
+            "name": "containers",
+            "status": "completed",
+            "conclusion": "failure",
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436953/job/116288657561",
+            "id": 116288657561
+          },
+          {
+            "name": "SonarQube analysis",
+            "status": "in_progress",
+            "conclusion": null,
+            "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/38694436953/job/116289461833",
+            "id": 116289461833
+          }
+        ]
+      }
+    ]
+  },
+  "gatewayRelease": {
+    "commit": "5beb98a5b2fe56f1b30d7ada54d145bac9d5ad02",
+    "image": "ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway:5beb98a5b2fe56f1b30d7ada54d145bac9d5ad02",
+    "digestReference": "ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway@sha256:d4190ea6ee31b84e7b67d36ad56e6391612c8bdc4916b8bb14d28b9a17f6ab47",
+    "port": 8080,
+    "readiness": "/actuator/health/readiness",
+    "liveness": "/actuator/health/liveness",
+    "anonymousRegistryDigestVerified": true
+  },
+  "publicEvidence": [
+    {
+      "path": "../evidence/G2-M3-real-workflow-5beb98a.json",
+      "sha256": "0cc713c6b175a2147c5eba07da6ef8df6d20a74e295c9c21e22c598412e72e07",
+      "sourceSha": "5beb98a5b2fe56f1b30d7ada54d145bac9d5ad02",
+      "runId": 38532352262
+    },
+    {
+      "path": "../evidence/G2-M3-real-published-5beb98a.png",
+      "sha256": "7632d1f7b871ecbb39bff84ffbf0d8f8f52003f08c801ceb0204a226f72bda4e",
+      "sourceSha": "5beb98a5b2fe56f1b30d7ada54d145bac9d5ad02",
+      "runId": 38532352262
+    }
+  ],
+  "mergedM3PullRequests": [
+    {
+      "number": 37,
+      "state": "closed",
+      "merged": true,
+      "mergedAt": "2026-10-13T13:06:04Z",
+      "mergeCommit": "ecffc5f78d12150bade29b46b8ebe2a4f60d81c4",
+      "head": "3860270ec06b5614c0526b26e07db52df42477d1",
+      "base": "main",
+      "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/37"
+    },
+    {
+      "number": 54,
+      "state": "closed",
+      "merged": true,
+      "mergedAt": "2026-10-14T14:16:26Z",
+      "mergeCommit": "ec595de37cf0fd17ffc31e2890dd4416b8d0e9bb",
+      "head": "5beb98a5b2fe56f1b30d7ada54d145bac9d5ad02",
+      "base": "main",
+      "url": "https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/54"
+    }
+  ],
+  "acceptance": {
+    "G1_staging": "NOT_RUN",
+    "G2_staging": "NOT_RUN",
+    "G3_full_demo_staging": "NOT_RUN",
+    "exactly_one_ReviewTask": "OWNER_EVIDENCE_REQUIRED",
+    "LabelPublished_v2_consumer_application": "OWNER_EVIDENCE_REQUIRED",
+    "M4_human_acceptance": "PENDING",
+    "STCN_103_104": "DESCOPED"
+  },
+  "mainFailure": {
+    "job": "containers",
+    "jobId": 116288657561,
+    "phase": "backend Docker build Maven dependency:go-offline",
+    "observedFailure": "Maven Central returned HTTP 502 retrieving org.apache.maven.doxia:doxia-module-markdown:1.11.1",
+    "interpretation": "Dependency-download failure observed in job log; no successful retry or full-main pass is claimed."
+  },
+  "limits": [
+    "CI artifacts are disposable real-component evidence, not AWS staging acceptance.",
+    "This report snapshot does not prove a live Runner, deployed Pods, HTTPS readiness or owner-approved deployment.",
+    "No tracker transition, worklog duration, team final submission or private credentials are inferred."
+  ],
+  "testSummaries": [
+    {
+      "suite": "Gateway",
+      "passed": 41,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "jobId": 115746957694
+    },
+    {
+      "suite": "Frontend reference profile",
+      "passed": 67,
+      "jobId": 115748704727
+    },
+    {
+      "suite": "Authenticated protocol fixtures",
+      "passed": 72,
+      "jobId": 115746958012
+    },
+    {
+      "suite": "Pages checks",
+      "passed": 7,
+      "jobId": 115746958012
+    },
+    {
+      "suite": "Deployed/demo config groups",
+      "passed": 3,
+      "jobId": 115746958012
+    },
+    {
+      "suite": "Real sign-in/seed then real G2 workflow",
+      "passedByPhase": [
+        5,
+        1
+      ],
+      "jobId": 115747917276
+    }
+  ]
+}

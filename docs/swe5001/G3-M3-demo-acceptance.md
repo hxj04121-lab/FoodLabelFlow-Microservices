@@ -1,4 +1,4 @@
-# M3 demo-path acceptance — 14 October 2026
+# M3 demo-path acceptance — 15 October 2026
 
 STCN-102 belongs to M3. The prepared Playwright profile follows the public demo
 path using real, separate supplier, manufacturer maker and checker identities.
@@ -16,13 +16,34 @@ The Impact inbox's local protocol fixtures are independent UI evidence.
 3. M1 confirms the actual deployed product, current formula, Chocolate Base
    previous specification, provenance and soy ingredient IDs. Local seeded data
    already exists; this requirement concerns the actual deployment.
-4. M1/M4 prepare and identify a **current PUBLISHED baseline label** for that
-   product/jurisdiction, with declarations that make the soy change meaningful.
-   Seeded products/formulas alone are insufficient for this Phase 2 scenario.
+4. M4 publishes and identifies a **current PUBLISHED baseline label** for the
+   actual product/jurisdiction on staging. M1 then records its `labelVersionId`
+   and business `versionNumber` alongside the actual specification/formula tuple.
+   Seeded products/formulas alone do not supply the baseline label for
+   `prod_usda_1118468`. Its declarations must make the soy change meaningful.
 5. M4 supplies approved native subjects, organisations, complete roles and test
    credentials through the secret channel. The maker needs LABEL_OFFICER,
    CHANGE_MANAGER and ADMIN_DATA_MAINTENANCE; the distinct checker needs APPROVER
    and PUBLISHER; the supplier needs ADMIN_DATA_MAINTENANCE for specification writes.
+
+### Seed expectations awaiting staging confirmation
+
+M1 provided these deterministic seed expectations in
+[the PR54 review](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/54#pullrequestreview-5514371795),
+consistent with [the demo dataset](data/demo-soy-lecithin-expected.json).
+They are preparation inputs, **not verified deployed values**. The baseline label
+and actual rule-set binding must come from the deployed service; no label ID or
+rule-set ID is invented from a local/CI run.
+
+| Input | Expected seed value |
+| --- | --- |
+| Supplier organisation | `org-supplier-beta` |
+| Product / manufacturer | `prod_usda_1118468` / `org-manufacturer-north` |
+| Material / previous specification | `mat_chocolate_base` / `spec_chocolate_v1` |
+| Current formula | `formula_1118468_v1` |
+| Added ingredient / provenance | `ing_soy_lecithin` / `prov_project_seed` |
+| Jurisdiction / expected new allergen | `US` / `all_soy` |
+| Baseline label ID and business version | **PENDING M4 publication and M1 verification** |
 
 ## Reproduction
 
@@ -54,6 +75,13 @@ or interrupted run may have committed resources. Check its outcome with owners
 before rerunning; changing expected-current IDs to suppress a conflict is not a
 recovery procedure. No data-volume reset, direct service/DB call, AWS action,
 load test or Pod deletion is performed by this browser profile.
+
+The soy-change demo performs a new specification release and explicit formula
+adoption; it is **not idempotent** on the same dataset. Before a rerun, reconcile
+the latest specification, current formula and baseline label tuple with M1/M4.
+Use a fresh owner-approved disposable scenario or an explicitly approved dataset
+reset procedure. Merely replacing the previous-spec ID while leaving stale
+formula/label bindings is insufficient. This document does not authorise a reset.
 
 ## Evidence and remaining acceptance boundary
 
