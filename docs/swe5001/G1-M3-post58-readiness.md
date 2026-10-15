@@ -54,8 +54,17 @@ The same recording case passed three local video-enabled runs. Its intermittent
 CI timeout has no confirmed code-level root cause. M3 requested exactly one
 targeted retry of the failed frontend job and its disposable-CI dependants,
 preserving the first attempt's trace/video artifact. No assertions, timeouts,
-role checks or business behavior were weakened. The retry result must be checked
-on that exact run/source before calling it successful.
+role checks or business behavior were weakened.
+
+The second attempt subsequently completed successfully on the same exact main
+source a0fc86b794f4776f03e630e1b307bf21726b328e. Its frontend job 116299269231
+passed all 72 authenticated cases, the additional recording case, seven Pages
+checks and the deployed/demo configuration guard groups. The real-component job
+116300363701 passed five sign-in/seed cases and the real G2 browser workflow.
+Gateway verification also succeeded; Pages publication and Gateway image
+publication were conditionally skipped. These results establish a successful
+retry of disposable integration CI, not a diagnosed timeout fix or live staging
+acceptance. The first-attempt failure remains part of the evidence history.
 
 This CI workflow is different from the protected AWS release workflow; retrying
 the test job does not install Gateway in EKS or authorize a staging window.
