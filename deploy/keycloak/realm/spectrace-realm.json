@@ -50,43 +50,8 @@
       {
         "name": "CHANGE_MANAGER",
         "description": "Creates change requests and launches impact analysis. Permissions: CHANGE_REQUEST.CREATE, IMPACT.RUN."
-      },
-      {
-        "name": "default-roles-spectrace",
-        "description": "${role_default-roles}",
-        "composite": true,
-        "composites": {
-          "realm": [
-            "offline_access",
-            "uma_authorization"
-          ],
-          "client": {
-            "account": [
-              "view-profile",
-              "manage-account"
-            ]
-          }
-        }
       }
-    ],
-    "client": {
-      "account": [
-        {
-          "name": "view-profile",
-          "description": "",
-          "composite": false,
-          "clientRole": true,
-          "containerId": "7af1d2f6-2a4c-4f6f-9d5c-3ac4d24a2a01"
-        },
-        {
-          "name": "manage-account",
-          "description": "",
-          "composite": false,
-          "clientRole": true,
-          "containerId": "7af1d2f6-2a4c-4f6f-9d5c-3ac4d24a2a01"
-        }
-      ]
-    }
+    ]
   },
   "clientScopes": [
     {
@@ -263,36 +228,6 @@
       },
       "defaultClientScopes": [],
       "optionalClientScopes": []
-    },
-    {
-      "id": "7af1d2f6-2a4c-4f6f-9d5c-3ac4d24a2a01",
-      "clientId": "account",
-      "name": "${client_account}",
-      "rootUrl": "${authBaseUrl}",
-      "baseUrl": "/realms/spectrace/account/",
-      "surrogateAuthRequired": false,
-      "enabled": true,
-      "alwaysDisplayInConsole": false,
-      "clientAuthenticatorType": "client-secret",
-      "defaultRoles": [
-        "view-profile",
-        "manage-account"
-      ],
-      "redirectUris": [
-        "/realms/spectrace/account/*"
-      ],
-      "webOrigins": [],
-      "notBefore": 0,
-      "bearerOnly": false,
-      "consentRequired": false,
-      "standardFlowEnabled": true,
-      "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": false,
-      "publicClient": false,
-      "frontchannelLogout": false,
-      "protocol": "openid-connect",
-      "attributes": {}
     }
   ],
   "users": [
