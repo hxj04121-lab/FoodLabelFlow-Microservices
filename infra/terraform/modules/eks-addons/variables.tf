@@ -74,35 +74,6 @@ variable "database_subnet_cidrs" {
   }
 }
 
-variable "acm_certificate_arn" {
-  description = "Existing ACM certificate ARN for the staging Gateway HTTPS ALB listener."
-  type        = string
-
-  validation {
-    condition     = can(regex("^arn:aws:acm:ap-southeast-1:[0-9]{12}:certificate/[0-9a-fA-F-]+$", var.acm_certificate_arn))
-    error_message = "Use the existing ACM certificate ARN in ap-southeast-1."
-  }
-}
-
-variable "staging_domain" {
-  description = "DNS name covered by the existing ACM certificate."
-  type        = string
-}
-
-variable "alb_ingress_cidrs" {
-  description = "Reviewed source CIDRs allowed to access the public Gateway ALB."
-  type        = list(string)
-  validation {
-    condition     = length(var.alb_ingress_cidrs) > 0 && alltrue([for cidr in var.alb_ingress_cidrs : can(cidrhost(cidr, 0))])
-    error_message = "Set at least one valid, reviewed source CIDR for the staging ALB."
-  }
-}
-
-variable "gateway_service_name" {
-  description = "Kubernetes Service name exported by the Gateway chart."
-  type        = string
-}
-
 variable "workload_namespaces" {
   description = "Namespaces to create for gateway, keycloak, rabbitmq, observability, specification, formulation, compliance, and label-workflow."
   type        = map(string)
@@ -166,4 +137,10 @@ variable "metrics_server_chart_version" {
   description = "Pinned metrics-server chart version."
   type        = string
   default     = "3.14.0"
+}
+
+variable "manage_vpc_cni" {
+  description = "Migrate the self-managed CNI only after explicit inventory and approval."
+  type        = bool
+  default     = false
 }

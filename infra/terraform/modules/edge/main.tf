@@ -25,7 +25,7 @@ resource "aws_security_group" "this" {
 
 resource "aws_lb" "this" {
   name                       = substr(replace("${var.name}-alb", "_", "-"), 0, 32)
-  internal                   = length(var.ingress_cidrs) == 0 || var.certificate_arn == ""
+  internal                   = var.internal
   load_balancer_type         = "application"
   drop_invalid_header_fields = true
   security_groups            = [aws_security_group.this.id]

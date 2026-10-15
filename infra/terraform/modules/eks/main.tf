@@ -32,14 +32,26 @@ resource "aws_security_group" "nodes" {
   tags = merge(var.tags, { Name = "${var.name}-eks-nodes" })
 }
 
-resource "aws_security_group_rule" "nodes_self" {
+resource "aws_security_group_rule" "nodes_self_tcp" {
+  # Replies are stateful; no ephemeral-port range is needed between worker ENIs.
+  for_each          = toset(["53", "4317", "4369", "5672", "8080", "10250", "15672", "15692", "25672"])
   type              = "ingress"
-  description       = "Node-to-node traffic"
+  description       = "Node-to-node workload TCP ${each.key}"
   security_group_id = aws_security_group.nodes.id
   self              = true
-  from_port         = 0
-  to_port           = 0
-  protocol          = "-1"
+  from_port         = tonumber(each.key)
+  to_port           = tonumber(each.key)
+  protocol          = "tcp"
+}
+
+resource "aws_security_group_rule" "nodes_self_dns_udp" {
+  type              = "ingress"
+  description       = "Node-to-node DNS UDP"
+  security_group_id = aws_security_group.nodes.id
+  self              = true
+  from_port         = 53
+  to_port           = 53
+  protocol          = "udp"
 }
 
 resource "aws_security_group_rule" "cluster_api_from_nodes" {
@@ -54,11 +66,25 @@ resource "aws_security_group_rule" "cluster_api_from_nodes" {
 
 resource "aws_security_group_rule" "nodes_from_cluster" {
   type                     = "ingress"
-  description              = "Control plane to kubelet and webhook ports"
+  description              = "Control plane to kubelet"
   security_group_id        = aws_security_group.nodes.id
   source_security_group_id = aws_security_group.cluster.id
-  from_port                = 1025
-  to_port                  = 65535
+  from_port                = 10250
+  to_port                  = 10250
+  protocol                 = "tcp"
+
+  lifecycle { create_before_destroy = true }
+  depends_on = [aws_security_group_rule.nodes_webhooks_from_cluster]
+}
+
+resource "aws_security_group_rule" "nodes_webhooks_from_cluster" {
+  for_each                 = toset(["4443", "9443"])
+  type                     = "ingress"
+  description              = "Control plane to controller webhook TCP ${each.key}"
+  security_group_id        = aws_security_group.nodes.id
+  source_security_group_id = aws_security_group.cluster.id
+  from_port                = tonumber(each.key)
+  to_port                  = tonumber(each.key)
   protocol                 = "tcp"
 }
 

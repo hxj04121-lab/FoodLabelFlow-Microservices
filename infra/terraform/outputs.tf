@@ -28,15 +28,15 @@ output "rds_endpoint" {
 }
 
 output "alb_dns_name" {
-  value = var.enable_alb && !var.enable_eks_addons ? module.edge[0].dns_name : null
+  value = var.enable_alb ? module.edge[0].dns_name : null
 }
 
 output "alb_target_group_arn" {
-  value = var.enable_alb && !var.enable_eks_addons ? module.edge[0].target_group_arn : null
+  value = var.enable_alb ? module.edge[0].target_group_arn : null
 }
 
 output "alb_security_group_id" {
-  value = var.enable_alb && !var.enable_eks_addons ? module.edge[0].security_group_id : null
+  value = var.enable_alb ? module.edge[0].security_group_id : null
 }
 
 output "acm_dns_validation_options" {

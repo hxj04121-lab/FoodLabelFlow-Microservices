@@ -5,7 +5,9 @@ mode="${1:-}"
 cluster_name="${STCN_EKS_CLUSTER_NAME:-}"
 region="${AWS_REGION:-ap-southeast-1}"
 gateway_namespace="${STCN_GATEWAY_NAMESPACE:-gateway}"
-gateway_ingress="${STCN_GATEWAY_INGRESS:-gateway}"
+gateway_binding="${STCN_GATEWAY_BINDING:-gateway-gateway}"
+target_group_arn="${STCN_ALB_TARGET_GROUP_ARN:-}"
+load_balancer_arn="${STCN_ALB_ARN:-}"
 certificate_arn="${STCN_ACM_CERTIFICATE_ARN:-}"
 if [[ "$region" != "ap-southeast-1" || -z "$cluster_name" ]]; then
   echo "set STCN_EKS_CLUSTER_NAME and use AWS_REGION=ap-southeast-1" >&2
@@ -16,26 +18,29 @@ for command in aws jq; do
 done
 
 case "$mode" in
-  deploy)
+  foundations|deploy)
     command -v kubectl >/dev/null || { echo "missing required command: kubectl" >&2; exit 127; }
-    [[ "$certificate_arn" == arn:aws:acm:ap-southeast-1:*:certificate/* ]] || { echo "set STCN_ACM_CERTIFICATE_ARN to the issued staging ACM certificate" >&2; exit 2; }
-    for addon in vpc-cni aws-ebs-csi-driver; do
-      aws eks describe-addon --region "$region" --cluster-name "$cluster_name" --addon-name "$addon" \
-        --query 'addon.status' --output text | grep -qx ACTIVE
-    done
-    vpc_config="$(aws eks describe-addon --region "$region" --cluster-name "$cluster_name" --addon-name vpc-cni --query 'addon.configurationValues' --output text)"
-    jq -e '.enableNetworkPolicy == "true" and .env.NETWORK_POLICY_ENFORCING_MODE == "strict"' <<<"$vpc_config" >/dev/null
+    aws eks describe-addon --region "$region" --cluster-name "$cluster_name" --addon-name aws-ebs-csi-driver \
+      --query 'addon.status' --output text | grep -qx ACTIVE
     kubectl -n kube-system rollout status deployment/aws-load-balancer-controller --timeout=180s
     kubectl -n kube-system rollout status deployment/cluster-autoscaler --timeout=180s
     kubectl -n kube-system rollout status deployment/metrics-server --timeout=180s
     kubectl -n kube-system rollout status daemonset/aws-node --timeout=180s
-    kubectl -n kube-system rollout status daemonset/aws-network-policy-agent --timeout=180s
+    kubectl -n kube-system get daemonset aws-node -o json | jq -e '
+      any(.spec.template.spec.containers[]; .name == "aws-eks-nodeagent" and any(.args[]?; . == "--enable-network-policy=true")) and
+      any(.spec.template.spec.containers[]; .name == "aws-node" and any(.env[]?; .name == "NETWORK_POLICY_ENFORCING_MODE" and .value == "strict"))
+    ' >/dev/null
     kubectl -n kube-system rollout status deployment/ebs-csi-controller --timeout=180s
     kubectl get apiservice v1beta1.metrics.k8s.io -o json | jq -e 'any(.status.conditions[]; .type == "Available" and .status == "True")' >/dev/null
-    kubectl get storageclass ebs-gp3 -o json | jq -e '.provisioner == "ebs.csi.aws.com" and .volumeBindingMode == "WaitForFirstConsumer" and .reclaimPolicy == "Delete"' >/dev/null
-    kubectl get ingress -A -o json | jq -e --arg cert "$certificate_arn" --arg namespace "$gateway_namespace" --arg name "$gateway_ingress" 'any(.items[]; .metadata.namespace == $namespace and .metadata.name == $name and .metadata.annotations["alb.ingress.kubernetes.io/certificate-arn"] == $cert and (.metadata.annotations["alb.ingress.kubernetes.io/listen-ports"] | fromjson | any(.[]; has("HTTPS"))) and (.status.loadBalancer.ingress | length > 0))' >/dev/null
+    kubectl get storageclass ebs-gp3 -o json | jq -e '.provisioner == "ebs.csi.aws.com" and .volumeBindingMode == "WaitForFirstConsumer" and .reclaimPolicy == "Delete" and .parameters.type == "gp3" and .parameters.encrypted == "true" and .allowVolumeExpansion == true' >/dev/null
+    if [[ "$mode" == "deploy" ]]; then
+      [[ "$certificate_arn" == arn:aws:acm:ap-southeast-1:*:certificate/* && -n "$target_group_arn" && -n "$load_balancer_arn" ]] || { echo "set issued certificate, existing ALB and target-group ARNs" >&2; exit 2; }
+      kubectl -n "$gateway_namespace" get targetgroupbinding "$gateway_binding" -o json | jq -e --arg arn "$target_group_arn" '.spec.targetGroupARN == $arn and .spec.targetType == "ip"' >/dev/null
+      aws elbv2 describe-listeners --region "$region" --load-balancer-arn "$load_balancer_arn" --output json | jq -e --arg cert "$certificate_arn" --arg tg "$target_group_arn" 'any(.Listeners[]; .Protocol == "HTTPS" and .Port == 443 and any(.Certificates[]; .CertificateArn == $cert) and any(.DefaultActions[]; .Type == "forward" and .TargetGroupArn == $tg))' >/dev/null
+      aws elbv2 describe-target-health --region "$region" --target-group-arn "$target_group_arn" --output json | jq -e '.TargetHealthDescriptions | length > 0 and all(.[]; .TargetHealth.State == "healthy")' >/dev/null
+    fi
     kubectl get networkpolicy -A -o json | jq -e 'any(.items[]; .metadata.name == "stcn-kube-system-required-traffic") and any(.items[]; .metadata.name == "stcn-default-deny-gateway")' >/dev/null
-    echo "EKS add-on deployments and HTTPS ingress configuration are ready."
+    echo "EKS foundations are ready; existing-ALB HTTPS routing was checked in deploy mode."
     ;;
   cleanup)
     error_file="$(mktemp)"
@@ -59,7 +64,7 @@ case "$mode" in
     echo "Staging cluster and project-tagged resources are absent; the Terraform state bucket may remain."
     ;;
   *)
-    echo "usage: $0 deploy|cleanup" >&2
+    echo "usage: $0 foundations|deploy|cleanup" >&2
     exit 2
     ;;
 esac

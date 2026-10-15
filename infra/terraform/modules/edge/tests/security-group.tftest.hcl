@@ -10,12 +10,13 @@ run "public_edge_allows_only_https_from_approved_cidrs" {
     subnet_ids      = ["subnet-0123456789abcdef0", "subnet-abcdef0123456789"]
     ingress_cidrs   = ["203.0.113.0/24"]
     certificate_arn = "arn:aws:acm:ap-southeast-1:111122223333:certificate/00000000-0000-0000-0000-000000000000"
+    internal        = false
     tags            = {}
   }
 
   assert {
     condition     = !aws_lb.this.internal
-    error_message = "The edge may be public only when an approved CIDR list and certificate are supplied."
+    error_message = "Public exposure must be an explicit internal = false decision, with an approved CIDR list and certificate."
   }
 
   assert {

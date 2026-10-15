@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import {mkdirSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
-import {parseAllDocuments} from 'yaml';
+import {parse, parseAllDocuments} from 'yaml';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const helm=process.env.HELM_BIN || 'helm';
@@ -129,5 +129,54 @@ check('immutable image digest renders by digest',()=>{
   assert(deployment.spec.template.spec.containers[0].image.endsWith('@'+digest));
 });
 check('invalid image digest is rejected',()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'--set','image.digest=sha256:short'],false));
+
+const targetGroup='arn:aws:elasticloadbalancing:ap-southeast-1:000000000000:targetgroup/test-gateway/0123456789abcdef';
+check('Gateway binds its existing target group without creating an Ingress/ALB',()=>{
+  const docs=render('gateway',['--set-string','targetGroupArn='+targetGroup]);
+  const binding=docs.find(d=>d.kind==='TargetGroupBinding');
+  const service=docs.find(d=>d.kind==='Service');
+  assert.equal(binding.spec.targetGroupARN,targetGroup);
+  assert.equal(binding.spec.targetType,'ip');
+  assert.equal(binding.spec.serviceRef.name,service.metadata.name);
+  assert.equal(binding.spec.serviceRef.port,service.spec.ports[0].port);
+  assert(!docs.some(d=>d.kind==='Ingress'));
+});
+check('target group binding is disabled by default',()=>assert(!render('gateway').some(d=>d.kind==='TargetGroupBinding')));
+check('reject target binding on a business service',()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'--set-string','targetGroupArn='+targetGroup],false));
+check('reject malformed target group ARN',()=>run(['template','review',chart,'-f',resolve(root,'values/gateway.yaml'),'--set-string','targetGroupArn=not-an-arn'],false));
+
+check('RabbitMQ policies match the actual spectrace Operator labels',()=>{
+  const output=run(['template','review',resolve(root,'platform-network-policies')]).stdout;
+  const docs=parseAllDocuments(output).map(d=>d.toJSON()).filter(Boolean);
+  const policy=docs.find(d=>d.metadata.name==='stcn-rabbitmq-flows');
+  assert.equal(policy.spec.podSelector.matchLabels['app.kubernetes.io/name'],'spectrace');
+  for(const doc of docs) {
+    const json=JSON.stringify(doc);
+    assert(!json.includes('"app.kubernetes.io/name":"rabbitmq"'),'Operator uses cluster name, not the generic service name');
+  }
+  for(const service of ['specification','formulation','compliance','label-workflow']) {
+    const policy=docs.find(d=>d.metadata.name===`stcn-${service}-flows`);
+    assert(policy,`missing ${service} flows`);
+    assert(policy.spec.egress.some(rule=>rule.ports?.some(p=>p.port===5672) && rule.to?.some(peer=>peer.podSelector?.matchLabels?.['app.kubernetes.io/name']==='spectrace')));
+  }
+});
+check('staged RabbitMQ bundle renders placement patch and quorum PDB',()=>{
+  const r=spawnSync(process.env.KUBECTL_BIN || 'kubectl',['kustomize',resolve(root,'../kubernetes/staging/rabbitmq')],{encoding:'utf8',timeout:60000});
+  if(r.error) throw r.error;
+  assert.equal(r.status,0,r.stderr+'\n'+r.stdout);
+  const docs=parseAllDocuments(r.stdout).map(d=>d.toJSON()).filter(Boolean);
+  const cluster=docs.find(d=>d.apiVersion==='rabbitmq.com/v1beta1' && d.kind==='RabbitmqCluster' && d.metadata.name==='spectrace');
+  assert(cluster,'pinned RabbitMQ Cluster must be in the rendered bundle');
+  const affinity=cluster.spec.affinity;
+  assert.deepEqual(affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions,
+    [{key:'eks.amazonaws.com/nodegroup',operator:'In',values:['general']}]);
+  const term=affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0];
+  assert.equal(term.topologyKey,'kubernetes.io/hostname');
+  assert.deepEqual(term.labelSelector.matchLabels,{'app.kubernetes.io/name':'spectrace','app.kubernetes.io/component':'rabbitmq'});
+  const pdb=docs.find(d=>d.apiVersion==='policy/v1' && d.kind==='PodDisruptionBudget' && d.metadata.name==='spectrace-rabbitmq-quorum');
+  assert(pdb,'quorum PDB must be in the rendered bundle');
+  assert.equal(pdb.spec.maxUnavailable,1);
+  assert.deepEqual(pdb.spec.selector,term.labelSelector);
+});
 
 console.log(`${count} Helm checks passed. Rendered constraints are not live pod-placement evidence.`);

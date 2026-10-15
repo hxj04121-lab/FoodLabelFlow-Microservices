@@ -1,4 +1,5 @@
 serviceName: example
+targetGroupArn: ""
 replicaCount: 1
 image:
   repository: example.invalid/spectrace/service

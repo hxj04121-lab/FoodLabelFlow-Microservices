@@ -89,23 +89,29 @@ variable "enable_alb" {
 }
 
 variable "enable_eks_addons" {
-  description = "Install EKS controllers and default-deny network policies after a validated ACM certificate is available."
+  description = "Install missing EKS controllers, storage, and network policies while preserving the existing ALB."
   type        = bool
   default     = false
   validation {
-    condition     = !var.enable_eks_addons || (var.enable_eks && var.enable_alb && var.certificate_arn != "" && var.domain_name != "" && length(var.alb_ingress_cidrs) > 0)
-    error_message = "EKS add-ons require EKS, an issued ACM certificate and domain, and explicit ALB ingress CIDRs."
+    condition     = !var.enable_eks_addons || var.enable_eks
+    error_message = "EKS add-ons require the existing EKS cluster."
   }
 }
 
-variable "gateway_service_name" {
-  description = "Kubernetes Service name used by the Gateway Ingress."
-  type        = string
-  default     = "gateway"
+variable "manage_vpc_cni" {
+  description = "Explicitly approve migration of healthy self-managed VPC CNI to the managed add-on; leave false to preserve the installed CNI; review a separate policy-enforcement patch if necessary."
+  type        = bool
+  default     = false
   validation {
-    condition     = trimspace(var.gateway_service_name) != ""
-    error_message = "gateway_service_name must match the deployed Gateway Service."
+    condition     = !var.manage_vpc_cni || var.enable_eks_addons
+    error_message = "VPC CNI migration requires the add-on module."
   }
+}
+
+variable "alb_internal" {
+  description = "Keep the existing ALB internal even when enabling HTTPS. Public exposure requires a separately reviewed replacement plan."
+  type        = bool
+  default     = true
 }
 
 variable "alb_ingress_cidrs" {
