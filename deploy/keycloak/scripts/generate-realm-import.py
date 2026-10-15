@@ -34,7 +34,7 @@ REALM_FILE = os.path.join(KEYCLOAK_DIR, "realm", "spectrace-realm.json")
 IMPORT_FILE = os.path.join(KEYCLOAK_DIR, "operator", "keycloak-realm-import.yaml")
 
 RESOURCE_NAME = "spectrace-realm"
-NAMESPACE = "spectrace"
+NAMESPACE = "keycloak"
 KEYCLOAK_CR_NAME = "spectrace-keycloak"
 CREDENTIALS_SECRET = "spectrace-demo-credentials"
 
