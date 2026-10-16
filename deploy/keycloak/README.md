@@ -386,3 +386,24 @@ that the user without a business role inherits none.
 7. **`fullScopeAllowed: true`** on `spectrace-web` is required for the roles
    mapper to emit the user's realm roles; grant business users only the six
    roles above and never Keycloak admin/`realm-management` roles.
+
+## Known limitation: the account console answers 403 for demo users
+
+`<external-origin>/auth/realms/spectrace/account` returns **403** for the demo users. Sign-in,
+OIDC discovery, the gateway and every service API are unaffected.
+
+Cause: this repository models the demo users with the six business roles only. `KeycloakRealmContractTest`
+requires the realm role vocabulary to be exactly those roles, requires each user to stay inside that
+vocabulary, and requires the committed token-claims samples to match the users; no user therefore
+carries the realm default role. Without `default-roles-spectrace` the users never receive the
+`account` client roles (`view-profile`, `manage-account`) that the account console needs, so the
+console reports "account not fully set up".
+
+Do not repair this with a runtime `kcadm` grant: the next realm import reproduces the 403 exactly.
+
+Planned change - after the demo window, as an M4-owned contract change with its own review: add
+`default-roles-spectrace` to every demo user, regenerate the operator resource, treat
+`default-roles-*` as infrastructure in the contract assertions (the same exemption the realm-role
+vocabulary check already uses), and regenerate `claims/sample-access-token-claims.json` so the samples
+match what Keycloak really mints. The added role is additive: services map known role names to
+permissions and ignore the rest, and the result matches stock Keycloak behaviour.
