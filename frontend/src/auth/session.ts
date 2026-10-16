@@ -38,7 +38,7 @@ function secureUrl(value: string | undefined): URL {
 
 function createManager() {
   authority = secureUrl(import.meta.env.VITE_OIDC_AUTHORITY).href.replace(/\/$/, '')
-  const api = secureUrl(import.meta.env.VITE_GATEWAY_ORIGIN)
+  const api = secureUrl(import.meta.env.VITE_GATEWAY_ORIGIN === '/' ? window.location.origin : import.meta.env.VITE_GATEWAY_ORIGIN)
   if (api.pathname !== '/') throw new Error('The gateway address must be an origin without a path.')
   gateway = api.origin
   audience = import.meta.env.VITE_OIDC_AUDIENCE ?? ''

@@ -20,7 +20,8 @@ export async function verifyDeployedBuild(request: APIRequestContext, target: Ta
 export function verifyBuild(build: Record<string, unknown>, target: Target) {
   assert(typeof build.commit === 'string', 'Pages build must record its actual source commit')
   assert(/^[a-f0-9]{40}$/.test(build.commit), 'Pages build must record its actual source commit')
-  assert(build.gatewayOrigin === target.gateway && build.authority === target.authority
+  const gateway = build.gatewayOrigin === '/' ? new URL(target.site).origin : build.gatewayOrigin
+  assert(gateway === target.gateway && build.authority === target.authority
     && build.callerPath === target.callerPath && build.audience === target.audience
     && build.siteBase === new URL(target.site).pathname, 'Published Pages configuration differs from the test target')
 }
@@ -47,8 +48,10 @@ export async function verifyDeployedAccess(request: APIRequestContext,
     .catch(() => { throw new Error('Deployed Gateway probe failed; credential details omitted') })
   const own = await get(`/api/formulations/products/${encodeURIComponent(input.ownProduct)}`)
   assert(own.status() === 200, 'The approved manufacturer must be able to read its own test product')
-  assert(own.headers()['access-control-allow-origin'] === new URL(input.site).origin,
-    'The actual Pages origin must be allowed by deployed CORS')
+  if (new URL(input.site).origin !== new URL(input.gateway).origin) {
+    assert(own.headers()['access-control-allow-origin'] === new URL(input.site).origin,
+      'The actual Pages origin must be allowed by deployed CORS')
+  }
   const product = await own.json()
   assert(product.productId === input.ownProduct && product.organisationId === input.orgId,
     'Own-product response must match the expected product and caller organisation')

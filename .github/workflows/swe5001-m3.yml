@@ -13,6 +13,55 @@ permissions:
   contents: read
 
 jobs:
+  frontend-container:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # Fixture builds can be tested, but are never published as staging images.
+      OIDC_AUTHORITY: ${{ vars.VITE_OIDC_AUTHORITY || 'https://identity.example.test/auth/realms/spectrace' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the root-hosted authenticated frontend
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/frontend:$GITHUB_SHA"
+          echo "FRONTEND_IMAGE=$image" >> "$GITHUB_ENV"
+          docker build -f frontend/Dockerfile.staging \
+            --build-arg SOURCE_COMMIT="$GITHUB_SHA" \
+            --build-arg VITE_OIDC_AUTHORITY="$OIDC_AUTHORITY" \
+            --tag "$image" frontend
+      - name: Verify real nginx routing and non-root execution
+        id: smoke
+        run: bash frontend/scripts/test-container.sh "$FRONTEND_IMAGE"
+      - name: Publish the tested image on trusted branch pushes
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/XFY' || github.ref == 'refs/heads/main') && vars.VITE_OIDC_AUTHORITY != ''
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node -e 'const h=new URL(process.env.OIDC_AUTHORITY).hostname; if (/(^|\.)(test|invalid|localhost)$/.test(h)) process.exit(1)'
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$FRONTEND_IMAGE"
+      - name: Preserve tested image and static build for M5
+        id: preserve
+        if: always() && steps.smoke.outcome == 'success'
+        run: |
+          container="$(docker create "$FRONTEND_IMAGE")"
+          trap 'docker rm "$container" >/dev/null' EXIT
+          docker cp "$container:/usr/share/nginx/html" frontend-dist
+          tar -czf frontend-dist.tar.gz -C frontend-dist .
+          docker save "$FRONTEND_IMAGE" | gzip > frontend-tested.tar.gz
+          docker image inspect "$FRONTEND_IMAGE" --format '{{json .RepoDigests}}' > frontend-registry-digests.json
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.preserve.outcome == 'success'
+        with:
+          name: m3-frontend-container
+          path: |
+            frontend-dist.tar.gz
+            frontend-tested.tar.gz
+            frontend-dist/g1-release.json
+            frontend-registry-digests.json
+          retention-days: 14
   gateway:
     runs-on: ubuntu-latest
     steps:
@@ -116,6 +165,8 @@ jobs:
           G2_RECORD_VIDEO: 'true'
         run: npx playwright test --config playwright.signin.config.ts --grep 'STCN-74 creates' --output test-results/label-demo
       - run: npm run test:pages
+        working-directory: frontend
+      - run: npm run test:container-ui
         working-directory: frontend
       - run: npm run test:deployed-config
         working-directory: frontend

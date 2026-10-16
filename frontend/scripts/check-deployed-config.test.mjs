@@ -28,6 +28,15 @@ test('the deployed profile reuses the real login test', () => {
   assert.doesNotMatch(result.stdout, /seeded-access/)
 })
 
+test('root deployment resolves a same-origin Gateway without changing the public /api paths', () => {
+  const result = list({ VITE_SITE_BASE: '/', VITE_GATEWAY_ORIGIN: '/', M3_DEPLOYED_BASE_URL: 'https://staging.example.test/' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.notEqual(list({ VITE_GATEWAY_ORIGIN: '/' }).status, 0)
+  for (const gateway of ['/api', '//foreign.example.test', '']) {
+    assert.notEqual(list({ VITE_SITE_BASE: '/', VITE_GATEWAY_ORIGIN: gateway, M3_DEPLOYED_BASE_URL: 'https://staging.example.test/' }).status, 0)
+  }
+})
+
 test('the demo profile requires explicit writes, separate maker/checker and actual baseline resources', () => {
   const demo = {
     M3_DEMO_ALLOW_WRITES: 'true', M3_EXPECTED_ROLES: 'LABEL_OFFICER,CHANGE_MANAGER,ADMIN_DATA_MAINTENANCE',
