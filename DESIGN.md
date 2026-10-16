@@ -1,49 +1,51 @@
 ---
 name: SpecTrace
-description: Shared purple and navy operational workspace
+description: Label ledger — forest-ink framing, herb-green actions, ruled data panels
 colors:
-  primary: "#6747c1"
-  primary-hover: "#5637a6"
+  primary: "#2d694d"
+  primary-hover: "#24573f"
   surface: "#fff"
-  foreground: "#292b43"
-  canvas: "#f5f6fb"
-  surface-tint: "#f0ecfa"
-  text-muted: "#61657c"
-  border-soft: "#e0e2ed"
-  border-control: "#7d849c"
-  focus: "#7152c2"
-  navy: "#2c3151"
-  success: "#17684e"
-  success-bg: "#edf8f2"
-  warning: "#815500"
-  warning-bg: "#fff8e8"
-  danger: "#992c45"
-  danger-bg: "#fff2f4"
+  foreground: "#1d2b24"
+  canvas: "#f6f4ee"
+  surface-tint: "#e6f0e9"
+  text-muted: "#56635b"
+  border-soft: "#e2ddd0"
+  border-control: "#79847c"
+  focus: "#2f7a56"
+  navy: "#17271f"
+  success: "#1f6b47"
+  success-bg: "#e8f4ec"
+  warning: "#7d5300"
+  warning-bg: "#fcf3de"
+  danger: "#9b2c36"
+  danger-bg: "#fbeeed"
+  saffron: "#c98a1b"
+  rule: "#1d2b24"
   destructive: "#c73e4b"
-  disabled-surface: "#eeedf4"
-  chart-purple: "#8862e4"
+  disabled-surface: "#ece9e1"
+  chart-green: "#288b5d"
   chart-teal: "#5dcfc4"
   chart-blue: "#6fb8e5"
 typography:
   headline:
-    fontFamily: "'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: "'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif"
     fontSize: "32px"
     fontWeight: 650
     letterSpacing: "-0.8px"
   title:
-    fontFamily: "'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: "-apple-system, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif"
     fontSize: "18px"
     fontWeight: 650
   body:
-    fontFamily: "'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: "-apple-system, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif"
     fontSize: "15px"
     lineHeight: 1.6
   label:
-    fontFamily: "'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: "-apple-system, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif"
     fontSize: "14px"
     fontWeight: 600
   support:
-    fontFamily: "'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: "-apple-system, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif"
     fontSize: "12px"
 rounded:
   surface: "14px"
@@ -98,21 +100,21 @@ components:
 
 ## Overview
 
-**Creative North Star: "Shared purple and navy operational workspace"**
+**Creative North Star: "Label ledger"**
 
-Retain the existing workspace identity: a navy header, cyan-to-purple layered mark, purple actions, and white bordered surfaces on a quiet canvas. Dense tables and evidence forms stay readable through clear headings, restrained support text, and visible interaction states.
+The workspace reads like a food label and its compliance ledger: warm label-stock canvas, a forest-ink header with a saffron edge, a leaf-green layered mark, herb-green actions, serif display headings, and data blocks modelled on the nutrition-facts panel (a heavy ink rule, hairline separators, tracked small-caps field names). Allergen and error states stay red; review attention uses amber. Dense tables and evidence forms stay readable through clear headings, restrained support text, and visible interaction states.
 
 This records the implemented shared system after the frontend refinement. It does not introduce a new brand or page strategy. Frontmatter defines the reusable primitives; `frontend/src/styles.css` and the shared UI components remain implementation evidence. Some scoped legacy treatments remain, as described below.
 
 **Key Characteristics:**
 
-- Recognizable purple actions and navy framing.
+- Herb-green actions on forest-ink framing; neutral lifecycle badges (one badge shows every state).
 - Compact data layouts with generous separation between tasks.
 - Visible current navigation, keyboard focus, and explicit status text.
 
 ## Colors
 
-Primary purple marks actions and selected navigation; neutral surfaces carry most of the screen.
+Primary herb green marks actions and selected navigation; neutral surfaces carry most of the screen.
 
 ### Primary
 
@@ -126,7 +128,7 @@ Surface is white; canvas separates the workspace from its panels. Foreground car
 
 Success and success-bg appear in validation results, health, and teal group tags. Danger and danger-bg appear in failed validation and error notices. Destructive is the UI component action/invalid-boundary role. Warning and warning-bg are declared root tokens reserved for warning use; current unresolved-evidence blocks retain scoped amber literals instead.
 
-Chart-purple, chart-teal, and chart-blue record the existing donut categories. Existing five-category bar gradients and featured metric gradients remain part of their chart contexts; they are not generic status colors. Preserve category assignments and legend meaning.
+Chart-green, chart-teal, and chart-blue record the existing donut categories. Existing five-category bar gradients and featured metric gradients remain part of their chart contexts; they are not generic status colors. Preserve category assignments and legend meaning.
 
 **The Meaning Rule.** Pair status color with explicit text. Preserve the distinction between action, status, and chart-category color.
 
@@ -172,7 +174,7 @@ Older task-specific containers retain corners around (9–12px), alongside their
 
 ### Buttons
 
-Primary is purple with white text; outline is a white bordered alternative; ghost carries low-emphasis actions and navigation. Shared buttons have minimum height (44px), with icon-size buttons also given minimum width (44px). This minimum overrides shorter component height presets. Default padding is in frontmatter; icon-containing and size variants have their own padding.
+Primary is herb green with white text; outline is a white bordered alternative; ghost carries low-emphasis actions and navigation. Shared buttons have minimum height (44px), with icon-size buttons also given minimum width (44px). This minimum overrides shorter component height presets. Default padding is in frontmatter; icon-containing and size variants have their own padding.
 
 The shared API also exposes secondary, destructive, and link variants. Preserve explicit action labels, disabled semantics, and busy state text. Disabled shared buttons have full-opacity muted text and a quiet fill. Small segmented chart controls retain a separate minimum height (36px).
 
@@ -182,7 +184,7 @@ Use white bordered panels for task content, the shared surface radius, and restr
 
 ### Inputs / Fields
 
-Workspace text inputs and selects have minimum height (44px), a visible control border, shared control radius, foreground text, and a purple caret. Textareas retain vertical resizing and content-driven height. Checkboxes and radio buttons are excluded from the full-size field rule.
+Workspace text inputs and selects have minimum height (44px), a visible control border, shared control radius, foreground text, and a green caret. Textareas retain vertical resizing and content-driven height. Checkboxes and radio buttons are excluded from the full-size field rule.
 
 Placeholders use text-muted at full opacity. Invalid fields use a visible error boundary and associated error text; retain the existing invalid attributes. Disabled fields retain their disabled semantics and a quiet background. Authenticated disabled fields and feedback blocks still have scoped legacy color variants.
 
@@ -196,9 +198,9 @@ Compact group tags identify categories; status and validation messages pair colo
 
 ### Focus and browser details
 
-Shared interactive elements use a (3px) focus outline with (3px) offset. Authenticated sign-in buttons, label fields, and impact controls retain more specific purple focus variants, including a (4px) button offset. Shared CSS supersedes many older field border/radius literals; it does not supersede every scoped focus or feedback declaration.
+Shared interactive elements use a (3px) focus outline with (3px) offset. Authenticated sign-in buttons, label fields, and impact controls retain more specific green focus variants, including a (4px) button offset. Shared CSS supersedes many older field border/radius literals; it does not supersede every scoped focus or feedback declaration.
 
-Keep skip links visible when focused, table regions keyboard focusable, selection tinted purple, underlines offset, and tabular numerals in data. Product names may be visually clamped to two lines while preserving their full accessible text and action labels.
+Keep skip links visible when focused, table regions keyboard focusable, selection tinted green, underlines offset, and tabular numerals in data. Product names may be visually clamped to two lines while preserving their full accessible text and action labels.
 
 ## Do's and Don'ts
 
