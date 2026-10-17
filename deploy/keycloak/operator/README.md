@@ -1,50 +1,33 @@
-# Importing the realm with the Keycloak operator (G1-M4.3)
+# Keycloak Operator staging bootstrap
 
-`keycloak-realm-import.yaml` is a `KeycloakRealmImport` (`k8s.keycloak.org/v2alpha1`) generated
-from `../realm/spectrace-realm.json`. The realm file stays the source of truth:
+This bundle installs Keycloak Operator `26.0.7` as a single-workload-namespace controller. The Operator runs in the existing `keycloak-system` namespace and watches only `keycloak`; its Role and RoleBinding grant access only inside `keycloak`. The CRDs are the only cluster-scoped resources. No ClusterRole or ClusterRoleBinding is installed.
 
-```bash
-python3 deploy/keycloak/scripts/generate-realm-import.py           # regenerate after a realm change
-python3 deploy/keycloak/scripts/generate-realm-import.py --check   # verify the committed copy
-```
+## M5: one-time CRD bootstrap and Operator installation
 
-`KeycloakOperatorRealmImportContractTest` (backend job of CI) fails when the committed resource no
-longer matches the realm file, so a realm change cannot silently miss the cluster import.
+First run the reviewed Terraform Plan and approved infrastructure change so the existing `keycloak` and `keycloak-system` namespaces, EBS CSI, NetworkPolicies, and AWS Load Balancer Controller are ready. The Plan is expected to reuse the existing cluster and node group; inspect the actual state-backed Plan before any Apply.
 
-## What the operator does with it
+CRDs are cluster-scoped. The **Protected one-time Keycloak Operator bootstrap** workflow uses a distinct `AWS_OPERATOR_INSTALL_ROLE_ARN`, only from `main`, on the VPC runner, with staging approval and the existing budget gate. Its EKS access must be temporarily cluster-scoped (typically `AmazonEKSClusterAdminPolicy` or equivalent Kubernetes admin) because CRD creation and the Operator Role's `escalate`/`bind` checks cannot be delegated through the existing namespace deploy role. This is a broad one-time grant; use OIDC trust restricted to this repository, `main`, and the protected `staging` Environment, then remove the EKS access association immediately after rollout. The workflow applies only the two pinned CRDs and namespace-scoped Operator files. Never grant this access to `AWS_DEPLOY_ROLE_ARN` or use it for routine deployments.
 
-Applying the resource makes the operator create the realm, its clients, client scopes, mappers and
-demo users in the Keycloak instance named by `spec.keycloakCRName`. The operator reports the result
-on the resource (`Done` or `HasErrors`) and runs a `keycloak-realm-import` Job; read the condition
-before continuing.
+The Operator's namespaced Role includes Secret access in `keycloak`, because the controller must read database and realm-import Secrets and create Keycloak-generated Secrets. Treat the ability to create Keycloak CRs and the temporary CRD installer association as privileged staging actions.
 
-## Credentials
+## M5: database and runtime Secret
 
-No password is committed. Every demo user's password is a `${DEMO_PASSWORD_<USER>}` placeholder
-resolved from the `spectrace-demo-credentials` Secret in the same namespace (one key per username,
-see `spec.placeholders`). The pipeline creates that Secret from the environment's secret store when
-the staging window opens; staging and production must rotate or disable these accounts before real
-traffic.
+The approved database bootstrap adds the isolated `keycloak` schema and account using the protected `KEYCLOAK_DB_PASSWORD` secret. The protected **STCN-15 staging runtime Secrets** workflow writes only `keycloak/keycloak-db` with `username` and `password` keys; no credential is committed or placed in kubectl arguments. Its apply path requires the existing funding gate and `staging` approval. The helper distributes the same protected `GATEWAY_ISSUER` value to the business services. The protected credit input is the existing Environment variable `STAGING_AVAILABLE_CREDIT_USD`.
 
-## Applying it (staging window)
+## M4: deploy the Keycloak server and bind the existing target group
 
-The Keycloak operator and the `Keycloak` custom resource belong to M5 (G1-M5); `metadata.namespace`
-and `spec.keycloakCRName` must match that install before applying.
+Set protected staging Environment variables `GATEWAY_ISSUER=https://staging.52zz.top/auth/realms/spectrace` and `MYSQL_HOST=<private RDS hostname>`. After the Operator is Ready and `keycloak/keycloak-db` exists, dispatch **Protected Keycloak staging release** from `main`. It passes the funding gate, checks the existing account/context, verifies the namespaced custom-resource permissions, renders the CR without database credentials, applies the `Keycloak` CR, waits for readiness, then applies `deploy/kubernetes/staging/keycloak-targetgroupbinding.yaml`.
 
-```bash
-kubectl -n spectrace apply -f deploy/keycloak/operator/keycloak-realm-import.yaml
-kubectl -n spectrace wait --for=condition=Done keycloakrealmimport/spectrace-realm --timeout=300s
-kubectl -n spectrace logs job/spectrace-realm   # the import log when the condition is HasErrors
-```
+The CR creates `spectrace-keycloak-service` in namespace `keycloak`, uses MySQL, accepts `xforwarded` headers, publishes `/auth`, disables Operator-managed ingress creation, and uses the staging realm issuer's host as its Keycloak hostname. It leaves Keycloak's default memory request (1700 Mi) and 2 Gi limit in place. No realm or bootstrap password is embedded in the CR. Terraform maps the protected deploy role to a dedicated Kubernetes group with only Keycloak/TGB custom-resource access in `keycloak`; the standard deploy workflow still cannot create namespaces or install the Operator.
 
-Then verify the running issuer exactly like the local profile:
+The existing `KeycloakRealmImport` remains generated from `deploy/keycloak/realm/spectrace-realm.json`. Apply it only when the protected `spectrace-demo-credentials` Secret exists; this PR does not create those demo-user credentials. Check its `Done` condition before attempting authenticated login.
 
-```bash
-python3 deploy/keycloak/scripts/verify-token-claims.py --base-url <externally visible URL>
-```
+## Capacity and network checks
 
-## Not verified here
+Declared request estimates before Kubernetes/system overhead and EBS CSI are: AWS Load Balancer Controller 2 × (100m CPU, 128 Mi); Cluster Autoscaler 100m/256 Mi; metrics-server 2 × (100m/200 Mi); Keycloak Operator 300m/450 Mi; one Keycloak instance 1700 Mi memory; Gateway 100m/256 Mi. The known subtotal is about 900m CPU plus Keycloak's runtime CPU demand, and 3318 Mi memory, before EBS CSI, CNI, kube-proxy, CoreDNS, and node reservations. The actual node allocatable and EBS CSI requests are not available from this workstation. One `t3.medium` is not a safe capacity assumption; after the budget gate opens, use the existing general node group's 1–3 bound and let the approved Cluster Autoscaler add a second node if measured requests require it.
 
-CI has no cluster and the operator is M5's, so this file is a specification plus a generator plus a
-drift test until the first window. Applying it and reading the condition is the G1-M4.3 evidence;
-`docs/swe5001/evidence/G1-M4-evidence.md` records what has been measured and what has not.
+Once both Pods are registered, run `scripts/verify_eks_addons.sh deploy` from the authorized VPC path. It checks the existing HTTPS listener routes, target-group VPC/IP type/HTTP health checks, target health, ENI/backend and ALB security-group paths on TCP/8080, and Gateway/Keycloak NetworkPolicies against actual ALB subnets. The check is read-only; the LBC policy has no EC2 security-group mutation actions. Live AWS/Kubernetes results must be recorded separately from this static bundle and its tests.
+
+## Realm import compatibility
+
+`keycloak-realm-import.yaml` is a `KeycloakRealmImport` (`k8s.keycloak.org/v2alpha1`) generated from `../realm/spectrace-realm.json`. Run `python3 deploy/keycloak/scripts/generate-realm-import.py --check` to verify the committed copy. The importer creates the realm, clients, client scopes, mappers, and demo users on CR `spectrace-keycloak`; it reports `Done` or `HasErrors` and runs the `spectrace-realm` Job.

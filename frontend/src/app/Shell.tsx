@@ -97,7 +97,7 @@ export function Shell() {
           </span>
           <div>
             <strong>FoodLabelFlow</strong>
-            <small>TEAM 16 · SWE5006</small>
+            <small>TEAM 16 · SWE5001</small>
           </div>
           <button
             className="mobile-close"
@@ -118,7 +118,10 @@ export function Shell() {
                 `nav-item ${isActive ? 'active' : ''}`
               }
             >
-              <n.icon size={19} />
+              <span className="nav-num" aria-hidden="true">
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <n.icon size={18} />
               <span>{n.label}</span>
               {i > 4 && <span className="nav-dot" />}
             </NavLink>
@@ -131,6 +134,10 @@ export function Shell() {
             </span>
             <strong>Always traceable</strong>
             <p>Preserve history. Keep every change in view.</p>
+            <div className="barcode" aria-hidden="true" />
+            <span className="barcode-caption" aria-hidden="true">
+              LOT 26·T16 · SWE5001
+            </span>
           </div>
           <NavLink
             to="/health"

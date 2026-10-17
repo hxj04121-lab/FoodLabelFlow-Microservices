@@ -5,8 +5,8 @@ set -euo pipefail
 : "${MYSQL_ADMIN_USER:?Set MYSQL_ADMIN_USER to the bootstrap administrator}"
 : "${MYSQL_ADMIN_PASSWORD:?Set MYSQL_ADMIN_PASSWORD from a protected secret}"
 
-services=(specification formulation compliance label_workflow)
-variables=(SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD)
+services=(specification formulation compliance label_workflow keycloak)
+variables=(SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD KEYCLOAK_DB_PASSWORD)
 for variable in "${variables[@]}"; do
   value="${!variable:-}"
   if [[ ! "$value" =~ ^[A-Za-z0-9_-]{32,128}$ ]]; then
@@ -31,4 +31,4 @@ printf 'FLUSH PRIVILEGES;\n' >> "$sql_file"
 MYSQL_PWD="$MYSQL_ADMIN_PASSWORD" mysql \
   --host="$MYSQL_HOST" --user="$MYSQL_ADMIN_USER" --protocol=TCP \
   --ssl-mode=REQUIRED < "$sql_file"
-echo "Created the four service databases and restricted each account to its own database."
+echo "Created the service and Keycloak databases and restricted each account to its own database."

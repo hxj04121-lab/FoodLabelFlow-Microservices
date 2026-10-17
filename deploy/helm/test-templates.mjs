@@ -4,6 +4,7 @@ import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {parse, parseAllDocuments} from 'yaml';
+import {checkGatewayUpgrade} from './check-gateway-upgrade.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const repo=resolve(root,'../..');
@@ -20,20 +21,20 @@ const run=(args,pass=true)=>{
   return r;
 };
 const check=(name,fn)=>{fn();count++;console.log('PASS '+name);};
-const render=(service,extra=[])=>{
-  const r=run(['template','review',chart,'-f',resolve(root,`values/${service}.yaml`),...extra]);
+const render=(service,extra=[],release='review')=>{
+  const r=run(['template',release,chart,'-f',resolve(root,`values/${service}.yaml`),...extra]);
   const docs=parseAllDocuments(r.stdout);
   for(const doc of docs) assert.equal(doc.errors.length,0,doc.errors.join('\n'));
   return docs.map(d=>d.toJSON()).filter(Boolean);
 };
 check('strict lint for every service values file',()=>{
   const outputs=[];
-  for(const service of ['compliance','specification','formulation','label-workflow','gateway']) {
+  for(const service of ['compliance','specification','formulation','label-workflow','gateway','frontend']) {
     outputs.push(run(['lint',chart,'--strict','-f',resolve(root,`values/${service}.yaml`)]).stdout);
   }
   writeFileSync(resolve(evidence,'helm-lint.txt'),outputs.join('\n'));
 });
-for(const service of ['compliance','specification','formulation','label-workflow','gateway']) {
+for(const service of ['compliance','specification','formulation','label-workflow','gateway','frontend']) {
   check(`${service} uses the same chart, probes and ClusterIP policy`,()=>{
     const docs=render(service);
     const dep=docs.find(d=>d.kind==='Deployment');
@@ -42,21 +43,23 @@ for(const service of ['compliance','specification','formulation','label-workflow
     const c=pod.containers[0];
     assert.equal(c.name,service);
     assert.equal(c.startupProbe.httpGet.port,'http');
-    assert.equal(c.readinessProbe.httpGet.path,'/actuator/health/readiness');
-    assert.equal(c.livenessProbe.httpGet.path,'/actuator/health/liveness');
+    assert.equal(c.readinessProbe.httpGet.path,service==='frontend'?'/healthz':'/actuator/health/readiness');
+    assert.equal(c.livenessProbe.httpGet.path,service==='frontend'?'/healthz':'/actuator/health/liveness');
     assert.equal(pod.automountServiceAccountToken,false);
     assert.equal(c.securityContext.allowPrivilegeEscalation,false);
     assert.equal(c.securityContext.readOnlyRootFilesystem,true);
     assert.equal(docs.find(d=>d.kind==='Service').spec.type,'ClusterIP');
     const np=docs.find(d=>d.kind==='NetworkPolicy');
     assert.deepEqual(np.spec.policyTypes,['Ingress','Egress']);
-    assert(np.spec.egress.some(r=>r.to?.some(t=>t.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='kube-system')),'DNS is allowed');
+    if(service==='frontend') assert.deepEqual(np.spec.egress,[]);
+    else assert(np.spec.egress.some(r=>r.to?.some(t=>t.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='kube-system')),'DNS is allowed');
     assert(!np.spec.egress.some(r=>r.to?.some(t=>t.ipBlock?.cidr==='0.0.0.0/0')),'No unrestricted egress');
     assert(!docs.some(d=>d.kind==='HorizontalPodAutoscaler'),'Fixed comparison must disable HPA');
-    if(service!=='gateway') assert.equal(pod.containers[0].envFrom?.[0]?.secretRef?.name,`${service}-runtime`);
+    if(service==='frontend') assert.equal(pod.containers[0].envFrom,undefined);
+    else if(service!=='gateway') assert.equal(pod.containers[0].envFrom?.[0]?.secretRef?.name,`${service}-runtime`);
     if(service!=='compliance') assert.equal(pod.nodeSelector['eks.amazonaws.com/nodegroup'],'general');
     const crossNamespace=np.spec.ingress.flatMap(r=>r.from??[]).filter(s=>s.namespaceSelector).map(s=>[s.namespaceSelector.matchLabels['kubernetes.io/metadata.name'],s.podSelector.matchLabels['app.kubernetes.io/name']]);
-    const expectedPeers={gateway:[['observability','grafana-alloy']],specification:[['gateway','gateway'],['observability','grafana-alloy']],formulation:[['gateway','gateway'],['observability','grafana-alloy']],compliance:[['gateway','gateway'],['label-workflow','label-workflow'],['observability','grafana-alloy']],'label-workflow':[['gateway','gateway'],['observability','grafana-alloy']]}[service];
+    const expectedPeers={gateway:[['observability','grafana-alloy']],specification:[['gateway','gateway'],['observability','grafana-alloy']],formulation:[['gateway','gateway'],['observability','grafana-alloy']],compliance:[['gateway','gateway'],['label-workflow','label-workflow'],['observability','grafana-alloy']],'label-workflow':[['gateway','gateway'],['observability','grafana-alloy']],frontend:[]}[service];
     assert.deepEqual(crossNamespace.sort((a,b)=>a.join('/').localeCompare(b.join('/'))),expectedPeers.sort((a,b)=>a.join('/').localeCompare(b.join('/'))));
     assert(np.spec.ingress.every(r=>(r.from??[]).every(s=>s.namespaceSelector&&s.podSelector)),'Every pod ingress peer is restricted by namespace and pod labels');
     if(service==='label-workflow') {
@@ -64,6 +67,7 @@ for(const service of ['compliance','specification','formulation','label-workflow
       assert.equal(c.env.find(e=>e.name==='SPECTRACE_LABEL_WORKFLOW_VALIDATION_BASE_URL')?.value,'http://compliance.compliance.svc.cluster.local:8080');
     }
     if(service==='gateway') assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='specification'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='specification')&&r.ports?.some(p=>p.port===8080)));
+    else if(service==='frontend') assert.deepEqual(np.spec.egress,[]);
     else assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='rabbitmq'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='rabbitmq')));
   });
 }
@@ -143,6 +147,36 @@ check('first Gateway release pins its verified image and only permits required i
   assert.deepEqual(np.spec.egress[1].to[0].podSelector.matchLabels,{app:'keycloak'},'Keycloak egress follows the Operator pod label');
   for(const rule of np.spec.egress.slice(1)) assert.deepEqual(rule.ports,[{port:8080,protocol:'TCP'}]);
 });
+check('Frontend renders the pinned static image with non-root health checks and isolated ALB ingress',()=>{
+  const frontendTargetGroup='arn:aws:elasticloadbalancing:ap-southeast-1:000000000000:targetgroup/test-frontend/0123456789abcdef';
+  const docs=render('frontend',['--set-string','targetGroupArn='+frontendTargetGroup,
+    '--set-json','networkPolicy.ingressFromCIDRs=["10.20.1.0/24","10.20.2.0/24"]'],'frontend');
+  const dep=docs.find(d=>d.kind==='Deployment');
+  const pod=dep.spec.template.spec;
+  const container=pod.containers[0];
+  assert.equal(dep.metadata.name,'frontend-frontend');
+  assert.equal(container.image,'ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:e6720ddc4416a153c5eecb11d8381bd9d2637e50f9ced6017d6b813f42047051');
+  assert.equal(container.ports[0].containerPort,8080);
+  assert.equal(container.readinessProbe.httpGet.path,'/healthz');
+  assert.equal(container.livenessProbe.httpGet.path,'/healthz');
+  assert.equal(pod.securityContext.runAsNonRoot,true);
+  assert.equal(pod.securityContext.runAsUser,10001);
+  assert.equal(container.securityContext.readOnlyRootFilesystem,true);
+  assert.equal(container.securityContext.allowPrivilegeEscalation,false);
+  assert.equal(pod.automountServiceAccountToken,false);
+  assert.deepEqual(container.resources,{requests:{cpu:'100m',memory:'128Mi'},limits:{cpu:'250m',memory:'256Mi'}});
+  assert.equal(docs.find(d=>d.kind==='Service').spec.type,'ClusterIP');
+  assert.deepEqual(docs.find(d=>d.kind==='Service').spec.ports,[{name:'http',port:8080,targetPort:'http',protocol:'TCP'}]);
+  const np=docs.find(d=>d.kind==='NetworkPolicy');
+  assert.deepEqual(np.spec.ingress.map(r=>r.from[0].ipBlock.cidr),['10.20.1.0/24','10.20.2.0/24']);
+  assert(np.spec.ingress.every(r=>r.ports[0].port==='http'));
+  assert.deepEqual(np.spec.egress,[]);
+  const binding=docs.find(d=>d.kind==='TargetGroupBinding');
+  assert.equal(binding.spec.targetGroupARN,frontendTargetGroup);
+  assert.equal(binding.spec.targetType,'ip');
+  assert.equal(binding.spec.serviceRef.name,'frontend-frontend');
+  assert(!docs.some(d=>d.kind==='Ingress'));
+});
 check('Gateway render preserves every required env in deploy workflow values order',()=>{
   const runtime=spawnSync('python3',[resolve(repo,'platform/gateway/deploy-runtime-values.py')],{
     cwd:repo,encoding:'utf8',env:{...process.env,GATEWAY_ISSUER:'https://id.example.test/auth/realms/spectrace'}
@@ -151,7 +185,7 @@ check('Gateway render preserves every required env in deploy workflow values ord
   const runtimePath=resolve(evidence,'gateway-runtime-values.json');
   writeFileSync(runtimePath,runtime.stdout);
   const workflow=readFileSync(resolve(repo,'.github/workflows/deploy-gateway.yml'),'utf8');
-  assert.match(workflow,/--values deploy\/helm\/values\/gateway\.yaml --values "\$RUNNER_TEMP\/gateway-runtime-values\.json"/);
+  assert.match(workflow,/--values "\$RUNNER_TEMP\/gateway-current-values\.json" --values "\$RUNNER_TEMP\/gateway-runtime-values\.json"/);
   const rendered=run(['template','gateway',chart,'--namespace','gateway',
     '--values',resolve(root,'values/gateway.yaml'),'--values',runtimePath]);
   const docs=parseAllDocuments(rendered.stdout).map(d=>d.toJSON()).filter(Boolean);
@@ -178,6 +212,7 @@ check('Gateway render preserves every required env in deploy workflow values ord
 check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-scoped',()=>{
   const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/deploy-gateway.yml'),'utf8'));
   assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+  assert.deepEqual(Object.keys(workflow.on.workflow_dispatch.inputs),['staging_window_hours','staging_window_end_sgt']);
   assert.deepEqual(workflow.jobs.deploy['runs-on'],['self-hosted','linux','staging-vpc']);
   assert.equal(workflow.jobs.deploy.environment,'staging');
   assert.deepEqual(workflow.jobs.deploy.permissions,{contents:'read','id-token':'write'});
@@ -185,14 +220,61 @@ check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-
   assert.equal(workflow.jobs.deploy.env.AWS_REGION,'${{ vars.AWS_REGION }}');
   assert.equal(workflow.jobs.deploy.env.EKS_CLUSTER_NAME,'${{ vars.EKS_CLUSTER_NAME }}');
   assert.equal(workflow.jobs.deploy.env.AWS_ROLE_ARN,'${{ vars.AWS_DEPLOY_ROLE_ARN }}');
+  assert.equal(workflow.jobs.deploy.env.AVAILABLE_CREDIT_USD,'${{ secrets.AVAILABLE_CREDIT_USD }}');
   const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
   assert.match(script,/kubectl get namespace gateway/);
   assert.doesNotMatch(script,/create namespace|kubectl create ns|terraform apply/i);
   assert.doesNotMatch(script,/679857346122|spectrace-staging|ap-southeast-1/,'AWS target identifiers must come from the protected Environment');
   assert.match(script,/validate-deploy-target\.py/);
-  assert.match(script,/helm install gateway/);
+  assert.match(script,/helm upgrade gateway/);
+  assert.match(script,/helm get values gateway/);
+  assert.match(script,/check-gateway-upgrade\.mjs/);
+  assert.match(script,/--dry-run=server/);
+  assert.match(script,/platform\/staging\/validate_window\.py/);
+  assert.doesNotMatch(script,/helm uninstall|helm install gateway|create namespace/i);
   assert.match(script,/anonymous GHCR pull/);
-  assert.doesNotMatch(script,/well-known\/openid-configuration|kubectl get service "\$service"|for item in 'GATEWAY_KEYCLOAK/,'process readiness does not require Keycloak or business Services to be deployed');
+  assert.doesNotMatch(script,/kubectl get service "\$service"|for item in 'GATEWAY_KEYCLOAK/,'Gateway health checks must not probe application dependencies');
+});
+check('Gateway manifest diff permits only the reviewed CORS origin change',()=>{
+  const digest='ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway@sha256:d4190ea6ee31b84e7b67d36ad56e6391612c8bdc4916b8bb14d28b9a17f6ab47';
+  const origin='https://hxj04121-lab.github.io';
+  const expected='https://hxj04121-lab.github.io,https://staging.52zzx.top';
+  const makeManifest=(origins,overrides={})=>{
+    const labels={'app.kubernetes.io/name':'gateway','app.kubernetes.io/instance':'gateway'};
+    const objects=[
+      {apiVersion:'apps/v1',kind:'Deployment',metadata:{name:'gateway-gateway',labels},spec:{selector:{matchLabels:labels},template:{metadata:{labels},spec:{containers:[{name:'gateway',image:overrides.image||digest,env:[{name:'GATEWAY_ISSUER',value:'https://staging.52zzx.top/auth/realms/spectrace'},{name:'GATEWAY_ALLOWED_ORIGINS',value:origins}]}]}}}},
+      {apiVersion:'v1',kind:'Service',metadata:{name:'gateway-gateway'},spec:{type:'ClusterIP',selector:labels,ports:[{port:8080,targetPort:'http'}]}},
+      {apiVersion:'networking.k8s.io/v1',kind:'NetworkPolicy',metadata:{name:'gateway-gateway'},spec:{ingressFromCIDRs:overrides.cidr||['10.20.1.0/24']}},
+      {apiVersion:'elbv2.k8s.aws/v1beta1',kind:'TargetGroupBinding',metadata:{name:'gateway-gateway'},spec:{targetGroupARN:'arn:aws:elasticloadbalancing:ap-southeast-1:123456789012:targetgroup/gateway/0123456789abcdef',targetType:'ip',serviceRef:{name:'gateway-gateway',port:8080}}}
+    ];
+    return objects.map(object=>JSON.stringify(object)).join('\n---\n');
+  };
+  checkGatewayUpgrade(makeManifest(origin),makeManifest(expected));
+  checkGatewayUpgrade(makeManifest(expected),makeManifest(expected));
+  assert.throws(()=>checkGatewayUpgrade(makeManifest(origin),makeManifest(expected,{cidr:['0.0.0.0/0']})),/must render identically/);
+  assert.throws(()=>checkGatewayUpgrade(makeManifest(origin),makeManifest(expected,{image:'ghcr.io/example/gateway:latest'})),/image digest must remain unchanged/);
+  assert.throws(()=>checkGatewayUpgrade(makeManifest(origin),makeManifest('https://example.test')),/must allow the Pages and staging root origins/);
+});
+check('Frontend deployment is a protected VPC release with an explicit, gated listener cutover',()=>{
+  const workflow=parse(readFileSync(resolve(repo,'.github/workflows/deploy-frontend.yml'),'utf8'));
+  assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+  assert.deepEqual(Object.keys(workflow.on.workflow_dispatch.inputs),[
+    'staging_window_hours','staging_window_end_sgt','activate_frontend_default'
+  ]);
+  assert.deepEqual(workflow.jobs.deploy['runs-on'],['self-hosted','linux','staging-vpc']);
+  assert.equal(workflow.jobs.deploy.if,"github.ref == 'refs/heads/main'");
+  assert.equal(workflow.jobs.deploy.environment,'staging');
+  assert.deepEqual(workflow.jobs.deploy.permissions,{contents:'read','id-token':'write'});
+  const cutover=workflow.jobs.deploy.steps.find(step=>step.name==='Activate Frontend as HTTPS default and smoke-test public routes');
+  const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
+  assert.match(script,/helm upgrade --install frontend/);
+  assert.match(script,/sha256:e6720ddc4416a153c5eecb11d8381bd9d2637e50f9ced6017d6b813f42047051/);
+  assert.match(script,/--dry-run=server/);
+  assert.match(script,/Target Groups to become Healthy/);
+  assert.equal(cutover.if,'inputs.activate_frontend_default');
+  assert.match(script,/aws elbv2 modify-listener/);
+  assert.match(script,/default-action-restored/);
+  assert.doesNotMatch(script,/create-target-group|create-load-balancer|create-security-group|authorize-security-group|terraform apply|update-nodegroup-config/i);
 });
 check('invalid image digest is rejected',()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'--set','image.digest=sha256:short'],false));
 
@@ -286,6 +368,18 @@ check('RabbitMQ policies match the actual spectrace Operator labels',()=>{
     assert(policy.spec.egress.some(rule=>rule.ports?.some(p=>p.port===5672) && rule.to?.some(peer=>peer.podSelector?.matchLabels?.['app.kubernetes.io/name']==='spectrace')));
   }
 });
+check('Keycloak platform policies select the Operator pods by their app label',()=>{
+  const output=run(['template','review',resolve(root,'platform-network-policies')]).stdout;
+  const docs=parseAllDocuments(output).map(d=>d.toJSON()).filter(Boolean);
+  const keycloak=docs.find(d=>d.metadata.name==='stcn-keycloak-flows');
+  assert.deepEqual(keycloak.spec.podSelector.matchLabels,{app:'keycloak'});
+  for(const name of ['gateway','specification','formulation','compliance','label-workflow']) {
+    const policy=docs.find(d=>d.metadata.name===`stcn-${name}-flows`);
+    const peer=policy.spec.egress.flatMap(rule=>rule.to??[]).find(target=>
+      target.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='keycloak');
+    assert.deepEqual(peer?.podSelector?.matchLabels,{app:'keycloak'},`${name} must select Keycloak Operator pods`);
+  }
+});
 check('staged RabbitMQ bundle renders placement patch and quorum PDB',()=>{
   const r=spawnSync(process.env.KUBECTL_BIN || 'kubectl',['kustomize',resolve(root,'../kubernetes/staging/rabbitmq')],{encoding:'utf8',timeout:60000});
   if(r.error) throw r.error;
@@ -321,4 +415,124 @@ check('PR frontend builds are read-only and publishing consumes only the tested 
   const commands=publish.steps.map(s=>s.run||'').join('\n');
   assert(commands.includes('docker load')&&commands.includes('org.opencontainers.image.revision')&&commands.includes('docker push'));
 });
+
+check('Keycloak NetworkPolicy allows ALB health checks only from configured ALB subnets',()=>{
+  const platformChart=resolve(root,'platform-network-policies');
+  const output=run(['template','review',platformChart,'--set-json','cidrs.alb=["10.20.0.0/24","10.20.1.0/24"]']);
+  const docs=parseAllDocuments(output.stdout).map(d=>d.toJSON()).filter(Boolean);
+  const policy=docs.find(d=>d.kind==='NetworkPolicy'&&d.metadata.name==='stcn-keycloak-flows');
+  assert.deepEqual(policy.spec.podSelector.matchLabels,{app:'keycloak'},'Selector follows the Keycloak Operator server Pod labels');
+  const albIngress=policy.spec.ingress.filter(rule=>rule.from?.some(source=>source.ipBlock));
+  assert.deepEqual(albIngress,[
+    {from:[{ipBlock:{cidr:'10.20.0.0/24'}}],ports:[{port:8080,protocol:'TCP'}]},
+    {from:[{ipBlock:{cidr:'10.20.1.0/24'}}],ports:[{port:8080,protocol:'TCP'}]}
+  ]);
+  assert(policy.spec.ingress.some(rule=>rule.from?.some(source=>source.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='gateway')),'Gateway-to-Keycloak access remains allowed');
+  const operatorRule=policy.spec.ingress.find(rule=>rule.from?.some(source=>source.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='keycloak-system'));
+  assert.deepEqual(operatorRule.from[0].podSelector.matchLabels,{'app.kubernetes.io/name':'keycloak-operator'});
+  assert.deepEqual(operatorRule.from[1].podSelector.matchLabels,{'job-name':'spectrace-realm'},'Realm import Job may reach Keycloak without opening the namespace');
+});
+
+check('Keycloak Operator CRDs are pinned and the operator RBAC stays in the keycloak namespace',()=>{
+  const manifests=[];
+  for(const path of ['../keycloak/operator/operator.yaml','../keycloak/operator/rbac.yaml']) {
+    const docs=parseAllDocuments(readFileSync(resolve(root,path),'utf8'));
+    for(const doc of docs) { assert.equal(doc.errors.length,0,doc.errors.join('\n')); manifests.push(doc.toJSON()); }
+  }
+  const deployment=manifests.find(d=>d.kind==='Deployment');
+  assert.equal(deployment.metadata.namespace,'keycloak-system');
+  assert.equal(deployment.spec.replicas,1);
+  assert.equal(deployment.spec.template.spec.containers[0].image,'quay.io/keycloak/keycloak-operator:26.0.7');
+  assert.equal(deployment.spec.template.spec.containers[0].resources.requests.memory,'450Mi');
+  assert.equal(deployment.spec.template.spec.containers[0].resources.requests.cpu,'300m');
+  assert.equal(deployment.spec.template.spec.containers[0].env.find(e=>e.name==='KUBERNETES_NAMESPACE').value,'keycloak');
+  assert(!manifests.some(d=>d.kind==='ClusterRole'||d.kind==='ClusterRoleBinding'));
+  const role=manifests.find(d=>d.kind==='Role');
+  const binding=manifests.find(d=>d.kind==='RoleBinding');
+  assert.equal(role.metadata.namespace,'keycloak');
+  assert.equal(binding.metadata.namespace,'keycloak');
+  assert.deepEqual(binding.subjects,[{kind:'ServiceAccount',name:'keycloak-operator',namespace:'keycloak-system'}]);
+  assert(role.rules.every(rule=>rule.apiGroups.every(group=>['','apps','batch','networking.k8s.io','k8s.keycloak.org'].includes(group))));
+  assert(role.rules.every(rule=>rule.resources.every(resource=>resource!=='*')));
+  const kustomization=parse(readFileSync(resolve(root,'../keycloak/operator/crds/kustomization.yaml'),'utf8'));
+  assert.deepEqual(kustomization.resources,[
+    'https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.0.7/kubernetes/keycloaks.k8s.keycloak.org-v1.yml',
+    'https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.0.7/kubernetes/keycloakrealmimports.k8s.keycloak.org-v1.yml'
+  ]);
+  const rendered=spawnSync(process.env.KUBECTL_BIN||'kubectl',['kustomize',resolve(root,'../keycloak/operator/crds')],{encoding:'utf8',timeout:60000});
+  if(rendered.error) throw rendered.error;
+  assert.equal(rendered.status,0,rendered.stderr);
+  const crds=parseAllDocuments(rendered.stdout).map(d=>d.toJSON()).filter(Boolean);
+  assert.deepEqual(crds.map(d=>d.metadata.name).sort(),['keycloakrealmimports.k8s.keycloak.org','keycloaks.k8s.keycloak.org']);
+});
+
+check('staging deploy custom-resource RBAC is namespace-scoped and limited to the existing CRs',()=>{
+  const directory=resolve(repo,'infra/terraform/modules/eks-addons/manifests');
+  const cases=[
+    ['gateway','gateway-gateway',['elbv2.k8s.aws']],
+    ['frontend','frontend-frontend',['elbv2.k8s.aws']],
+    ['keycloak','spectrace-keycloak',['k8s.keycloak.org','elbv2.k8s.aws']]
+  ];
+  for(const [namespace,name,groups] of cases) {
+    const role=parse(readFileSync(resolve(directory,`${namespace}-deployer-role.yaml.tmpl`),'utf8').replaceAll('${namespace}',namespace));
+    const binding=parse(readFileSync(resolve(directory,`${namespace}-deployer-rolebinding.yaml.tmpl`),'utf8').replaceAll('${namespace}',namespace).replaceAll('${group}','spectrace-staging-deploy'));
+    assert.equal(role.metadata.namespace,namespace);
+    assert.deepEqual([...new Set(role.rules.map(rule=>rule.apiGroups[0]))].sort(),groups.sort());
+    assert(role.rules.every(rule=>rule.resources.length===1 && rule.resources[0]!=='*'));
+    assert(role.rules.some(rule=>rule.verbs.includes('create')));
+    assert(role.rules.filter(rule=>rule.verbs.some(verb=>['get','patch','watch'].includes(verb))).every(rule=>rule.resourceNames?.includes(name)));
+    if(namespace==='frontend') {
+      assert(role.rules.some(rule=>rule.verbs.includes('list') && !rule.resourceNames));
+      assert(role.rules.some(rule=>rule.resourceNames?.includes(name) && rule.verbs.includes('update')));
+    }
+    assert.equal(binding.kind,'RoleBinding');
+    assert.equal(binding.metadata.namespace,namespace);
+    assert.deepEqual(binding.subjects,[{kind:'Group',name:'spectrace-staging-deploy',apiGroup:'rbac.authorization.k8s.io'}]);
+    assert.equal(binding.roleRef.kind,'Role');
+  }
+  assert.match(readFileSync(resolve(repo,'infra/terraform/modules/github-oidc/main.tf'),'utf8'),/kubernetes_groups\s*=\s*\[var\.deployer_kubernetes_group\]/);
+});
+
+check('Keycloak staging release stays behind main, budget, staging approval, and namespace checks',()=>{
+  const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/deploy-keycloak.yml'),'utf8'));
+  assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+  assert.equal(workflow.jobs.deploy.if,"github.ref == 'refs/heads/main'");
+  assert.deepEqual(workflow.jobs.deploy['runs-on'],['self-hosted','linux','staging-vpc']);
+  assert.equal(workflow.jobs.deploy.environment,'staging');
+  assert.deepEqual(workflow.jobs.deploy.permissions,{contents:'read','id-token':'write'});
+  assert.equal(workflow.jobs.deploy.env.GATEWAY_ISSUER,'${{ vars.GATEWAY_ISSUER }}');
+  assert.equal(workflow.jobs.deploy.env.MYSQL_HOST,'${{ vars.MYSQL_HOST }}');
+  assert.equal(workflow.jobs.deploy.env.AVAILABLE_CREDIT_USD,'${{ vars.STAGING_AVAILABLE_CREDIT_USD }}');
+  const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
+  assert.match(script,/aws_staging_budget\.py --require-gate/);
+  assert.match(script,/kubectl auth can-i/);
+  assert.match(script,/keycloaks\/spectrace-keycloak/);
+  assert.match(script,/targetgroupbindings\/spectrace-keycloak/);
+  assert.match(script,/kubectl get serviceaccount default --namespace keycloak/);
+  assert.doesNotMatch(script,/kubectl get namespace keycloak/);
+  assert.match(script,/keycloak-server\.json/);
+  assert.match(script,/keycloak-targetgroupbinding\.yaml/);
+  assert.doesNotMatch(script,/terraform apply|helm install|create namespace|kubectl create ns/i);
+});
+
+check('Keycloak Operator bootstrap uses a separate, temporary cluster install role and pinned CRDs',()=>{
+  const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/install-keycloak-operator.yml'),'utf8'));
+  assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+  assert.equal(workflow.jobs.install.if,"github.ref == 'refs/heads/main'");
+  assert.deepEqual(workflow.jobs.install['runs-on'],['self-hosted','linux','staging-vpc']);
+  assert.equal(workflow.jobs.install.environment,'staging');
+  assert.deepEqual(workflow.jobs.install.permissions,{contents:'read','id-token':'write'});
+  assert.equal(workflow.jobs.install.env.AWS_ROLE_ARN,'${{ vars.AWS_OPERATOR_INSTALL_ROLE_ARN }}');
+  assert.equal(workflow.jobs.install.env.AVAILABLE_CREDIT_USD,'${{ vars.STAGING_AVAILABLE_CREDIT_USD }}');
+  const script=workflow.jobs.install.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
+  assert.match(script,/aws_staging_budget\.py --require-gate/);
+  assert.match(script,/AWS_ROLE_ARN.*AWS_DEPLOY_ROLE_ARN/);
+  assert.match(script,/kubectl auth can-i "\$verb" customresourcedefinitions\.apiextensions\.k8s\.io/);
+  assert.match(script,/keycloakrealmimports\.k8s\.keycloak\.org/);
+  assert.match(script,/escalate roles\/keycloak-operator/);
+  assert.match(script,/bind roles\/keycloak-operator/);
+  assert.match(script,/kubectl apply -f "\$RUNNER_TEMP\/keycloak-operator-crds\.yaml"/);
+  assert.doesNotMatch(script,/terraform apply|helm install|create namespace|kubectl create ns/i);
+});
+
 console.log(`${count} Helm checks passed. Rendered constraints are not live pod-placement evidence.`);

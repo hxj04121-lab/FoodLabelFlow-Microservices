@@ -39,8 +39,9 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
     public_subnet_cidrs         = ["10.0.0.0/24", "10.0.1.0/24"]
     private_subnet_cidrs        = ["10.0.16.0/24", "10.0.17.0/24"]
     database_subnet_cidrs       = ["10.0.16.0/24", "10.0.17.0/24"]
-    workload_namespaces         = { gateway = "gateway", keycloak = "keycloak", rabbitmq = "rabbitmq", observability = "observability", specification = "specification", formulation = "formulation", compliance = "compliance", label-workflow = "label-workflow" }
+    workload_namespaces         = { gateway = "gateway", keycloak = "keycloak", rabbitmq = "rabbitmq", observability = "observability", specification = "specification", formulation = "formulation", compliance = "compliance", label-workflow = "label-workflow", frontend = "frontend" }
     operator_namespaces         = { rabbitmq = "rabbitmq-system", keycloak = "keycloak-system" }
+    deployer_kubernetes_group   = "spectrace-staging-deploy"
     node_groups                 = { general = { asg_name = "test-general", min_size = 1, max_size = 3 }, compliance = { asg_name = "test-compliance", min_size = 1, max_size = 4 } }
   }
   assert {
@@ -54,6 +55,39 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
   assert {
     condition     = yamldecode(helm_release.cluster_autoscaler.values[0]).fullnameOverride == "cluster-autoscaler" && yamldecode(helm_release.cluster_autoscaler.values[0]).image.tag == "v1.36.0" && yamldecode(helm_release.load_balancer_controller.values[0]).replicaCount == 2
     error_message = "The controllers must use stable names, matching Kubernetes minor version, and declared replicas."
+  }
+  assert {
+    condition = (
+      length(jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement) == 2 &&
+      toset(one([
+        for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Action
+        if contains(statement.Action, "elasticloadbalancing:RegisterTargets")
+        ])) == toset([
+        "elasticloadbalancing:ModifyTargetGroup",
+        "elasticloadbalancing:ModifyTargetGroupAttributes",
+        "elasticloadbalancing:RegisterTargets",
+        "elasticloadbalancing:DeregisterTargets"
+      ]) &&
+      toset(one([
+        for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Resource
+        if contains(statement.Action, "elasticloadbalancing:RegisterTargets")
+        ])) == toset([
+        "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-keycloak/6c9f10642dd79519",
+        "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-gateway/b8c46985507e8b58",
+        "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-frontend/*"
+        ]) && alltrue([
+        for action in flatten([for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Action]) :
+        startswith(action, "ec2:Describe") || startswith(action, "ec2:Get") ||
+        startswith(action, "elasticloadbalancing:Describe") ||
+        contains([
+          "elasticloadbalancing:ModifyTargetGroup",
+          "elasticloadbalancing:ModifyTargetGroupAttributes",
+          "elasticloadbalancing:RegisterTargets",
+          "elasticloadbalancing:DeregisterTargets"
+        ], action)
+      ])
+    )
+    error_message = "The TGB-only controller must register targets only on the two existing groups and the name-scoped frontend group, without mutating ALB infrastructure."
   }
 }
 

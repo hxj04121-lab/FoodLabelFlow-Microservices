@@ -169,7 +169,7 @@ export function Overview() {
           />
           <div className="donut-layout">
             <div
-              className="donut" style={{ background: (()=>{const total=data.product.length || 1; const a=data.product.filter(p=>p.fixture_group==="REVIEW_REQUIRED_BASELINE_NO_SOY").length/total*100; const b=a+data.product.filter(p=>p.fixture_group==="NO_ACTION_BASELINE_SOY").length/total*100; return `conic-gradient(#8862e4 0 ${a}%,#5dcfc4 ${a}% ${b}%,#6fb8e5 ${b}% 100%)`})() }}
+              className="donut" style={{ background: (()=>{const total=Math.max(data.product.length, 1); const a=data.product.filter(p=>p.fixture_group==="REVIEW_REQUIRED_BASELINE_NO_SOY").length/total*100; const b=a+data.product.filter(p=>p.fixture_group==="NO_ACTION_BASELINE_SOY").length/total*100; return `conic-gradient(var(--chart-b) 0 ${a}%,var(--chart-a) ${a}% ${b}%,var(--chart-c) ${b}% 100%)`})() }}
               role="img"
               aria-label={Object.entries(groups).map(([key,label])=>`${label}: ${data.product.filter(p=>p.fixture_group===key).length}`).join("; ")}
             >
