@@ -18,7 +18,7 @@ class GatewayDeployRuntimeTests(unittest.TestCase):
         self.assertEqual(values, {
             "GATEWAY_REALM": "spectrace",
             "GATEWAY_AUDIENCE": "spectrace-api",
-            "GATEWAY_ALLOWED_ORIGINS": "https://hxj04121-lab.github.io",
+            "GATEWAY_ALLOWED_ORIGINS": "https://hxj04121-lab.github.io,https://id.example.test",
             "GATEWAY_SPECIFICATION_WRITE_ROLES": "ADMIN_DATA_MAINTENANCE",
             "GATEWAY_FORMULATION_WRITE_ROLES": "ADMIN_DATA_MAINTENANCE",
             "GATEWAY_COMPLIANCE_WRITE_ROLES": "CHANGE_MANAGER",
