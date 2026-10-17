@@ -13,7 +13,7 @@ RUN mvn -B -ntp -q -f services/compliance/pom.xml -DskipTests package
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-RUN addgroup -S -g 10001 spectrace && adduser -S -D -H -u 10001 -G spectrace spectrace
+RUN adduser -S -D -H -u 10001 spectrace
 COPY --from=build /workspace/services/compliance/target/app.jar app.jar
 USER 10001
 EXPOSE 8080
