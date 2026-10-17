@@ -284,7 +284,7 @@ check('business service release is main-only, M1-gated, digest-pinned, budgeted,
   assert.match(script,/gateway-cors/);
   assert.match(script,/code_challenge_methods_supported/);
   assert.doesNotMatch(script,/\bAVAILABLE_CREDIT_USD\s*=|terraform apply|create namespace|kubectl create ns/i);
-  assert.match(script,/env -u AVAILABLE_CREDIT_USD/);
+  assert.match(script,/env -u AVAILABLE_CREDIT_USD python3 scripts\/aws_staging_budget\.py[\s\S]*--approved-spend-usd "\$APPROVED_STAGING_SPEND_USD"[\s\S]*--require-gate/);
 });
 check('Frontend first install uses only the Terraform namespace and refuses unmanaged workloads',()=>{
   const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/deploy-frontend.yml'),'utf8'));

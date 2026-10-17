@@ -99,12 +99,6 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-testcontainers</artifactId>
             <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.github.docker-java</groupId>
-                    <artifactId>docker-java-transport-zerodep</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.spectrace.platform</groupId>

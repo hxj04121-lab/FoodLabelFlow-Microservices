@@ -29,38 +29,14 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-testcontainers</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.github.docker-java</groupId>
-                    <artifactId>docker-java-transport-zerodep</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-mysql</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.github.docker-java</groupId>
-                    <artifactId>docker-java-transport-zerodep</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-rabbitmq</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.github.docker-java</groupId>
-                    <artifactId>docker-java-transport-zerodep</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <!-- Use the maintained, BOM-managed transport instead of Testcontainers' shaded HttpComponents copy. -->
-        <dependency>
-            <groupId>com.github.docker-java</groupId>
-            <artifactId>docker-java-transport-httpclient5</artifactId>
-            <version>3.7.1</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.amqp</groupId>
