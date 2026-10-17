@@ -93,8 +93,11 @@ docker save "$IMAGE" | gzip > frontend-image.tar.gz
 # M5 can retag/push it to the approved EKS-accessible registry.
 ```
 
-The workflow's `m3-frontend-container` artifact contains `frontend-tested.tar.gz`,
-`frontend-dist.tar.gz`, `g1-release.json` and recorded registry digests. Check the
+The read-only build job's `m3-frontend-container` artifact contains `frontend-tested.tar.gz`,
+`frontend-dist.tar.gz` and `g1-release.json`. The separate push-only publisher downloads
+that same run's tested image, checks its source/configuration and publishes it without
+rebuilding or checking out PR code; only that job has `packages: write`. Its
+`m3-frontend-release` artifact records the actual registry digest. Check the
 metadata for the actual issuer and source before deploying; a PR without the
 repository issuer variable may intentionally use a reserved test issuer.
 

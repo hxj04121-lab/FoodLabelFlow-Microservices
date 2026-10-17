@@ -223,6 +223,16 @@ post-merge M3 CI video-step timeout and one bounded retry are tracked in the
 [dated post58 readiness note](../G1-M3-post58-readiness.md). This progress does not
 change the earlier immutable test/image evidence or the live NOT RUN entries.
 
+The [17 October public preflight](../evidence/G1-M3-staging-preflight-20261017.md)
+records the later runtime state separately: TLS and discovery pass, and anonymous
+API access returns canonical 401, but the staging root/build metadata remain 404,
+the root login callback is rejected and the new-origin preflight returns 403.
+Approved identities and a test/shutdown window have not been delivered to M3.
+Real browser sign-in, authenticated service identity/API and sign-out remain
+NOT RUN; no business workload readiness or E2E result is inferred from these
+public checks. M3's delivered image remains available for the owner-controlled
+frontend rollout.
+
 From `frontend`, use `npm run build`, `npm run test:types`, `npm run test:signin`,
 `npm run test:pages` and `npm run test:deployed-config` for independent validation.
 `npm run test:deployed` is the read-only live G1 smoke; `npm run test:demo` is the

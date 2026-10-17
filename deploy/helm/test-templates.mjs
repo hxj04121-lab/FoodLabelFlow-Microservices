@@ -399,6 +399,23 @@ check('staged RabbitMQ bundle renders placement patch and quorum PDB',()=>{
   assert.deepEqual(pdb.spec.selector,term.labelSelector);
 });
 
+check('PR frontend builds are read-only and publishing consumes only the tested same-run artifact',()=>{
+  const workflow=parse(readFileSync(resolve(repo,'.github/workflows/swe5001-m3.yml'),'utf8'));
+  const build=workflow.jobs['frontend-container'];
+  assert.deepEqual(build.permissions,{contents:'read'},'PR-controlled build steps must have no package write permission');
+  assert(!build.steps.some(s=>/docker\s+(login|push)\b/.test(s.run||'')),'Build job must not publish');
+  const publish=workflow.jobs['publish-frontend-container'];
+  assert.equal(publish.needs,'frontend-container');
+  assert.equal(publish.permissions.packages,'write');
+  assert.equal(publish.if,"github.event_name == 'push' && (github.ref == 'refs/heads/XFY' || github.ref == 'refs/heads/main') && vars.VITE_OIDC_AUTHORITY != ''");
+  const download=publish.steps.find(s=>s.uses==='actions/download-artifact@v4');
+  assert.equal(download.with.name,'m3-frontend-container');
+  assert(!download.with['run-id']&&!download.with.repository,'Do not consume another run or repository artifact');
+  assert(!publish.steps.some(s=>(s.uses||'').startsWith('actions/checkout@')),'Privileged publisher must not execute checkout code');
+  const commands=publish.steps.map(s=>s.run||'').join('\n');
+  assert(commands.includes('docker load')&&commands.includes('org.opencontainers.image.revision')&&commands.includes('docker push'));
+});
+
 check('Keycloak NetworkPolicy allows ALB health checks only from configured ALB subnets',()=>{
   const platformChart=resolve(root,'platform-network-policies');
   const output=run(['template','review',platformChart,'--set-json','cidrs.alb=["10.20.0.0/24","10.20.1.0/24"]']);
