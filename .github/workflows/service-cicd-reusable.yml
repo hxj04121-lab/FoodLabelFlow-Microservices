@@ -179,7 +179,7 @@ jobs:
           BUILD_CONTEXT="${BUILD_CONTEXT:-$SERVICE_PATH}"
           image="local/${SERVICE_NAME}:${GITHUB_SHA}"
           docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "$image" "$BUILD_CONTEXT"
-          kind load docker-image "$image"
+          kind load docker-image --name chart-testing "$image"
           echo "image=$image" >> "$GITHUB_ENV"
       - name: Trivy container image gate
         uses: aquasecurity/trivy-action@v0.36.0
