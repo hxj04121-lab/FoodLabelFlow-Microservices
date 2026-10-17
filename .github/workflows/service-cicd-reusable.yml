@@ -131,6 +131,8 @@ jobs:
           MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
         run: |
           if [[ -n "$MAVEN_REACTOR_PROJECT" ]]; then
+            # The check-only goal does not build reactor siblings; install them first so the service POM can resolve.
+            mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am -DskipTests install
             mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DsuppressionFile="$GITHUB_WORKSPACE/security/owasp-suppressions.xml"
           else
             mvn -B -ntp -f "$SERVICE_PATH/pom.xml" org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DsuppressionFile="$GITHUB_WORKSPACE/security/owasp-suppressions.xml"
