@@ -11,13 +11,12 @@ fi
 : "${GITHUB_ACTIONS:?Runtime Secrets may only be managed by the protected GitHub workflow}"
 : "${GITHUB_REF:?Set GITHUB_REF}"
 : "${GITHUB_WORKFLOW:?Set GITHUB_WORKFLOW}"
-: "${STAGING_WINDOW_OPEN:?Set STAGING_WINDOW_OPEN}"
 if [[ "$GITHUB_ACTIONS" != true || "$GITHUB_REF" != refs/heads/main || "$GITHUB_WORKFLOW" != "STCN-15 staging runtime Secrets" ]]; then
   echo "Refusing runtime Secret operation outside the protected main staging workflow" >&2
   exit 2
 fi
-if [[ "$action" == apply && "$STAGING_WINDOW_OPEN" != true ]]; then
-  echo "Refusing Secret apply without an approved open staging window" >&2
+if [[ "$action" == apply && "${STAGING_WINDOW_VALIDATED:-}" != true ]]; then
+  echo "Refusing Secret apply without the protected workflow's validated budget window" >&2
   exit 2
 fi
 
@@ -48,21 +47,19 @@ for namespace in "${namespaces[@]}" keycloak; do
     echo "Refusing runtime Secret operation: deploy role cannot create Secrets in $namespace" >&2
     exit 1
   }
+  test "$(kubectl auth can-i patch secrets --namespace "$namespace")" = yes || {
+    echo "Refusing runtime Secret operation: deploy role cannot update Secrets in $namespace" >&2
+    exit 1
+  }
 done
 
 if [[ "$action" == apply ]]; then
   : "${MYSQL_HOST:?Set MYSQL_HOST to the private RDS endpoint}"
-  : "${RABBITMQ_HOST:?Set RABBITMQ_HOST to the private RabbitMQ service hostname}"
-  : "${RABBITMQ_USERNAME:?Set the RabbitMQ runtime username}"
-  : "${RABBITMQ_PASSWORD:?Set the RabbitMQ runtime password}"
   : "${GATEWAY_ISSUER:?Set GATEWAY_ISSUER to the approved staging realm issuer}"
   : "${SPECTRACE_SECURITY_JWKSETURI:?Set the internal Keycloak JWKS URI}"
-  [[ "$MYSQL_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9]$ && "$MYSQL_HOST" != *..* ]] || { echo "MYSQL_HOST must be a DNS hostname" >&2; exit 2; }
-  [[ "$RABBITMQ_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9]$ && "$RABBITMQ_HOST" != *..* ]] || { echo "RABBITMQ_HOST must be a DNS hostname" >&2; exit 2; }
+  [[ "$MYSQL_HOST" =~ ^[A-Za-z0-9.-]+\.ap-southeast-1\.rds\.amazonaws\.com$ ]] || { echo "MYSQL_HOST must be the actual ap-southeast-1 RDS endpoint" >&2; exit 2; }
   [[ "$GATEWAY_ISSUER" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/auth/realms/spectrace$ ]] || { echo "GATEWAY_ISSUER must be the HTTPS /auth/realms/spectrace URL" >&2; exit 2; }
   [[ "$SPECTRACE_SECURITY_JWKSETURI" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/auth/realms/spectrace/protocol/openid-connect/certs$ ]] || { echo "SPECTRACE_SECURITY_JWKSETURI must be the Keycloak realm JWKS URL" >&2; exit 2; }
-  [[ "$RABBITMQ_USERNAME" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || { echo "RABBITMQ_USERNAME has invalid characters or length" >&2; exit 2; }
-  [[ "$RABBITMQ_PASSWORD" =~ ^[A-Za-z0-9_-]{32,128}$ ]] || { echo "RABBITMQ_PASSWORD must be a 32-128 character generated secret" >&2; exit 2; }
   [[ "${KEYCLOAK_DB_PASSWORD:-}" =~ ^[A-Za-z0-9_-]{32,128}$ ]] || { echo "KEYCLOAK_DB_PASSWORD must be a 32-128 character generated secret" >&2; exit 2; }
   for variable in "${variables[@]}"; do
     value="${!variable:-}"
@@ -88,9 +85,6 @@ for i in "${!namespaces[@]}"; do
         "SPRING_DATASOURCE_URL=jdbc:mysql://${MYSQL_HOST}:3306/${schema}?sslMode=REQUIRED&serverTimezone=UTC" \
         "SPRING_DATASOURCE_USERNAME=${schema}" \
         "SPRING_DATASOURCE_PASSWORD=${password}" \
-        "RABBITMQ_HOST=${RABBITMQ_HOST}" \
-        "RABBITMQ_USERNAME=${RABBITMQ_USERNAME}" \
-        "RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}" \
         "SPECTRACE_SECURITY_ISSUERURI=${GATEWAY_ISSUER}" \
         "SPECTRACE_SECURITY_JWKSETURI=${SPECTRACE_SECURITY_JWKSETURI}" \
         "SPECTRACE_SECURITY_AUDIENCE=spectrace-api") \

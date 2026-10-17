@@ -66,6 +66,17 @@ run "deploy_role_trust_and_access_are_staging_scoped" {
   }
 
   assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.deploy.policy).Statement :
+      contains(statement.Action, "eks:DescribeNodegroup") && statement.Resource == "arn:aws:eks:ap-southeast-1:111122223333:nodegroup/spectrace-staging/compliance/*"
+      ]) && anytrue([
+      for statement in jsondecode(aws_iam_role_policy.deploy.policy).Statement :
+      contains(statement.Action, "secretsmanager:GetSecretValue") && can(regex("spectrace-staging/mysql/master-\\*", statement.Resource))
+    ])
+    error_message = "The deploy role may inspect only the compliance node group and read only the staging RDS bootstrap secret."
+  }
+
+  assert {
     condition     = aws_eks_access_entry.deploy[0].type == "STANDARD" && aws_eks_access_policy_association.deploy[0].policy_arn == "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy" && aws_eks_access_policy_association.deploy[0].access_scope[0].type == "namespace" && toset(aws_eks_access_policy_association.deploy[0].access_scope[0].namespaces) == toset(["gateway", "keycloak", "specification", "formulation", "compliance", "label-workflow", "frontend"])
     error_message = "The deploy role must receive namespace-scoped edit access only for the seven application namespaces."
   }

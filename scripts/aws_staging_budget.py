@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from pathlib import Path
 
 REGION = "ap-southeast-1"
+STAGING_SPEND_CAP_USD = Decimal("150")
 BULK = "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/{service}/current/{region}/index.csv"
 
 # Pricing rows are selected from AWS's public regional Price List CSVs. No AWS credentials are used.
@@ -211,6 +212,8 @@ def report(data, hours, experiment_hours, k6_hours, credit, approved_spend=None,
     spend_amount = Decimal("0") if approved_spend is None else decimal(approved_spend, "owner-approved spend limit")
     if credit_amount < 0 or spend_amount < 0:
         raise ValueError("available credit and owner-approved spend limit must be non-negative")
+    if spend_amount > STAGING_SPEND_CAP_USD:
+        raise ValueError("owner-approved staging spend cannot exceed the STCN-17 USD 150 cap")
     remaining = credit_amount + spend_amount - final
     passed = final <= credit_amount + spend_amount
     print("Available AWS credit:      UNVERIFIED" if credit is None else f"Available AWS credit:      ${credit_amount:.2f} (explicit input)")

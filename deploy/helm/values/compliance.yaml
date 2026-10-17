@@ -1,4 +1,18 @@
 serviceName: compliance
+image:
+  repository: ghcr.io/hxj04121-lab/foodlabelflow-microservices/compliance
+  digest: sha256:94295979c70625b1f9dc20941351acc2c218f97f04b82c81f1d51b53b8ec7ce5
+env:
+  - name: RABBITMQ_HOST
+    value: spectrace.rabbitmq.svc.cluster.local
+  - name: RABBITMQ_PORT
+    value: "5672"
+  - name: RABBITMQ_USERNAME
+    valueFrom:
+      secretKeyRef: {name: compliance-rabbitmq-user-credentials, key: username}
+  - name: RABBITMQ_PASSWORD
+    valueFrom:
+      secretKeyRef: {name: compliance-rabbitmq-user-credentials, key: password}
 envFrom:
   - secretRef:
       name: compliance-runtime
@@ -21,5 +35,11 @@ networkPolicy:
             matchLabels: {kubernetes.io/metadata.name: rabbitmq}
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: rabbitmq
+              app.kubernetes.io/name: spectrace
       ports: [{port: 5672, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: keycloak}
+          podSelector:
+            matchLabels: {app: keycloak}
+      ports: [{port: 8080, protocol: TCP}]
