@@ -1,0 +1,47 @@
+# Staging ingress and backend peers for service-specific namespaces.
+networkPolicy:
+  ingressFromPeers: [{namespace: observability, name: grafana-alloy}]
+  ingressFromCIDRs:
+    - 10.40.0.0/20
+    - 10.40.16.0/20
+  egressRules:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: specification
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: specification
+      ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: formulation
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: formulation
+      ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: compliance
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: compliance
+      ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: label-workflow
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: label-workflow
+      ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: keycloak
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports: [{port: 8080, protocol: TCP}]

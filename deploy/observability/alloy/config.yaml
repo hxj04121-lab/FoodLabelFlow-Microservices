@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alloy
+  namespace: observability
+data:
+  config.alloy: |
+    discovery.kubernetes "pods" {
+      role = "pod"
+    }
+
+    discovery.relabel "applications" {
+      targets = discovery.kubernetes.pods.targets
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        regex = "gateway|specification|formulation|compliance|label-workflow"
+        action = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_ip"]
+        target_label = "__address__"
+        replacement = "$1:8080"
+      }
+      rule {
+        target_label = "__metrics_path__"
+        replacement = "/actuator/prometheus"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        target_label = "service"
+      }
+    }
+
+    prometheus.scrape "applications" {
+      targets = discovery.relabel.applications.output
+      forward_to = [prometheus.remote_write.grafana.receiver]
+      scrape_interval = "30s"
+    }
+
+    discovery.relabel "rabbitmq" {
+      targets = discovery.kubernetes.pods.targets
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        regex = "rabbitmq"
+        action = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_ip"]
+        target_label = "__address__"
+        replacement = "$1:15692"
+      }
+      rule {
+        target_label = "__metrics_path__"
+        replacement = "/metrics/detailed"
+      }
+      rule {
+        target_label = "__param_family"
+        replacement = "queue_coarse_metrics"
+      }
+    }
+
+    prometheus.scrape "rabbitmq" {
+      targets = discovery.relabel.rabbitmq.output
+      forward_to = [prometheus.remote_write.grafana.receiver]
+      scrape_interval = "30s"
+    }
+
+    prometheus.scrape "kubernetes_state" {
+      targets = [{"__address__" = "kube-state-metrics.observability.svc.cluster.local:8080"}]
+      forward_to = [prometheus.remote_write.grafana.receiver]
+      scrape_interval = "30s"
+    }
+
+    loki.source.kubernetes "pods" {
+      targets = discovery.kubernetes.pods.targets
+      forward_to = [loki.write.grafana.receiver]
+    }
+
+    prometheus.remote_write "grafana" {
+      endpoint {
+        url = sys.env("PROMETHEUS_URL")
+        basic_auth {
+          username = sys.env("GRAFANA_CLOUD_METRICS_USER")
+          password = sys.env("GRAFANA_CLOUD_API_KEY")
+        }
+      }
+    }
+
+    loki.write "grafana" {
+      endpoint {
+        url = sys.env("LOKI_URL")
+        basic_auth {
+          username = sys.env("GRAFANA_CLOUD_LOGS_USER")
+          password = sys.env("GRAFANA_CLOUD_API_KEY")
+        }
+      }
+    }

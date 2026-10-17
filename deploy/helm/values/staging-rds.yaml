@@ -1,0 +1,5 @@
+# Observed from the staging RDS subnet group; allow MySQL only to these private subnets.
+networkPolicy:
+  databaseCidrs:
+    - 10.40.64.0/20
+    - 10.40.80.0/20

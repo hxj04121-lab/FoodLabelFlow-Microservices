@@ -1,0 +1,6 @@
+# Optional compatibility overlay when Label Workflow and Compliance share the staging namespace.
+networkPolicy:
+  ingressFromPeers:
+    - {namespace: gateway, name: gateway}
+    - {namespace: staging, name: label-workflow}
+    - {namespace: observability, name: grafana-alloy}

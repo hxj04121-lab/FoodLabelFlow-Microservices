@@ -242,14 +242,15 @@ spec:
           "redirectUris": [
             "http://localhost:5173/*",
             "http://127.0.0.1:5173/*",
-            "https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/"
+            "https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/",
+            "https://staging.52zzx.top/"
           ],
           "webOrigins": [
             "+"
           ],
           "attributes": {
             "pkce.code.challenge.method": "S256",
-            "post.logout.redirect.uris": "http://localhost:5173/*##http://127.0.0.1:5173/*##https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/",
+            "post.logout.redirect.uris": "http://localhost:5173/*##http://127.0.0.1:5173/*##https://hxj04121-lab.github.io/FoodLabelFlow-Microservices/##https://staging.52zzx.top/",
             "backchannel.logout.session.required": "true",
             "oauth2.device.authorization.grant.enabled": "false",
             "oidc.ciba.grant.enabled": "false",

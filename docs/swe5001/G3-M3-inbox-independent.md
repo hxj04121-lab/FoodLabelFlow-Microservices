@@ -1,5 +1,13 @@
 # G3 M3 — independent impact inbox (STCN-101)
 
+> **15 October status update:** the inbox and later all-frontend refinement were
+> adopted through PR54 at implementation checkpoint `5beb98a`. The current shared
+> styling is recorded in [DESIGN.md](../../DESIGN.md); the following initial
+> 69-test/capture/design-extension discussion is historical. The later 72-test
+> authenticated suite and real G2 CI are recorded in
+> [the M3 report](report/M3-technical-sections.md). Staging acceptance remains
+> NOT RUN; no historical screenshot is relabelled as deployed evidence.
+
 The authenticated reference frontend now includes a read-only **Impact inbox** for a manufacturer change manager. It presents persisted finding evidence and exact bound version references before the user continues to the existing label workspace. This is a scoped extension of `SignInWorkspace`, with the incumbent implementation as its visual authority.
 
 ## Access and usage

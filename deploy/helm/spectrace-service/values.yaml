@@ -16,6 +16,7 @@ resources:
 nodeSelector:
   eks.amazonaws.com/nodegroup: general
 tolerations: []
+kindTest: false
 spread:
   enabled: true
   minimumZones: 2

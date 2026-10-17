@@ -54,13 +54,22 @@ def validate_url(name, value, required_path):
 
 
 def build_values(env=os.environ):
-    rows = [{"name": name, "value": value} for name, value in STATIC_ENV.items()]
+    rows = []
     for name, path in URLS.items():
         value = env.get(name, "").strip()
         if not value:
             raise ValueError(f"missing GitHub staging Environment variable: {name}")
         validate_url(name, value, path)
         rows.append({"name": name, "value": value})
+    # The root-hosted staging front end shares the issuer's public origin. Browsers send that Origin
+    # on module scripts, API calls and token requests, and the Gateway sees the Pod host, so it must
+    # allow it explicitly. Derived from the issuer, so no domain is hard-coded.
+    issuer = urlsplit(env["GATEWAY_ISSUER"].strip())
+    origins = STATIC_ENV["GATEWAY_ALLOWED_ORIGINS"].split(",")
+    if f"{issuer.scheme}://{issuer.netloc}" not in origins:
+        origins.append(f"{issuer.scheme}://{issuer.netloc}")
+    static = dict(STATIC_ENV, GATEWAY_ALLOWED_ORIGINS=",".join(origins))
+    rows = [{"name": name, "value": value} for name, value in static.items()] + rows
     issuer_path = urlsplit(env["GATEWAY_ISSUER"]).path
     keycloak = urlsplit(SERVICE_URLS["GATEWAY_KEYCLOAK"])
     jwks = keycloak._replace(path=issuer_path + "/protocol/openid-connect/certs").geturl()

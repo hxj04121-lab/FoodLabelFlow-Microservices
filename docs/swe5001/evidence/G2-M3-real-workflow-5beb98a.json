@@ -1,0 +1,110 @@
+{
+  "scope": "Real disposable CI Keycloak/Gateway/Specification/Formulation/Compliance/Label; no AWS or G3 ReviewTask acceptance",
+  "source": "5beb98a5b2fe56f1b30d7ada54d145bac9d5ad02",
+  "productId": "prod_usda_1118468",
+  "label": {
+    "labelVersionId": "lbl_645e164b4e7b493f85948c77a81d2979",
+    "productId": "prod_usda_1118468",
+    "formulaVersionId": "formula_11911240-5b07-44df-ba65-10f5ba6bc94c",
+    "ruleSetVersionId": "ruleset_us_falcpa_demo_v1",
+    "jurisdictionCode": "US",
+    "versionNumber": 1,
+    "lifecycleStatus": "PUBLISHED"
+  },
+  "formulaVersionId": "formula_11911240-5b07-44df-ba65-10f5ba6bc94c",
+  "specificationVersionId": "spec_b9cfbbeb-43b6-4ec6-97b0-82abdabc743f",
+  "checks": [
+    "PKCE separate maker/checker",
+    "real rule resolver/validation",
+    "request changes and resubmit",
+    "approve/publish/current label",
+    "foreign label 403"
+  ],
+  "observed": [
+    {
+      "operation": "POST /api/specifications/versions",
+      "status": 201,
+      "correlation": "d82df205-130a-4004-a776-b2911057c68f"
+    },
+    {
+      "operation": "POST /api/specifications/versions/spec_b9cfbbeb-43b6-4ec6-97b0-82abdabc743f/release",
+      "status": 200,
+      "correlation": "10786847-266c-48a2-8013-c3df85b4b208"
+    },
+    {
+      "operation": "GET /api/formulations/released-specifications?materialId=mat_chocolate_base&limit=100",
+      "status": 200,
+      "correlation": "3879e60e-63ed-41be-9676-9c213274858f"
+    },
+    {
+      "operation": "GET /api/formulations/released-specifications?materialId=mat_chocolate_base&limit=100",
+      "status": 200,
+      "correlation": "e766278e-c2eb-46d5-af7c-abcc0520d539"
+    },
+    {
+      "operation": "GET /api/formulations/released-specifications?materialId=mat_chocolate_base&limit=100",
+      "status": 200,
+      "correlation": "60bd1f00-2558-46c5-9144-95a949221b8a"
+    },
+    {
+      "operation": "GET /api/formulations/products/prod_usda_1118468",
+      "status": 200,
+      "correlation": "f981c382-bf61-4a3f-9c71-a981d3f3fa07"
+    },
+    {
+      "operation": "POST /api/formulations/formula-versions",
+      "status": 201,
+      "correlation": "3b3eaa60-4a3e-48dc-9fdf-14c295f6db2e"
+    },
+    {
+      "operation": "POST /api/formulations/formula-versions/formula_11911240-5b07-44df-ba65-10f5ba6bc94c/release",
+      "status": 200,
+      "correlation": "f3d2fad2-5213-45e6-93e8-81b64db658f4"
+    },
+    {
+      "operation": "POST /api/labels/lbl_645e164b4e7b493f85948c77a81d2979/validations",
+      "status": 201,
+      "correlation": "da959d68-edd2-4f96-afa4-77d4ae4b1b5f"
+    },
+    {
+      "operation": "POST /api/labels/lbl_645e164b4e7b493f85948c77a81d2979/submit",
+      "status": 200,
+      "correlation": "d7c382a8-85ed-4f3a-953a-ff05b60a17f1"
+    },
+    {
+      "operation": "POST /api/labels/lbl_645e164b4e7b493f85948c77a81d2979/decisions",
+      "status": 201,
+      "correlation": "f8cca17f-7218-497d-a56b-91a403a5fa32"
+    },
+    {
+      "operation": "POST /api/labels/lbl_645e164b4e7b493f85948c77a81d2979/validations",
+      "status": 201,
+      "correlation": "b33eed13-344e-4298-8a7f-caaa306fc8f2"
+    },
+    {
+      "operation": "POST /api/labels/lbl_645e164b4e7b493f85948c77a81d2979/submit",
+      "status": 200,
+      "correlation": "6ca2ab0d-6c88-423f-ae91-a4bb2cfd0c42"
+    },
+    {
+      "operation": "POST /api/labels/lbl_645e164b4e7b493f85948c77a81d2979/decisions",
+      "status": 201,
+      "correlation": "2602fad9-e932-45df-b5ba-3ba07fe3cf41"
+    },
+    {
+      "operation": "POST /api/labels/lbl_645e164b4e7b493f85948c77a81d2979/publish",
+      "status": 201,
+      "correlation": "f499b1f7-bafa-4c92-aada-db7ca4d3bd98"
+    },
+    {
+      "operation": "GET /api/labels/current?productId=prod_usda_1118468&jurisdictionCode=US",
+      "status": 200,
+      "correlation": "326b9485-7da0-47af-9222-f9641e466c29"
+    },
+    {
+      "operation": "GET /api/labels/lbl_645e164b4e7b493f85948c77a81d2979",
+      "status": 403,
+      "correlation": "a8392c7d-c657-4c5b-ba87-425713eb183e"
+    }
+  ]
+}

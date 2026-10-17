@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.app.json",
   "compilerOptions": { "incremental": false, "types": ["vite/client", "node"] },
-  "include": ["auth-tests/signin.spec.ts", "real-auth-tests/g2-workflow.spec.ts", "demo-tests/*.ts", "playwright.demo-path.config.ts"]
+  "include": ["auth-tests/signin.spec.ts", "real-auth-tests/g2-workflow.spec.ts", "demo-tests/*.ts", "playwright.demo-path.config.ts", "container-tests/*.ts", "playwright.container.config.ts"]
 }

@@ -1,0 +1,479 @@
+name: Protected Frontend staging release
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_window_hours:
+        description: User-approved staging window length in hours
+        type: number
+        required: true
+      staging_window_end_sgt:
+        description: User-confirmed staging shutdown time in Asia/Singapore (YYYY-MM-DD HH:MM)
+        type: string
+        required: true
+      activate_frontend_default:
+        description: After health gates pass, route the HTTPS default action to Frontend
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, staging-vpc]
+    environment: staging
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      GATEWAY_ISSUER: ${{ vars.GATEWAY_ISSUER }}
+      FRONTEND_TARGET_GROUP_ARN: ${{ vars.FRONTEND_TARGET_GROUP_ARN }}
+      AVAILABLE_CREDIT_USD: ${{ secrets.AVAILABLE_CREDIT_USD }}
+      APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
+      STAGING_WINDOW_HOURS: ${{ inputs.staging_window_hours }}
+      STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
+      ACTIVATE_FRONTEND_DEFAULT: ${{ inputs.activate_frontend_default }}
+      STAGING_ALB_NAME: foodlabelflow-staging-public-alb
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: deploy/helm/package-lock.json
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.1
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.0
+      - name: Validate the approved window, chart, and fail-closed budget gate
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          for value in "$AWS_ACCOUNT_ID" "$AWS_REGION" "$EKS_CLUSTER_NAME" "$AWS_ROLE_ARN" "$GATEWAY_ISSUER" "$FRONTEND_TARGET_GROUP_ARN"; do
+            test -n "$value"
+          done
+          python3 platform/staging/validate_window.py "$STAGING_WINDOW_HOURS" "$STAGING_WINDOW_END_SGT" > "$RUNNER_TEMP/staging-window.json"
+          npm ci --ignore-scripts --no-audit --no-fund --prefix deploy/helm
+          npm test --prefix deploy/helm
+          python3 -m unittest discover -s tests -p 'test_frontend_*.py' -v
+          python3 -m unittest discover -s tests -p 'test_staging_window.py' -v
+          if ! python3 scripts/aws_staging_budget.py --require-gate --hours "$STAGING_WINDOW_HOURS" --experiment-hours 0 --k6-hours 0 > "$RUNNER_TEMP/frontend-budget-gate.log" 2>&1; then
+            echo '::error::The existing fail-closed staging funding/pricing gate did not pass; no AWS or Kubernetes write was attempted.'
+            exit 1
+          fi
+          echo 'Approved staging funding and pricing gate passed.'
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify AWS identity, existing ALB routes, and target groups
+        run: |
+          set -euo pipefail
+          identity=$(aws sts get-caller-identity --query 'Arn' --output text)
+          aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" > "$RUNNER_TEMP/cluster.json"
+          cluster_arn=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cluster"]["arn"])' "$RUNNER_TEMP/cluster.json")
+          cluster_vpc=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cluster"]["resourcesVpcConfig"]["vpcId"])' "$RUNNER_TEMP/cluster.json")
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cluster"]["status"])' "$RUNNER_TEMP/cluster.json")" = ACTIVE
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" >/dev/null
+          context=$(kubectl config current-context)
+          python3 platform/gateway/validate-deploy-target.py \
+            --account-id "$AWS_ACCOUNT_ID" --role-arn "$AWS_ROLE_ARN" --caller-arn "$identity" \
+            --region "$AWS_REGION" --cluster "$EKS_CLUSTER_NAME" --cluster-arn "$cluster_arn" --context "$context"
+          aws elbv2 describe-load-balancers --names "$STAGING_ALB_NAME" > "$RUNNER_TEMP/alb.json"
+          alb_arn=$(python3 -c 'import json,sys; rows=json.load(open(sys.argv[1]))["LoadBalancers"]; assert len(rows)==1; print(rows[0]["LoadBalancerArn"])' "$RUNNER_TEMP/alb.json")
+          aws elbv2 describe-target-groups --names foodlabelflow-staging-gateway foodlabelflow-staging-keycloak > "$RUNNER_TEMP/backend-target-groups.json"
+          gateway_tg=$(python3 - "$RUNNER_TEMP/backend-target-groups.json" <<'PY'
+          import json, sys
+          rows=json.load(open(sys.argv[1]))['TargetGroups']
+          names={row['TargetGroupName']:row['TargetGroupArn'] for row in rows}
+          assert set(names)=={'foodlabelflow-staging-gateway','foodlabelflow-staging-keycloak'}
+          print(names['foodlabelflow-staging-gateway'])
+          PY
+          )
+          keycloak_tg=$(python3 - "$RUNNER_TEMP/backend-target-groups.json" <<'PY'
+          import json, sys
+          rows=json.load(open(sys.argv[1]))['TargetGroups']
+          names={row['TargetGroupName']:row['TargetGroupArn'] for row in rows}
+          assert set(names)=={'foodlabelflow-staging-gateway','foodlabelflow-staging-keycloak'}
+          print(names['foodlabelflow-staging-keycloak'])
+          PY
+          )
+          aws elbv2 describe-target-groups --target-group-arns "$FRONTEND_TARGET_GROUP_ARN" > "$RUNNER_TEMP/frontend-target-group.json"
+          aws elbv2 describe-listeners --load-balancer-arn "$alb_arn" > "$RUNNER_TEMP/listeners-before.json"
+          listener_arn=$(python3 -c 'import json,sys; rows=[r for r in json.load(open(sys.argv[1]))["Listeners"] if r.get("Port")==443]; assert len(rows)==1; print(rows[0]["ListenerArn"])' "$RUNNER_TEMP/listeners-before.json")
+          aws elbv2 describe-rules --listener-arn "$listener_arn" > "$RUNNER_TEMP/rules-before.json"
+          python3 platform/frontend/verify-alb.py \
+            "$RUNNER_TEMP/alb.json" "$RUNNER_TEMP/listeners-before.json" "$RUNNER_TEMP/rules-before.json" \
+            "$RUNNER_TEMP/frontend-target-group.json" "$cluster_vpc" "$alb_arn" "$gateway_tg" "$keycloak_tg" "$FRONTEND_TARGET_GROUP_ARN" \
+            > "$RUNNER_TEMP/alb-verification.json"
+          mapfile -t subnet_ids < <(python3 - "$RUNNER_TEMP/alb.json" <<'PY'
+          import json, sys
+          rows=json.load(open(sys.argv[1]))['LoadBalancers'][0]['AvailabilityZones']
+          print('\n'.join(row['SubnetId'] for row in rows if row.get('SubnetId')))
+          PY
+          )
+          aws ec2 describe-subnets --subnet-ids "${subnet_ids[@]}" > "$RUNNER_TEMP/alb-subnets.json"
+          subnet_cidrs=$(python3 - "$RUNNER_TEMP/alb-subnets.json" "$cluster_vpc" <<'PY'
+          import json, sys
+          rows=json.load(open(sys.argv[1]))['Subnets']
+          vpc=sys.argv[2]
+          assert len(rows)>=2 and all(row.get('VpcId')==vpc and row.get('State')=='available' for row in rows)
+          print(','.join(sorted(row['CidrBlock'] for row in rows)))
+          PY
+          )
+          FRONTEND_ALB_SUBNET_CIDRS="$subnet_cidrs" python3 platform/frontend/deploy-runtime-values.py > "$RUNNER_TEMP/frontend-runtime-values.json"
+          for tg in "$gateway_tg" "$keycloak_tg"; do
+            aws elbv2 describe-target-health --target-group-arn "$tg" > "$RUNNER_TEMP/target-health-before.json"
+            python3 - "$RUNNER_TEMP/target-health-before.json" <<'PY'
+          import json, runpy, sys
+          runpy.run_path('platform/frontend/verify-alb.py')['verify_healthy_targets'](
+              json.load(open(sys.argv[1])), 'Existing Gateway/Keycloak Target Group')
+          PY
+          done
+      - name: Verify GHCR digest and render the frontend release
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, urllib.parse, urllib.request
+          repository='hxj04121-lab/foodlabelflow-microservices/frontend'
+          expected='sha256:e6720ddc4416a153c5eecb11d8381bd9d2637e50f9ced6017d6b813f42047051'
+          token_url='https://ghcr.io/token?'+urllib.parse.urlencode({'scope':f'repository:{repository}:pull','service':'ghcr.io'})
+          token=json.load(urllib.request.urlopen(token_url,timeout=20))['token']
+          headers={'Authorization':'Bearer '+token,'Accept':', '.join(['application/vnd.oci.image.index.v1+json','application/vnd.docker.distribution.manifest.list.v2+json','application/vnd.oci.image.manifest.v1+json','application/vnd.docker.distribution.manifest.v2+json'])}
+          request=urllib.request.Request(f'https://ghcr.io/v2/{repository}/manifests/{expected}',headers=headers)
+          with urllib.request.urlopen(request,timeout=20) as response:
+              manifest=json.load(response)
+              if response.headers.get('Docker-Content-Digest')!=expected or manifest.get('mediaType') not in ('application/vnd.oci.image.manifest.v1+json','application/vnd.docker.distribution.manifest.v2+json'):
+                  raise SystemExit('Pinned Frontend digest changed or is not a single-platform image manifest')
+          request=urllib.request.Request(f'https://ghcr.io/v2/{repository}/blobs/{manifest["config"]["digest"]}',headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(request,timeout=20) as response:
+              image=json.load(response)
+          if image.get('os')!='linux' or image.get('architecture')!='amd64' or image.get('config',{}).get('User')!='101':
+              raise SystemExit('Pinned Frontend image must be linux/amd64 and non-root')
+          if '8080/tcp' not in image.get('config',{}).get('ExposedPorts',{}):
+              raise SystemExit('Pinned Frontend image must expose HTTP port 8080')
+          print('Anonymous GHCR pull verified for the pinned linux/amd64 non-root image; no registry credential was used.')
+          PY
+          helm lint deploy/helm/spectrace-service --strict \
+            --values deploy/helm/values/frontend.yaml --values "$RUNNER_TEMP/frontend-runtime-values.json"
+          helm template frontend deploy/helm/spectrace-service --namespace frontend \
+            --values deploy/helm/values/frontend.yaml --values "$RUNNER_TEMP/frontend-runtime-values.json" \
+            > "$RUNNER_TEMP/frontend-rendered.yaml"
+          grep -Fq 'ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:e6720ddc4416a153c5eecb11d8381bd9d2637e50f9ced6017d6b813f42047051' "$RUNNER_TEMP/frontend-rendered.yaml"
+      - name: Check namespace, capacity and authorization before deployment
+        run: |
+          set -euo pipefail
+          kubectl get nodes -l eks.amazonaws.com/nodegroup=general -o json > "$RUNNER_TEMP/general-nodes.json"
+          python3 - "$RUNNER_TEMP/general-nodes.json" <<'PY'
+          import json, sys
+          nodes=json.load(open(sys.argv[1]))['items']
+          ready=[node for node in nodes if any(c.get('type')=='Ready' and c.get('status')=='True' for c in node['status'].get('conditions',[]))]
+          if not ready:
+              raise SystemExit('No Ready general node is available; node-group scale changes are not permitted by this workflow.')
+          PY
+          if kubectl get namespace frontend -o name >/dev/null 2>&1; then
+            helm list --namespace frontend --filter '^frontend$' --output json > "$RUNNER_TEMP/frontend-release.json"
+            python3 - "$RUNNER_TEMP/frontend-release.json" <<'PY'
+          import json, sys
+          releases=json.load(open(sys.argv[1]))
+          if len(releases)!=1 or releases[0].get('name')!='frontend' or releases[0].get('status')!='deployed':
+              raise SystemExit('Namespace frontend exists without exactly one deployed frontend Helm release; refusing to adopt existing resources.')
+          PY
+          else
+            test "$(kubectl auth can-i create namespaces)" = yes
+          fi
+          for resource in deployments services serviceaccounts networkpolicies targetgroupbindings.elbv2.k8s.aws; do
+            for verb in get list watch create patch update; do
+              test "$(kubectl auth can-i "$verb" "$resource" --namespace frontend)" = yes
+            done
+          done
+          for verb in get list create update patch; do
+            test "$(kubectl auth can-i "$verb" secrets --namespace frontend)" = yes
+          done
+          test "$(kubectl auth can-i get pods --namespace frontend)" = yes
+          test "$(kubectl auth can-i list endpointslices --namespace frontend)" = yes
+          kubectl create namespace frontend --dry-run=client -o yaml | kubectl apply --dry-run=server -f - >/dev/null
+      - name: Create namespace and server-validate rendered resources
+        run: |
+          set -euo pipefail
+          if ! kubectl get namespace frontend -o name >/dev/null 2>&1; then
+            kubectl create namespace frontend
+          fi
+          kubectl apply --dry-run=server -f "$RUNNER_TEMP/frontend-rendered.yaml" >/dev/null
+      - name: Install or upgrade Frontend and verify service endpoints
+        run: |
+          set -euo pipefail
+          if ! helm upgrade --install frontend deploy/helm/spectrace-service --namespace frontend \
+            --values deploy/helm/values/frontend.yaml --values "$RUNNER_TEMP/frontend-runtime-values.json" \
+            --atomic --wait --timeout 10m; then
+            kubectl get pods --namespace frontend -o wide > "$RUNNER_TEMP/frontend-pods-on-failure.txt" 2>&1 || true
+            kubectl describe pods --namespace frontend > "$RUNNER_TEMP/frontend-scheduling-on-failure.txt" 2>&1 || true
+            kubectl describe nodes -l eks.amazonaws.com/nodegroup=general > "$RUNNER_TEMP/frontend-node-capacity-on-failure.txt" 2>&1 || true
+            echo '::error::Frontend did not become Ready; no node group expansion was attempted.'
+            exit 1
+          fi
+          kubectl rollout status deployment/frontend-frontend --namespace frontend --timeout=5m
+          kubectl get pods --namespace frontend -l app.kubernetes.io/instance=frontend -o json > "$RUNNER_TEMP/frontend-pods.json"
+          kubectl get deployment frontend-frontend --namespace frontend -o json > "$RUNNER_TEMP/frontend-deployment.json"
+          kubectl get service frontend-frontend --namespace frontend -o json > "$RUNNER_TEMP/frontend-service.json"
+          kubectl get networkpolicy frontend-frontend --namespace frontend -o json > "$RUNNER_TEMP/frontend-networkpolicy.json"
+          kubectl get targetgroupbindings.elbv2.k8s.aws frontend-frontend --namespace frontend -o json > "$RUNNER_TEMP/frontend-targetgroupbinding.json"
+          kubectl get endpointslices --namespace frontend -l kubernetes.io/service-name=frontend-frontend -o json > "$RUNNER_TEMP/frontend-endpoints.json"
+          helm status frontend --namespace frontend > "$RUNNER_TEMP/frontend-release-status.txt"
+          python3 - "$RUNNER_TEMP/frontend-pods.json" "$RUNNER_TEMP/frontend-endpoints.json" <<'PY'
+          import json, sys
+          pods=json.load(open(sys.argv[1]))['items']
+          assert len(pods)==1, f'expected one Frontend Pod, found {len(pods)}'
+          pod=pods[0]
+          statuses=pod['status'].get('containerStatuses',[])
+          digest='sha256:e6720ddc4416a153c5eecb11d8381bd9d2637e50f9ced6017d6b813f42047051'
+          assert pod['status'].get('phase')=='Running'
+          assert len(statuses)==1 and statuses[0].get('ready') is True and statuses[0].get('restartCount')==0
+          assert statuses[0].get('imageID','').endswith('@'+digest)
+          endpoints=[ep for sl in json.load(open(sys.argv[2]))['items'] for ep in sl.get('endpoints',[]) if ep.get('conditions',{}).get('ready')]
+          assert endpoints, 'Frontend Service has no ready EndpointSlice'
+          PY
+          kubectl port-forward --namespace frontend service/frontend-frontend 18081:8080 > "$RUNNER_TEMP/frontend-port-forward.log" 2>&1 &
+          port_forward_pid=$!
+          trap 'kill "$port_forward_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            health_status=$(curl --silent --show-error -o "$RUNNER_TEMP/frontend-healthz.txt" -w '%{http_code}' http://127.0.0.1:18081/healthz || true)
+            if [[ "$health_status" == 200 ]]; then break; fi
+            sleep 2
+          done
+          test "$health_status" = 200
+          grep -qx 'ok' "$RUNNER_TEMP/frontend-healthz.txt"
+          : > "$RUNNER_TEMP/frontend-asset-http-results.txt"
+          root_status=$(curl --silent --show-error -D "$RUNNER_TEMP/frontend-index.headers" http://127.0.0.1:18081/ -o "$RUNNER_TEMP/frontend-index.html" -w '%{http_code}')
+          test "$root_status" = 200
+          deep_status=$(curl --silent --show-error http://127.0.0.1:18081/labels -o "$RUNNER_TEMP/frontend-deep-route.html" -w '%{http_code}')
+          test "$deep_status" = 200
+          cmp "$RUNNER_TEMP/frontend-index.html" "$RUNNER_TEMP/frontend-deep-route.html"
+          python3 - "$RUNNER_TEMP/frontend-index.html" <<'PY' > "$RUNNER_TEMP/frontend-assets.txt"
+          import re, sys
+          html=open(sys.argv[1]).read()
+          assets=sorted(set(re.findall(r'(?:src|href)="(/assets/[^"]+\.(?:js|css))"',html)))
+          if not assets:
+              raise SystemExit('Root HTML did not reference a JS or CSS asset.')
+          print('\n'.join(assets))
+          PY
+          while IFS= read -r asset; do
+            asset_status=$(curl --silent --show-error "http://127.0.0.1:18081$asset" -o /dev/null -w '%{http_code}')
+            test "$asset_status" = 200
+            echo "$asset HTTP $asset_status" >> "$RUNNER_TEMP/frontend-asset-http-results.txt"
+          done < "$RUNNER_TEMP/frontend-assets.txt"
+      - name: Wait for all three Target Groups to become Healthy
+        run: |
+          set -euo pipefail
+          frontend_tg="$FRONTEND_TARGET_GROUP_ARN"
+          gateway_tg=$(python3 - "$RUNNER_TEMP/backend-target-groups.json" <<'PY'
+          import json, sys
+          print(next(row['TargetGroupArn'] for row in json.load(open(sys.argv[1]))['TargetGroups'] if row['TargetGroupName']=='foodlabelflow-staging-gateway'))
+          PY
+          )
+          keycloak_tg=$(python3 - "$RUNNER_TEMP/backend-target-groups.json" <<'PY'
+          import json, sys
+          print(next(row['TargetGroupArn'] for row in json.load(open(sys.argv[1]))['TargetGroups'] if row['TargetGroupName']=='foodlabelflow-staging-keycloak'))
+          PY
+          )
+          for pair in "frontend:$frontend_tg" "gateway:$gateway_tg" "keycloak:$keycloak_tg"; do
+            name="${pair%%:*}"
+            tg="${pair#*:}"
+            healthy=false
+            for attempt in $(seq 1 36); do
+              aws elbv2 describe-target-health --target-group-arn "$tg" > "$RUNNER_TEMP/$name-target-health.json"
+              if python3 - "$RUNNER_TEMP/$name-target-health.json" "$name" <<'PY'
+          import json, runpy, sys
+          runpy.run_path('platform/frontend/verify-alb.py')['verify_healthy_targets'](
+              json.load(open(sys.argv[1])), sys.argv[2])
+          PY
+              then healthy=true; break; fi
+              sleep 5
+            done
+            test "$healthy" = true
+          done
+      - name: Record pre-cutover listener evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/frontend-evidence"
+          for file in staging-window.json alb.json listeners-before.json rules-before.json alb-verification.json frontend-target-group.json frontend-runtime-values.json frontend-rendered.yaml frontend-pods.json frontend-deployment.json frontend-service.json frontend-networkpolicy.json frontend-targetgroupbinding.json frontend-endpoints.json frontend-healthz.txt frontend-index.headers frontend-assets.txt frontend-asset-http-results.txt frontend-release-status.txt frontend-target-health.json gateway-target-health.json keycloak-target-health.json; do
+            [[ ! -f "$RUNNER_TEMP/$file" ]] || cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/frontend-evidence/$file"
+          done
+          if [[ -f "$RUNNER_TEMP/listeners-before.json" ]]; then
+            python3 - "$RUNNER_TEMP/listeners-before.json" "$RUNNER_TEMP/frontend-evidence/default-actions-before.json" <<'PY'
+          import json, sys
+          rows=[row for row in json.load(open(sys.argv[1]))['Listeners'] if row.get('Port')==443]
+          assert len(rows)==1
+          json.dump(rows[0].get('DefaultActions',[]),open(sys.argv[2],'w'),indent=2)
+          PY
+          fi
+          if [[ "${ACTIVATE_FRONTEND_DEFAULT:-false}" != true ]]; then
+            echo 'not-requested' > "$RUNNER_TEMP/frontend-evidence/listener-cutover.txt"
+          fi
+      - name: Activate Frontend as HTTPS default and smoke-test public routes
+        if: inputs.activate_frontend_default
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/frontend-evidence"
+          listener_arn=$(python3 -c 'import json,sys; rows=[r for r in json.load(open(sys.argv[1]))["Listeners"] if r.get("Port")==443]; assert len(rows)==1; print(rows[0]["ListenerArn"])' "$RUNNER_TEMP/listeners-before.json")
+          kubectl get pods --namespace gateway -l app.kubernetes.io/instance=gateway -o json > "$RUNNER_TEMP/gateway-pod.json"
+          python3 - "$RUNNER_TEMP/gateway-pod.json" "$GATEWAY_ISSUER" <<'PY'
+          import json, sys
+          pod=json.load(open(sys.argv[1]))
+          containers=pod.get('items',[])
+          assert containers, 'Gateway Pod is not available for CORS cutover checks'
+          env={row['name']:row.get('value') for row in containers[0]['spec']['containers'][0].get('env',[])}
+          assert env.get('GATEWAY_ALLOWED_ORIGINS')=='https://hxj04121-lab.github.io,https://staging.52zzx.top'
+          assert env.get('GATEWAY_ISSUER')==sys.argv[2]
+          PY
+          check_preflight() {
+            origin="$1"
+            expected_status="$2"
+            headers="$evidence/preflight-cutover-$(echo "$origin" | sed 's#https://##;s#/#-#g').headers"
+            status=$(curl --silent --show-error --max-time 20 -X OPTIONS \
+              -H "Origin: $origin" -H 'Access-Control-Request-Method: GET' \
+              -H 'Access-Control-Request-Headers: authorization,content-type' \
+              -o /dev/null -D "$headers" -w '%{http_code}' \
+              https://staging.52zzx.top/api/formulations/products)
+            if [[ "$expected_status" == allowed ]]; then
+              [[ "$status" == 200 || "$status" == 204 ]]
+              allow=$(awk -F': ' 'tolower($1)=="access-control-allow-origin"{gsub("\r","",$2);print $2}' "$headers")
+              test "$allow" = "$origin"
+            else
+              test "$status" = 403
+              test -z "$(awk -F': ' 'tolower($1)=="access-control-allow-origin"{print $2}' "$headers")"
+            fi
+          }
+          check_preflight https://hxj04121-lab.github.io allowed
+          check_preflight https://staging.52zzx.top allowed
+          check_preflight https://not-allowed.example denied
+          listener_changed=false
+          rollback_listener() {
+            result=$?
+            trap - EXIT
+            if [[ "$result" -ne 0 && "$listener_changed" == true ]]; then
+              if aws elbv2 modify-listener --listener-arn "$listener_arn" --default-actions "file://$evidence/default-actions-before.json" >/dev/null; then
+                echo 'default-action-restored' > "$evidence/listener-cutover.txt"
+              else
+                echo 'rollback-failed; manual restoration is required from default-actions-before.json' > "$evidence/listener-cutover.txt"
+              fi
+            fi
+            exit "$result"
+          }
+          trap rollback_listener EXIT
+          old_default=$(python3 - "$RUNNER_TEMP/listeners-before.json" "$FRONTEND_TARGET_GROUP_ARN" <<'PY'
+          import json, sys
+          row=next(r for r in json.load(open(sys.argv[1]))['Listeners'] if r.get('Port')==443)
+          print('true' if [a.get('TargetGroupArn') for a in row.get('DefaultActions',[]) if a.get('Type')=='forward']==[sys.argv[2]] else 'false')
+          PY
+          )
+          if [[ "$old_default" != true ]]; then
+            listener_changed=true
+            aws elbv2 modify-listener --listener-arn "$listener_arn" \
+              --default-actions "Type=forward,TargetGroupArn=$FRONTEND_TARGET_GROUP_ARN" >/dev/null
+          fi
+          aws elbv2 describe-listeners --load-balancer-arn "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["LoadBalancers"][0]["LoadBalancerArn"])' "$RUNNER_TEMP/alb.json")" > "$RUNNER_TEMP/listeners-after.json"
+          aws elbv2 describe-rules --listener-arn "$listener_arn" > "$RUNNER_TEMP/rules-after.json"
+          python3 - "$RUNNER_TEMP/rules-before.json" "$RUNNER_TEMP/rules-after.json" "$RUNNER_TEMP/listeners-after.json" "$FRONTEND_TARGET_GROUP_ARN" <<'PY'
+          import json, runpy, sys
+          checks=runpy.run_path('platform/frontend/verify-alb.py')
+          checks['verify_rules_unchanged'](json.load(open(sys.argv[1])),json.load(open(sys.argv[2])))
+          checks['verify_default_forward'](json.load(open(sys.argv[3])),sys.argv[4])
+          PY
+          root_status=$(curl --silent --show-error --max-time 20 -o "$evidence/public-index.html" -D "$evidence/public-index.headers" -w '%{http_code}' https://staging.52zzx.top/)
+          test "$root_status" = 200
+          deep_status=$(curl --silent --show-error --max-time 20 -o "$evidence/public-deep-route.html" -w '%{http_code}' https://staging.52zzx.top/labels)
+          test "$deep_status" = 200
+          cmp "$evidence/public-index.html" "$evidence/public-deep-route.html"
+          python3 - "$evidence/public-index.html" <<'PY' > "$evidence/public-assets.txt"
+          import re, sys
+          assets=sorted(set(re.findall(r'(?:src|href)="(/assets/[^"]+\.(?:js|css))"',open(sys.argv[1]).read())))
+          if not assets: raise SystemExit('Public Frontend page has no JS/CSS assets')
+          print('\n'.join(assets))
+          PY
+          : > "$evidence/public-asset-http-results.txt"
+          while IFS= read -r asset; do
+            asset_status=$(curl --silent --show-error --max-time 20 "https://staging.52zzx.top$asset" -o /dev/null -w '%{http_code}')
+            test "$asset_status" = 200
+            echo "$asset HTTP $asset_status" >> "$evidence/public-asset-http-results.txt"
+          done < "$evidence/public-assets.txt"
+          oidc_status=$(curl --silent --show-error --max-time 20 \
+            https://staging.52zzx.top/auth/realms/spectrace/.well-known/openid-configuration \
+            -o "$evidence/public-oidc-discovery.json" -w '%{http_code}')
+          test "$oidc_status" = 200
+          python3 - "$evidence/public-oidc-discovery.json" "$GATEWAY_ISSUER" <<'PY'
+          import json, sys
+          discovery=json.load(open(sys.argv[1]))
+          assert discovery.get('issuer')==sys.argv[2]
+          PY
+          api_status=$(curl --silent --show-error --max-time 20 -o "$evidence/public-anonymous-api.json" \
+            -D "$evidence/public-anonymous-api.headers" -w '%{http_code}' \
+            https://staging.52zzx.top/api/formulations/products)
+          test "$api_status" = 401
+          grep -qi '^www-authenticate: Bearer' "$evidence/public-anonymous-api.headers"
+          gateway_tg=$(python3 - "$RUNNER_TEMP/backend-target-groups.json" <<'PY'
+          import json, sys
+          print(next(row['TargetGroupArn'] for row in json.load(open(sys.argv[1]))['TargetGroups'] if row['TargetGroupName']=='foodlabelflow-staging-gateway'))
+          PY
+          )
+          keycloak_tg=$(python3 - "$RUNNER_TEMP/backend-target-groups.json" <<'PY'
+          import json, sys
+          print(next(row['TargetGroupArn'] for row in json.load(open(sys.argv[1]))['TargetGroups'] if row['TargetGroupName']=='foodlabelflow-staging-keycloak'))
+          PY
+          )
+          for pair in "frontend:$FRONTEND_TARGET_GROUP_ARN" "gateway:$gateway_tg" "keycloak:$keycloak_tg"; do
+            name="${pair%%:*}"
+            tg="${pair#*:}"
+            aws elbv2 describe-target-health --target-group-arn "$tg" > "$evidence/$name-target-health-after.json"
+            python3 - "$evidence/$name-target-health-after.json" "$name" <<'PY'
+          import json, runpy, sys
+          runpy.run_path('platform/frontend/verify-alb.py')['verify_healthy_targets'](
+              json.load(open(sys.argv[1])), sys.argv[2])
+          PY
+          done
+          cp "$RUNNER_TEMP/listeners-after.json" "$evidence/listeners-after.json"
+          cp "$RUNNER_TEMP/rules-after.json" "$evidence/listener-rules-after.json"
+          echo 'activated-and-smoke-tested' > "$evidence/listener-cutover.txt"
+      - name: Write deployment summary and upload evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/frontend-evidence"
+          python3 - "$RUNNER_TEMP/frontend-evidence/deployment-summary.json" <<'PY'
+          import json, os, sys
+          result={
+              'commit':os.environ['GITHUB_SHA'],
+              'requestedFrontendImage':'ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:e6720ddc4416a153c5eecb11d8381bd9d2637e50f9ced6017d6b813f42047051',
+              'frontendPodEvidenceAvailable':os.path.exists(os.path.join(os.environ['RUNNER_TEMP'],'frontend-pods.json')),
+              'namespace':'frontend',
+              'release':'frontend',
+              'listenerCutoverRequested':os.environ.get('ACTIVATE_FRONTEND_DEFAULT')=='true',
+              'windowEndAsiaSingapore':os.environ.get('STAGING_WINDOW_END_SGT'),
+          }
+          json.dump(result,open(sys.argv[1],'w'),indent=2)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-staging-deployment-${{ github.run_id }}
+          path: ${{ runner.temp }}/frontend-evidence/
+          if-no-files-found: ignore
+          retention-days: 14

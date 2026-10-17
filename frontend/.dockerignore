@@ -2,3 +2,10 @@ node_modules
 dist
 .idea
 *.log
+.env
+.env.*
+test-results
+playwright-report
+coverage
+.nyc_output
+*.tsbuildinfo

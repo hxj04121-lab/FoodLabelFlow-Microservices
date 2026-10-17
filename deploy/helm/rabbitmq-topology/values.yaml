@@ -1,0 +1,29 @@
+rabbitmq:
+  name: spectrace
+  namespace: rabbitmq
+  exchange: spectrace.events
+  deadLetterExchange: spectrace.dlx
+consumers:
+  - service: compliance
+    namespace: compliance
+    queues:
+      - name: specification-published
+        routingKey: specification.published.v1
+      - name: formula-published
+        routingKey: formula.published.v1
+      - name: label-published
+        routingKeys:
+          - label.published.v1
+          - label.published.v2
+  - service: formulation
+    namespace: formulation
+    queues:
+      - name: specification-published
+        routingKey: specification.published.v1
+  - service: label-workflow
+    namespace: label-workflow
+    queues:
+      - name: formula-published
+        routingKey: formula.published.v1
+      - name: impact-finding
+        routingKey: impact.finding.v1

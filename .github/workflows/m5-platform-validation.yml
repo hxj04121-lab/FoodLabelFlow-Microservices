@@ -1,0 +1,54 @@
+name: M5 platform offline validation
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/**'
+      - 'infra/terraform/**'
+      - '.github/workflows/m5-platform-validation.yml'
+      - '.github/workflows/service-cicd-reusable.yml'
+      - '.github/workflows/compliance-kind-ci.yml'
+      - 'scripts/check_m5_platform.py'
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/**'
+      - 'infra/terraform/**'
+      - '.github/workflows/m5-platform-validation.yml'
+      - '.github/workflows/service-cicd-reusable.yml'
+      - '.github/workflows/compliance-kind-ci.yml'
+      - 'scripts/check_m5_platform.py'
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install PyYAML==6.0.3
+      - uses: hashicorp/setup-terraform@v3
+        with: {terraform_version: 1.15.8}
+      - run: terraform fmt -check -recursive
+        working-directory: infra/terraform
+      - run: terraform init -backend=false -input=false && terraform validate
+        working-directory: infra/terraform
+      - uses: azure/setup-helm@v4
+        with: {version: v4.3.0}
+      - run: helm lint deploy/helm/platform-network-policies deploy/helm/rabbitmq-topology
+      - run: python scripts/check_m5_platform.py
+      - name: Verify RabbitMQ per-queue DLQ scrape target
+        run: python3 -m unittest discover -s tests -p 'test_alloy_dlq_scrape.py' -v
+      - run: bash -n scripts/verify_eks_addons.sh
+      - uses: azure/setup-kubectl@v4
+      - run: kubectl kustomize deploy/operators >/dev/null
+      - run: kubectl kustomize deploy/operators/rabbitmq >/dev/null
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
