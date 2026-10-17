@@ -31,6 +31,7 @@ class FrontendDeployRuntimeTests(unittest.TestCase):
             ("AWS_ACCOUNT_ID", "999999999999"),
             ("AWS_REGION", "us-east-1"),
             ("FRONTEND_TARGET_GROUP_ARN", "not-an-arn"),
+            ("FRONTEND_TARGET_GROUP_ARN", "arn:aws:elasticloadbalancing:ap-southeast-1:123456789012:targetgroup/other/0123456789abcdef"),
         ):
             bad = config()
             bad[key] = value

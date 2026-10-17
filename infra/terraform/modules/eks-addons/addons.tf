@@ -163,6 +163,7 @@ resource "kubernetes_manifest" "deployer_custom_resource_role" {
   for_each = {
     gateway  = var.workload_namespaces.gateway
     keycloak = var.workload_namespaces.keycloak
+    frontend = var.workload_namespaces.frontend
   }
 
   manifest = yamldecode(templatefile("${path.module}/manifests/${each.key}-deployer-role.yaml.tmpl", {
@@ -176,6 +177,7 @@ resource "kubernetes_manifest" "deployer_custom_resource_rolebinding" {
   for_each = {
     gateway  = var.workload_namespaces.gateway
     keycloak = var.workload_namespaces.keycloak
+    frontend = var.workload_namespaces.frontend
   }
 
   manifest = yamldecode(templatefile("${path.module}/manifests/${each.key}-deployer-rolebinding.yaml.tmpl", {

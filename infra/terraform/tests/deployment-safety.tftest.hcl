@@ -39,7 +39,7 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
     public_subnet_cidrs         = ["10.0.0.0/24", "10.0.1.0/24"]
     private_subnet_cidrs        = ["10.0.16.0/24", "10.0.17.0/24"]
     database_subnet_cidrs       = ["10.0.16.0/24", "10.0.17.0/24"]
-    workload_namespaces         = { gateway = "gateway", keycloak = "keycloak", rabbitmq = "rabbitmq", observability = "observability", specification = "specification", formulation = "formulation", compliance = "compliance", label-workflow = "label-workflow" }
+    workload_namespaces         = { gateway = "gateway", keycloak = "keycloak", rabbitmq = "rabbitmq", observability = "observability", specification = "specification", formulation = "formulation", compliance = "compliance", label-workflow = "label-workflow", frontend = "frontend" }
     operator_namespaces         = { rabbitmq = "rabbitmq-system", keycloak = "keycloak-system" }
     deployer_kubernetes_group   = "spectrace-staging-deploy"
     node_groups                 = { general = { asg_name = "test-general", min_size = 1, max_size = 3 }, compliance = { asg_name = "test-compliance", min_size = 1, max_size = 4 } }
@@ -73,7 +73,8 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
         if contains(statement.Action, "elasticloadbalancing:RegisterTargets")
         ])) == toset([
         "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-keycloak/6c9f10642dd79519",
-        "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-gateway/b8c46985507e8b58"
+        "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-gateway/b8c46985507e8b58",
+        "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-frontend/*"
         ]) && alltrue([
         for action in flatten([for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Action]) :
         startswith(action, "ec2:Describe") || startswith(action, "ec2:Get") ||
@@ -86,7 +87,7 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
         ], action)
       ])
     )
-    error_message = "The TGB-only controller must register targets only on the two approved groups and cannot create or mutate ALB infrastructure."
+    error_message = "The TGB-only controller must register targets only on the two existing groups and the name-scoped frontend group, without mutating ALB infrastructure."
   }
 }
 

@@ -75,15 +75,15 @@ variable "database_subnet_cidrs" {
 }
 
 variable "workload_namespaces" {
-  description = "Namespaces to create for gateway, keycloak, rabbitmq, observability, specification, formulation, compliance, and label-workflow."
+  description = "Namespaces to create for gateway, keycloak, rabbitmq, observability, specification, formulation, compliance, label-workflow, and frontend."
   type        = map(string)
 
   validation {
     condition = toset(keys(var.workload_namespaces)) == toset([
       "gateway", "keycloak", "rabbitmq", "observability",
-      "specification", "formulation", "compliance", "label-workflow"
+      "specification", "formulation", "compliance", "label-workflow", "frontend"
     ]) && alltrue([for ns in values(var.workload_namespaces) : trimspace(ns) != ""])
-    error_message = "Provide non-empty namespace names for all eight platform and service workloads."
+    error_message = "Provide non-empty namespace names for all nine platform and service workloads."
   }
 }
 

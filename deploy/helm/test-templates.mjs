@@ -220,9 +220,9 @@ check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-
   assert.equal(workflow.jobs.deploy.env.AWS_REGION,'${{ vars.AWS_REGION }}');
   assert.equal(workflow.jobs.deploy.env.EKS_CLUSTER_NAME,'${{ vars.EKS_CLUSTER_NAME }}');
   assert.equal(workflow.jobs.deploy.env.AWS_ROLE_ARN,'${{ vars.AWS_DEPLOY_ROLE_ARN }}');
-  assert.equal(workflow.jobs.deploy.env.AVAILABLE_CREDIT_USD,'${{ vars.STAGING_AVAILABLE_CREDIT_USD }}');
+  assert.equal(workflow.jobs.deploy.env.AVAILABLE_CREDIT_USD,'${{ secrets.AVAILABLE_CREDIT_USD }}');
   const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
-  assert.match(script,/kubectl get serviceaccount default --namespace gateway/);
+  assert.match(script,/kubectl get namespace gateway/);
   assert.doesNotMatch(script,/create namespace|kubectl create ns|terraform apply/i);
   assert.doesNotMatch(script,/679857346122|spectrace-staging|ap-southeast-1/,'AWS target identifiers must come from the protected Environment');
   assert.match(script,/validate-deploy-target\.py/);
@@ -441,6 +441,7 @@ check('staging deploy custom-resource RBAC is namespace-scoped and limited to th
   const directory=resolve(repo,'infra/terraform/modules/eks-addons/manifests');
   const cases=[
     ['gateway','gateway-gateway',['elbv2.k8s.aws']],
+    ['frontend','frontend-frontend',['elbv2.k8s.aws']],
     ['keycloak','spectrace-keycloak',['k8s.keycloak.org','elbv2.k8s.aws']]
   ];
   for(const [namespace,name,groups] of cases) {
@@ -451,6 +452,10 @@ check('staging deploy custom-resource RBAC is namespace-scoped and limited to th
     assert(role.rules.every(rule=>rule.resources.length===1 && rule.resources[0]!=='*'));
     assert(role.rules.some(rule=>rule.verbs.includes('create')));
     assert(role.rules.filter(rule=>rule.verbs.some(verb=>['get','patch','watch'].includes(verb))).every(rule=>rule.resourceNames?.includes(name)));
+    if(namespace==='frontend') {
+      assert(role.rules.some(rule=>rule.verbs.includes('list') && !rule.resourceNames));
+      assert(role.rules.some(rule=>rule.resourceNames?.includes(name) && rule.verbs.includes('update')));
+    }
     assert.equal(binding.kind,'RoleBinding');
     assert.equal(binding.metadata.namespace,namespace);
     assert.deepEqual(binding.subjects,[{kind:'Group',name:'spectrace-staging-deploy',apiGroup:'rbac.authorization.k8s.io'}]);

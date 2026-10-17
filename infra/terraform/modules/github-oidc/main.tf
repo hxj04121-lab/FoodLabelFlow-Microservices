@@ -103,7 +103,7 @@ resource "aws_eks_access_policy_association" "deploy" {
 
   access_scope {
     type       = "namespace"
-    namespaces = ["gateway", "keycloak", "specification", "formulation", "compliance", "label-workflow"]
+    namespaces = ["gateway", "keycloak", "specification", "formulation", "compliance", "label-workflow", "frontend"]
   }
 
   depends_on = [aws_eks_access_entry.deploy]

@@ -126,6 +126,7 @@ module "eks_addons" {
     formulation    = "formulation"
     compliance     = "compliance"
     label-workflow = "label-workflow"
+    frontend       = "frontend"
   }
   operator_namespaces       = { rabbitmq = "rabbitmq-system", keycloak = "keycloak-system" }
   deployer_kubernetes_group = local.deployer_kubernetes_group

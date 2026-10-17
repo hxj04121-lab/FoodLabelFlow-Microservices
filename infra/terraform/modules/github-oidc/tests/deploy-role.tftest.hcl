@@ -66,8 +66,8 @@ run "deploy_role_trust_and_access_are_staging_scoped" {
   }
 
   assert {
-    condition     = aws_eks_access_entry.deploy[0].type == "STANDARD" && aws_eks_access_policy_association.deploy[0].policy_arn == "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy" && aws_eks_access_policy_association.deploy[0].access_scope[0].type == "namespace" && toset(aws_eks_access_policy_association.deploy[0].access_scope[0].namespaces) == toset(["gateway", "keycloak", "specification", "formulation", "compliance", "label-workflow"])
-    error_message = "The deploy role must receive namespace-scoped edit access only for the six application namespaces."
+    condition     = aws_eks_access_entry.deploy[0].type == "STANDARD" && aws_eks_access_policy_association.deploy[0].policy_arn == "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy" && aws_eks_access_policy_association.deploy[0].access_scope[0].type == "namespace" && toset(aws_eks_access_policy_association.deploy[0].access_scope[0].namespaces) == toset(["gateway", "keycloak", "specification", "formulation", "compliance", "label-workflow", "frontend"])
+    error_message = "The deploy role must receive namespace-scoped edit access only for the seven application namespaces."
   }
 
   assert {
