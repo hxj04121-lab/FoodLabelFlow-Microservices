@@ -38,7 +38,8 @@ Machine-readable public HTTP and image evidence is in [`evidence/frontend-stagin
 
 ## GitHub and deployment gates
 
-- `main` was `3c1b6cf3a54fb16a08a0443116e4fa18b719fb43` when this work started. The implementation branch is `codex/m5-frontend-staging-upgrade-20261017`; this is a code delivery, not a deployed commit.
+- `main` was `3c1b6cf3a54fb16a08a0443116e4fa18b719fb43` when this work started. Implementation commit: `bf1d864f199622c9cbd840d4d34ea2d156a3ab8c` on `codex/m5-frontend-staging-upgrade-20261017`; this is a code delivery, not a deployed commit.
+- PR [#75](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/75) is OPEN and non-draft at that implementation commit. Its GitHub checks were still pending at 2026-10-17 15:52 SGT; the link is the live source for the eventual check result.
 - PR [#72](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/72) is OPEN, non-draft, APPROVED, and CLEAN at head `fc9f3ef8085f648f7ac391bbc11288e61bf8354a`; applicable checks are successful. It still needs the repository owner to merge through the normal path before Gateway release.
 - PR [#66](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/66), which carries existing staging controller/TargetGroupBinding support, is still OPEN and Draft at `d686713a2a11ffbc4cb283f476a470e0892de520`. Live CRD/controller readiness is UNKNOWN.
 - PR [#62](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/62) is CHANGES_REQUESTED at the image tag commit. The latest security finding is that the pull-request `frontend-container` job has job-level `packages: write`; M3 must fix and re-request review. This M5 change does not modify M3's workflow or rebuild the image.
@@ -67,7 +68,7 @@ If no Frontend Target Group exists, first query Terraform state/configuration an
 - `python3 -m unittest discover -s tests -p 'test_gateway_deploy_*.py' -v`: PASS, 7 tests.
 - `python3 -m unittest discover -s tests -p 'test_staging_window.py' -v`: PASS, 4 tests.
 - Workflow YAML parsed and every `run` block passed `bash -n`: PASS for Frontend, Gateway, and Helm workflows.
-- GitHub CI for this branch has not run yet. GHCR manifest/config verification passed; container `/healthz` execution remains unverified.
+- The PR has not produced a terminal GitHub CI result yet. GHCR manifest/config verification passed; container `/healthz` execution remains unverified.
 
 ## Rollback and next actions
 

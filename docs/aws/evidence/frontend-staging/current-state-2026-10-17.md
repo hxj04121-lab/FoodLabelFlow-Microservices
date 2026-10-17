@@ -7,6 +7,7 @@
 - AWS STS: `NoCredentials`. AWS Account/Role, ALB, listeners, Target Groups, RDS, quotas, budget, cluster status, and current node capacity are UNKNOWN.
 - Kubernetes: the configured EKS context invoked AWS SSO but reported `Token has expired and refresh failed` before kubectl could authenticate. API network reachability and RBAC are UNKNOWN; no workload absence is inferred.
 - GitHub `main`: `3c1b6cf3a54fb16a08a0443116e4fa18b719fb43`.
+- This 15:48 snapshot predates creation of M5 implementation commit `bf1d864f199622c9cbd840d4d34ea2d156a3ab8c` and PR #75; see the handoff for that later delivery state.
 - PR #72: OPEN, approved, CLEAN at `fc9f3ef8085f648f7ac391bbc11288e61bf8354a`; applicable checks completed successfully. Conditional Pages and publish jobs were skipped. It is not merged.
 - PR #66: OPEN Draft at `d686713a2a11ffbc4cb283f476a470e0892de520`.
 - PR #62: the latest review requests changes for job-level `packages: write` on a frontend job that also runs for pull requests. The pinned image manifest exists, but M3's review finding remains open.
