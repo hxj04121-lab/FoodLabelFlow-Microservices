@@ -2,6 +2,15 @@ name: Protected Gateway staging release
 
 on:
   workflow_dispatch:
+    inputs:
+      staging_window_hours:
+        description: User-approved staging window length in hours
+        type: number
+        required: true
+      staging_window_end_sgt:
+        description: User-confirmed staging shutdown time in Asia/Singapore (YYYY-MM-DD HH:MM)
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -27,11 +36,18 @@ jobs:
       GATEWAY_ISSUER: ${{ vars.GATEWAY_ISSUER }}
       AVAILABLE_CREDIT_USD: ${{ secrets.AVAILABLE_CREDIT_USD }}
       APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
+      STAGING_WINDOW_HOURS: ${{ inputs.staging_window_hours }}
+      STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: deploy/helm/package-lock.json
       - uses: azure/setup-kubectl@v4
         with:
           version: v1.36.1
@@ -47,8 +63,19 @@ jobs:
           test -n "$EKS_CLUSTER_NAME"
           test -n "$AWS_ROLE_ARN"
           test -n "$GATEWAY_ISSUER"
+          python3 platform/staging/validate_window.py "$STAGING_WINDOW_HOURS" "$STAGING_WINDOW_END_SGT" > "$RUNNER_TEMP/staging-window.json"
+          npm ci --ignore-scripts --no-audit --no-fund --prefix deploy/helm
+          npm test --prefix deploy/helm
           python3 -m unittest discover -s tests -p 'test_gateway_deploy_*.py' -v
+          python3 -m unittest discover -s tests -p 'test_staging_window.py' -v
           python3 platform/gateway/deploy-runtime-values.py > "$RUNNER_TEMP/gateway-runtime-values.json"
+          python3 - "$RUNNER_TEMP/gateway-runtime-values.json" <<'PY'
+          import json, sys
+          values=json.load(open(sys.argv[1]))
+          origins={row['name']:row['value'] for row in values['env']}.get('GATEWAY_ALLOWED_ORIGINS','')
+          if origins!='https://hxj04121-lab.github.io,https://staging.52zzx.top' or '*' in origins:
+              raise SystemExit('The reviewed PR #72 staging-root CORS origin must be merged before the protected Gateway release.')
+          PY
           if ! python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/gateway-budget-gate.log" 2>&1; then
             echo '::error::The existing fail-closed staging funding/pricing gate did not pass; no cluster write was attempted.'
             exit 1
@@ -58,7 +85,7 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Verify target and first-release-only scope
+      - name: Verify target and capture the existing Gateway release
         run: |
           set -euo pipefail
           identity=$(aws sts get-caller-identity --query 'Arn' --output text)
@@ -70,19 +97,56 @@ jobs:
             --account-id "$AWS_ACCOUNT_ID" --role-arn "$AWS_ROLE_ARN" --caller-arn "$identity" \
             --region "$AWS_REGION" --cluster "$EKS_CLUSTER_NAME" --cluster-arn "$cluster_arn" --context "$context"
           kubectl get namespace gateway >/dev/null
-          if helm list --namespace gateway --filter '^gateway$' --output json | python3 -c 'import json,sys; raise SystemExit(bool(json.load(sys.stdin)))'; then
-            :
-          else
-            echo '::error::The gateway Helm release already exists or could not be inspected; refusing first-install workflow.'
-            exit 1
-          fi
-          for resource in deployments services serviceaccounts networkpolicies secrets; do
-            test "$(kubectl auth can-i create "$resource" --namespace gateway)" = yes
+          helm list --namespace gateway --filter '^gateway$' --output json > "$RUNNER_TEMP/gateway-release.json"
+          python3 - "$RUNNER_TEMP/gateway-release.json" <<'PY'
+          import json, sys
+          releases=json.load(open(sys.argv[1]))
+          if len(releases)!=1 or releases[0].get('name')!='gateway' or releases[0].get('status')!='deployed':
+              raise SystemExit('Expected exactly one deployed Helm release named gateway in namespace gateway.')
+          PY
+          helm status gateway --namespace gateway > "$RUNNER_TEMP/gateway-release-status.txt"
+          helm get values gateway --namespace gateway --all --output json > "$RUNNER_TEMP/gateway-current-values.json"
+          helm get manifest gateway --namespace gateway > "$RUNNER_TEMP/gateway-current-manifest.yaml"
+          python3 - "$RUNNER_TEMP/gateway-current-values.json" "$RUNNER_TEMP/gateway-current-values-sanitized.json" <<'PY'
+          import json, sys
+          values=json.load(open(sys.argv[1]))
+          network=values.get('networkPolicy',{})
+          safe={
+              'serviceName':values.get('serviceName'),
+              'replicaCount':values.get('replicaCount'),
+              'image':{key:values.get('image',{}).get(key) for key in ('repository','tag','digest','pullPolicy')},
+              'containerPort':values.get('containerPort'),
+              'service':values.get('service',{}),
+              'nodeSelector':values.get('nodeSelector',{}),
+              'probes':values.get('probes',{}),
+              'networkPolicy':{'enabled':network.get('enabled'),'ingressFromCIDRs':network.get('ingressFromCIDRs',[]),'ingressFromPeers':network.get('ingressFromPeers',[])},
+              'targetGroupArn':values.get('targetGroupArn')
+          }
+          json.dump(safe,open(sys.argv[2],'w'),indent=2)
+          PY
+          kubectl get deployment gateway-gateway --namespace gateway -o json > "$RUNNER_TEMP/gateway-current-deployment.json"
+          kubectl get targetgroupbindings.elbv2.k8s.aws gateway-gateway --namespace gateway -o json > "$RUNNER_TEMP/gateway-current-tgb.json"
+          kubectl get networkpolicy gateway-gateway --namespace gateway -o json > "$RUNNER_TEMP/gateway-current-networkpolicy.json"
+          target_group_arn=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["spec"]["targetGroupARN"])' "$RUNNER_TEMP/gateway-current-tgb.json")
+          aws elbv2 describe-target-health --target-group-arn "$target_group_arn" > "$RUNNER_TEMP/gateway-current-target-health.json"
+          python3 - "$RUNNER_TEMP/gateway-current-target-health.json" <<'PY'
+          import json, sys
+          targets=json.load(open(sys.argv[1])).get('TargetHealthDescriptions',[])
+          if not targets or any(row.get('TargetHealth',{}).get('State')!='healthy' for row in targets):
+              raise SystemExit('Existing Gateway Target Group must have at least one Healthy target before upgrade.')
+          PY
+          for resource in deployments services serviceaccounts networkpolicies targetgroupbindings.elbv2.k8s.aws; do
+            for verb in get list watch patch update; do
+              test "$(kubectl auth can-i "$verb" "$resource" --namespace gateway)" = yes
+            done
           done
-          for resource in deployments services serviceaccounts networkpolicies secrets pods endpointslices; do
+          for resource in pods endpointslices; do
             for verb in get list watch; do
               test "$(kubectl auth can-i "$verb" "$resource" --namespace gateway)" = yes
             done
+          done
+          for verb in get list create update patch; do
+            test "$(kubectl auth can-i "$verb" secrets --namespace gateway)" = yes
           done
           test "$(kubectl auth can-i create pods/portforward --namespace gateway)" = yes
       - name: Verify anonymous GHCR pull for the pinned linux/amd64 image
@@ -111,18 +175,46 @@ jobs:
       - name: Lint and render pinned Gateway chart
         run: |
           set -euo pipefail
-          helm lint deploy/helm/spectrace-service --strict --values deploy/helm/values/gateway.yaml --values "$RUNNER_TEMP/gateway-runtime-values.json"
+          helm lint deploy/helm/spectrace-service --strict --values "$RUNNER_TEMP/gateway-current-values.json" --values "$RUNNER_TEMP/gateway-runtime-values.json"
           helm template gateway deploy/helm/spectrace-service --namespace gateway \
-            --values deploy/helm/values/gateway.yaml --values "$RUNNER_TEMP/gateway-runtime-values.json" \
+            --values "$RUNNER_TEMP/gateway-current-values.json" --values "$RUNNER_TEMP/gateway-runtime-values.json" \
             > "$RUNNER_TEMP/gateway-rendered.yaml"
           grep -Fq 'ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway@sha256:d4190ea6ee31b84e7b67d36ad56e6391612c8bdc4916b8bb14d28b9a17f6ab47' "$RUNNER_TEMP/gateway-rendered.yaml"
-      - name: Install the first Gateway release into the existing namespace
+          node deploy/helm/check-gateway-upgrade.mjs "$RUNNER_TEMP/gateway-current-manifest.yaml" "$RUNNER_TEMP/gateway-rendered.yaml" \
+            | tee "$RUNNER_TEMP/gateway-manifest-diff.txt"
+      - name: Dry-run and upgrade the existing Gateway release
+        id: gateway_upgrade
         run: |
           set -euo pipefail
-          helm install gateway deploy/helm/spectrace-service --namespace gateway --wait --timeout 10m \
-            --values deploy/helm/values/gateway.yaml --values "$RUNNER_TEMP/gateway-runtime-values.json"
+          if ! helm upgrade gateway deploy/helm/spectrace-service --namespace gateway --reset-values \
+            --values "$RUNNER_TEMP/gateway-current-values.json" --values "$RUNNER_TEMP/gateway-runtime-values.json" \
+            --dry-run=server --debug > "$RUNNER_TEMP/gateway-dry-run.log" 2>&1; then
+            echo '::error::Gateway server dry-run failed; no upgrade was applied.'
+            exit 1
+          fi
+          helm upgrade gateway deploy/helm/spectrace-service --namespace gateway --reset-values \
+            --values "$RUNNER_TEMP/gateway-current-values.json" --values "$RUNNER_TEMP/gateway-runtime-values.json" \
+            --atomic --wait --timeout 10m
+          echo upgraded=true >> "$GITHUB_OUTPUT"
+          kubectl get targetgroupbindings.elbv2.k8s.aws gateway-gateway --namespace gateway -o json > "$RUNNER_TEMP/gateway-updated-tgb.json"
+          kubectl get networkpolicy gateway-gateway --namespace gateway -o json > "$RUNNER_TEMP/gateway-updated-networkpolicy.json"
+          target_group_arn=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["spec"]["targetGroupARN"])' "$RUNNER_TEMP/gateway-updated-tgb.json")
+          aws elbv2 describe-target-health --target-group-arn "$target_group_arn" > "$RUNNER_TEMP/gateway-updated-target-health.json"
+          python3 - "$RUNNER_TEMP/gateway-updated-target-health.json" <<'PY'
+          import json, sys
+          targets=json.load(open(sys.argv[1])).get('TargetHealthDescriptions',[])
+          if not targets or any(row.get('TargetHealth',{}).get('State')!='healthy' for row in targets):
+              raise SystemExit('Gateway Target Group must return to Healthy after upgrade.')
+          PY
+          python3 - "$RUNNER_TEMP/gateway-current-tgb.json" "$RUNNER_TEMP/gateway-updated-tgb.json" "$RUNNER_TEMP/gateway-current-networkpolicy.json" "$RUNNER_TEMP/gateway-updated-networkpolicy.json" <<'PY'
+          import json, sys
+          before_tgb, after_tgb, before_np, after_np = [json.load(open(path)) for path in sys.argv[1:]]
+          assert before_tgb['spec']==after_tgb['spec'], 'Gateway TargetGroupBinding changed during upgrade'
+          assert before_np['spec']==after_np['spec'], 'Gateway NetworkPolicy or ALB CIDRs changed during upgrade'
+          PY
           kubectl rollout status deployment/gateway-gateway --namespace gateway --timeout=5m
           kubectl wait --for=condition=Available deployment/gateway-gateway --namespace gateway --timeout=60s
+          kubectl get deployment gateway-gateway --namespace gateway -o json > "$RUNNER_TEMP/gateway-updated-deployment.json"
           kubectl get pods --namespace gateway -l app.kubernetes.io/instance=gateway -o json > "$RUNNER_TEMP/gateway-pods.json"
           kubectl get service gateway-gateway --namespace gateway -o json > "$RUNNER_TEMP/gateway-service.json"
           for attempt in $(seq 1 30); do
@@ -175,6 +267,72 @@ jobs:
           }
           open(sys.argv[5],'w').write(json.dumps(result,indent=2)+'\n')
           PY
+      - name: Verify public authentication, OIDC and CORS behavior
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/gateway-evidence"
+          for origin in https://hxj04121-lab.github.io https://staging.52zzx.top; do
+            headers="$RUNNER_TEMP/gateway-evidence/preflight-$(echo "$origin" | sed 's#https://##;s#/#-#g').headers"
+            status=$(curl --silent --show-error --max-time 20 -X OPTIONS \
+              -H "Origin: $origin" -H 'Access-Control-Request-Method: GET' \
+              -H 'Access-Control-Request-Headers: authorization,content-type' \
+              -o /dev/null -D "$headers" -w '%{http_code}' \
+              https://staging.52zzx.top/api/formulations/products)
+            [[ "$status" == 200 || "$status" == 204 ]]
+            allow_origin=$(awk -F': ' 'tolower($1)=="access-control-allow-origin"{gsub("\r","",$2);print $2}' "$headers")
+            allow_methods=$(awk -F': ' 'tolower($1)=="access-control-allow-methods"{gsub("\r","",$2);print tolower($2)}' "$headers")
+            allow_headers=$(awk -F': ' 'tolower($1)=="access-control-allow-headers"{gsub("\r","",$2);print tolower($2)}' "$headers")
+            test "$allow_origin" = "$origin"
+            [[ "$allow_methods" == *get* ]]
+            [[ "$allow_headers" == *authorization* && "$allow_headers" == *content-type* ]]
+          done
+          invalid_headers="$RUNNER_TEMP/gateway-evidence/preflight-invalid-origin.headers"
+          invalid_status=$(curl --silent --show-error --max-time 20 -X OPTIONS \
+            -H 'Origin: https://not-allowed.example' -H 'Access-Control-Request-Method: GET' \
+            -H 'Access-Control-Request-Headers: authorization,content-type' \
+            -o /dev/null -D "$invalid_headers" -w '%{http_code}' \
+            https://staging.52zzx.top/api/formulations/products)
+          test "$invalid_status" = 403
+          test -z "$(awk -F': ' 'tolower($1)=="access-control-allow-origin"{print $2}' "$invalid_headers")"
+          api_status=$(curl --silent --show-error --max-time 20 -o "$RUNNER_TEMP/gateway-evidence/anonymous-api.json" \
+            -D "$RUNNER_TEMP/gateway-evidence/anonymous-api.headers" -w '%{http_code}' \
+            https://staging.52zzx.top/api/formulations/products)
+          test "$api_status" = 401
+          grep -qi '^www-authenticate: Bearer' "$RUNNER_TEMP/gateway-evidence/anonymous-api.headers"
+          curl --fail --silent --show-error --max-time 20 \
+            https://staging.52zzx.top/auth/realms/spectrace/.well-known/openid-configuration \
+            -o "$RUNNER_TEMP/gateway-evidence/oidc-discovery.json"
+          python3 - "$RUNNER_TEMP/gateway-evidence/oidc-discovery.json" "$GATEWAY_ISSUER" <<'PY'
+          import json, sys
+          assert json.load(open(sys.argv[1])).get('issuer')==sys.argv[2]
+          PY
+          echo "PASS: Pages/staging preflights allowed; unknown origin rejected; API returned 401 Bearer; Keycloak discovery matched issuer." \
+            > "$RUNNER_TEMP/gateway-evidence/public-smoke.txt"
+      - name: Roll back failed Gateway acceptance
+        if: failure() && steps.gateway_upgrade.outputs.upgraded == 'true'
+        run: |
+          set -euo pipefail
+          helm rollback gateway 0 --namespace gateway --wait --timeout 10m
+          echo 'Gateway release rolled back to its previous revision after acceptance failure.' \
+            > "$RUNNER_TEMP/gateway-evidence/rollback.txt"
+      - name: Save sanitized Gateway release evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/gateway-evidence"
+          cp "$RUNNER_TEMP/staging-window.json" "$RUNNER_TEMP/gateway-evidence/staging-window.json" 2>/dev/null || true
+          cp "$RUNNER_TEMP/gateway-release-status.txt" "$RUNNER_TEMP/gateway-evidence/release-status.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/gateway-current-values-sanitized.json" "$RUNNER_TEMP/gateway-evidence/current-values-sanitized.json" 2>/dev/null || true
+          cp "$RUNNER_TEMP/gateway-current-deployment.json" "$RUNNER_TEMP/gateway-evidence/deployment-before.json" 2>/dev/null || true
+          cp "$RUNNER_TEMP/gateway-updated-deployment.json" "$RUNNER_TEMP/gateway-evidence/deployment-after.json" 2>/dev/null || true
+          cp "$RUNNER_TEMP/gateway-manifest-diff.txt" "$RUNNER_TEMP/gateway-evidence/manifest-diff.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/gateway-runtime-values.json" "$RUNNER_TEMP/gateway-evidence/runtime-values.json" 2>/dev/null || true
+          cp "$RUNNER_TEMP/gateway-current-tgb.json" "$RUNNER_TEMP/gateway-evidence/current-targetgroupbinding.json" 2>/dev/null || true
+          cp "$RUNNER_TEMP/gateway-updated-networkpolicy.json" "$RUNNER_TEMP/gateway-evidence/networkpolicy.json" 2>/dev/null || true
+          cp "$RUNNER_TEMP/gateway-updated-target-health.json" "$RUNNER_TEMP/gateway-evidence/target-health.json" 2>/dev/null || true
+          if [[ ! -f "$RUNNER_TEMP/gateway-evidence/rollback.txt" ]]; then
+            echo 'not-needed' > "$RUNNER_TEMP/gateway-evidence/rollback.txt"
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

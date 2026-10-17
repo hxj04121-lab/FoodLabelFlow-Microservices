@@ -1,10 +1,10 @@
 name: SWE5001 Helm template
 on:
   pull_request:
-    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'platform/gateway/**', 'tests/test_gateway_deploy_*.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/swe5001-helm.yml']
+    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'platform/gateway/**', 'platform/frontend/**', 'platform/staging/**', 'tests/test_gateway_deploy_*.py', 'tests/test_frontend_*.py', 'tests/test_staging_window.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/deploy-frontend.yml', '.github/workflows/swe5001-helm.yml']
   push:
     branches: ['feature/stcn-48-*']
-    paths: ['deploy/helm/**', 'platform/gateway/**', 'tests/test_gateway_deploy_*.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/swe5001-helm.yml']
+    paths: ['deploy/helm/**', 'platform/gateway/**', 'platform/frontend/**', 'platform/staging/**', 'tests/test_gateway_deploy_*.py', 'tests/test_frontend_*.py', 'tests/test_staging_window.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/deploy-frontend.yml', '.github/workflows/swe5001-helm.yml']
 permissions:
   contents: read
 jobs:
