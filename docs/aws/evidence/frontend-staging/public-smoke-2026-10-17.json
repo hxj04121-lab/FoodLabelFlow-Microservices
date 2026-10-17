@@ -1,0 +1,26 @@
+{
+  "checkedAtSgt": "2026-10-17T15:48:01+08:00",
+  "checks": {
+    "frontendRoot": {
+      "httpStatus": "404",
+      "curlExit": 0
+    },
+    "keycloakDiscovery": {
+      "httpStatus": "200",
+      "curlExit": 0,
+      "issuer": "https://staging.52zzx.top/auth/realms/spectrace"
+    },
+    "gatewayAnonymousApi": {
+      "httpStatus": "401",
+      "curlExit": 0,
+      "bearerChallenge": true,
+      "contentType": "application/json"
+    },
+    "stagingOriginPreflight": {
+      "httpStatus": "403",
+      "curlExit": 0,
+      "allowOrigin": null
+    }
+  },
+  "assets": "not fetched because root returned non-200"
+}

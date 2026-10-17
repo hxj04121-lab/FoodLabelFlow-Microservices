@@ -393,7 +393,10 @@
       "then": {
         "properties": {
           "serviceName": {
-            "const": "gateway"
+            "enum": [
+              "frontend",
+              "gateway"
+            ]
           }
         }
       }

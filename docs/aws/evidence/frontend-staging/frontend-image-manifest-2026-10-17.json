@@ -1,0 +1,16 @@
+{
+  "checkedAtSgt": "2026-10-17T15:48:01+08:00",
+  "repository": "ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend",
+  "tag": "ad9bf12fc702ebd269a44cc2bedc02349c2fac81",
+  "requestedDigest": "sha256:e6720ddc4416a153c5eecb11d8381bd9d2637e50f9ced6017d6b813f42047051",
+  "pullMethod": "anonymous GHCR bearer token; no stored or supplied credentials",
+  "manifestDigestMatches": true,
+  "manifestMediaType": "application/vnd.docker.distribution.manifest.v2+json",
+  "os": "linux",
+  "architecture": "amd64",
+  "user": "101",
+  "exposedPorts": [
+    "8080/tcp"
+  ],
+  "imageConfigPass": true
+}
