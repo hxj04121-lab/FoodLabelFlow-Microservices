@@ -429,7 +429,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--ink); }
 .search-box > svg { top: 14px; }
 .nav-item { min-height: 44px; }
 .nav-item span:not(.nav-dot) { min-width: 0; }
-.segmented button { min-height: 36px; padding-inline: 12px; }
+.segmented button { min-height: 44px; padding-inline: 12px; }
 .product-cell > span { min-width: 0; }
 .product-cell { min-width: 220px; }
 .table-scroll table { min-width: 760px; }

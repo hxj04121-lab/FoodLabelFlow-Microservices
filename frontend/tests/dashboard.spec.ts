@@ -8,6 +8,10 @@ test('overview, chart switching and CSV export', async ({ page }) => {
     page.getByRole('heading', { name: 'Overview', exact: true }),
   ).toBeVisible()
   await expect(page.getByText('Connected to the M1 read-only API', { exact: false })).toBeVisible()
+  // Chart switches meet the shared 44px target; their selector must not undercut the button minimum.
+  for (const name of ['By material', 'By group']) {
+    expect((await page.getByRole('button', { name, exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  }
   await page.getByRole('button', { name: 'By group', exact: true }).click()
   await expect(page.locator('.bar-chart')).toHaveAttribute('aria-label', /Soy declared: 20/)
   await page.getByRole('button', { name: 'By material', exact: true }).click()
