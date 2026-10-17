@@ -1,0 +1,16 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spectrace-staging-deployer-custom-resources
+  namespace: ${namespace}
+rules:
+  - apiGroups: [elbv2.k8s.aws]
+    resources: [targetgroupbindings]
+    verbs: [create]
+  - apiGroups: [elbv2.k8s.aws]
+    resources: [targetgroupbindings]
+    verbs: [list]
+  - apiGroups: [elbv2.k8s.aws]
+    resources: [targetgroupbindings]
+    resourceNames: [frontend-frontend]
+    verbs: [get, patch, update, watch]

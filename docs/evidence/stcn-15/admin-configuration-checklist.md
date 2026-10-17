@@ -37,13 +37,12 @@ Configure these **variables** from approved owner-controlled sources:
 | `STAGING_WINDOW_OPEN` | `false` by default; `true` only for an approved, open window |
 | `STAGING_WINDOW_HOURS`, `STAGING_EXPERIMENT_HOURS`, `STAGING_K6_HOURS` | Approved maximum window, experiment, and load-test durations |
 | `STAGING_AVAILABLE_CREDIT_USD` | Verified eligible credit balance; do not infer from a budget limit or forecast |
-| `STAGING_GATEWAY_URL` | Approved HTTPS Gateway origin after listener and certificate verification |
+| `GATEWAY_ISSUER` | Approved HTTPS Keycloak realm issuer, e.g. `https://staging.52zz.top/auth/realms/spectrace` |
 | `STAGING_BASE_URL` | Same HTTPS origin for the operator-driven staging health check |
 | `STAGING_PROTECTED_SMOKE_PATH` | Approved authenticated Gateway smoke endpoint |
 | `RABBITMQ_HOST` | Private RabbitMQ service DNS name |
 | `SPECTRACE_SECURITY_JWKSETURI` | Internal Keycloak realm JWKS URL ending in `/auth/realms/spectrace/protocol/openid-connect/certs` |
 | `MYSQL_HOST` | Private RDS endpoint hostname |
-| `KEYCLOAK_DB_USERNAME` | Dedicated Keycloak runtime database user |
 | `STAGING_DATABASE_SUBNET_CIDRS` | Approved private database subnet CIDRs for NetworkPolicy egress |
 | `STAGING_ALB_SUBNET_CIDRS` | Approved load-balancer subnet CIDRs for Gateway ingress |
 
@@ -74,7 +73,7 @@ Configure these **secrets** only through the approved secret manager:
 
 `GITHUB_TOKEN` is supplied by GitHub Actions and is not manually configured. The workflow sets `AWS_REGION=ap-southeast-1`. Generate database account values as 32–128 characters from `[A-Za-z0-9_-]`. The helper compares the configured target account with the role's STS identity and verifies the Kubernetes context before writing any Secret.
 
-The runtime Secret helper derives `SPECTRACE_SECURITY_ISSUERURI` as `${STAGING_GATEWAY_URL}/auth/realms/spectrace` and sets `SPECTRACE_SECURITY_AUDIENCE=spectrace-api`. Keep `STAGING_GATEWAY_URL` as the HTTPS origin that Keycloak uses in `KC_HOSTNAME`; supply the internal JWKS endpoint separately in `SPECTRACE_SECURITY_JWKSETURI`. The helper copies `RABBITMQ_HOST`, `RABBITMQ_USERNAME`, and `RABBITMQ_PASSWORD` into each `<service>-runtime` Secret, so staging never falls back to the local RabbitMQ defaults. The apply operation fails closed if the issuer, JWKS URL, broker hostname, or generated broker password does not meet the expected format.
+The runtime Secret helper uses `GATEWAY_ISSUER` unchanged for `SPECTRACE_SECURITY_ISSUERURI` and sets `SPECTRACE_SECURITY_AUDIENCE=spectrace-api`. The same issuer is the input to the Keycloak Server CR renderer; its hostname becomes the external origin plus `/auth`. Supply the internal JWKS endpoint separately in `SPECTRACE_SECURITY_JWKSETURI`. The helper copies `RABBITMQ_HOST`, `RABBITMQ_USERNAME`, and `RABBITMQ_PASSWORD` into each service runtime Secret and writes `keycloak/keycloak-db` with username `keycloak` plus the protected `KEYCLOAK_DB_PASSWORD`. It fails closed if the issuer, JWKS URL, broker hostname, or generated password does not meet the expected format.
 
 For the operator-driven `scripts/staging.sh` path, set `STAGING_ENVIRONMENT_APPROVED=true` only after the protected Environment approval. Its `AVAILABLE_CREDIT_USD` input must use the verified value represented by `STAGING_AVAILABLE_CREDIT_USD`; this flag does not replace GitHub Environment approval.
 

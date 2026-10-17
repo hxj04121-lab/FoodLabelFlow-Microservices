@@ -11,9 +11,9 @@ RUN mvn -B -ntp -q -f services/label-workflow/pom.xml dependency:go-offline
 COPY services/label-workflow/src services/label-workflow/src
 RUN mvn -B -ntp -q -f services/label-workflow/pom.xml -DskipTests package
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-RUN useradd --system --uid 10001 spectrace
+RUN adduser -S -D -H -u 10001 spectrace
 COPY --from=build /workspace/services/label-workflow/target/app.jar app.jar
 USER 10001
 EXPOSE 8080

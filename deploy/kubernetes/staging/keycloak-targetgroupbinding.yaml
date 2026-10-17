@@ -1,0 +1,11 @@
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: spectrace-keycloak
+  namespace: keycloak
+spec:
+  targetGroupARN: arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-keycloak/6c9f10642dd79519
+  targetType: ip
+  serviceRef:
+    name: spectrace-keycloak-service
+    port: 8080

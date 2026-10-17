@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     env:
       # Fixture builds can be tested, but are never published as staging images.
       OIDC_AUTHORITY: ${{ vars.VITE_OIDC_AUTHORITY || 'https://identity.example.test/auth/realms/spectrace' }}
@@ -34,14 +33,6 @@ jobs:
       - name: Verify real nginx routing and non-root execution
         id: smoke
         run: bash frontend/scripts/test-container.sh "$FRONTEND_IMAGE"
-      - name: Publish the tested image on trusted branch pushes
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/XFY' || github.ref == 'refs/heads/main') && vars.VITE_OIDC_AUTHORITY != ''
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          node -e 'const h=new URL(process.env.OIDC_AUTHORITY).hostname; if (/(^|\.)(test|invalid|localhost)$/.test(h)) process.exit(1)'
-          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker push "$FRONTEND_IMAGE"
       - name: Preserve tested image and static build for M5
         id: preserve
         if: always() && steps.smoke.outcome == 'success'
@@ -51,7 +42,6 @@ jobs:
           docker cp "$container:/usr/share/nginx/html" frontend-dist
           tar -czf frontend-dist.tar.gz -C frontend-dist .
           docker save "$FRONTEND_IMAGE" | gzip > frontend-tested.tar.gz
-          docker image inspect "$FRONTEND_IMAGE" --format '{{json .RepoDigests}}' > frontend-registry-digests.json
       - uses: actions/upload-artifact@v4
         if: always() && steps.preserve.outcome == 'success'
         with:
@@ -60,7 +50,48 @@ jobs:
             frontend-dist.tar.gz
             frontend-tested.tar.gz
             frontend-dist/g1-release.json
-            frontend-registry-digests.json
+          retention-days: 14
+  publish-frontend-container:
+    # The PR build cannot write packages. Only trusted pushes get a separate write token.
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/XFY' || github.ref == 'refs/heads/main') && vars.VITE_OIDC_AUTHORITY != ''
+    needs: frontend-container
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      OIDC_AUTHORITY: ${{ vars.VITE_OIDC_AUTHORITY }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: m3-frontend-container
+          path: frontend-release-input
+      - name: Verify source and publish the already tested image
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const build = JSON.parse(fs.readFileSync('frontend-release-input/frontend-dist/g1-release.json', 'utf8'));
+          assert.equal(build.commit, process.env.GITHUB_SHA);
+          assert.equal(build.authority, process.env.OIDC_AUTHORITY);
+          assert.equal(build.gatewayOrigin, '/');
+          assert.equal(build.siteBase, '/');
+          assert(!/(^|\.)(test|invalid|localhost)$/.test(new URL(build.authority).hostname));
+          NODE
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/frontend:$GITHUB_SHA"
+          gzip -dc frontend-release-input/frontend-tested.tar.gz | docker load
+          revision="$(docker image inspect "$image" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+          test "$revision" = "$GITHUB_SHA"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$image"
+          reference="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
+          printf '{"commit":"%s","image":"%s","digestReference":"%s"}\n' "$GITHUB_SHA" "$image" "$reference" > frontend-release.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m3-frontend-release
+          path: frontend-release.json
           retention-days: 14
   gateway:
     runs-on: ubuntu-latest

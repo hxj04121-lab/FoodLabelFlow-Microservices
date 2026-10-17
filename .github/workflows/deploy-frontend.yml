@@ -189,11 +189,19 @@ jobs:
               raise SystemExit('No Ready general node is available; node-group scale changes are not permitted by this workflow.')
           PY
           if kubectl get namespace frontend -o name >/dev/null 2>&1; then
-            helm list --namespace frontend --filter '^frontend$' --output json > "$RUNNER_TEMP/frontend-release.json"
-            python3 - "$RUNNER_TEMP/frontend-release.json" <<'PY'
+            # Terraform pre-creates the namespace, so a first release finds it empty. Accept that, or
+            # exactly one deployed frontend release; refuse anything else rather than adopt it.
+            helm list --namespace frontend --all --output json > "$RUNNER_TEMP/frontend-release.json"
+            kubectl get deployments,statefulsets,services,targetgroupbindings.elbv2.k8s.aws --namespace frontend -o name \
+              > "$RUNNER_TEMP/frontend-existing-resources.txt"
+            python3 - "$RUNNER_TEMP/frontend-release.json" "$RUNNER_TEMP/frontend-existing-resources.txt" <<'PY'
           import json, sys
           releases=json.load(open(sys.argv[1]))
-          if len(releases)!=1 or releases[0].get('name')!='frontend' or releases[0].get('status')!='deployed':
+          resources=[line for line in open(sys.argv[2]).read().split() if line]
+          if not releases:
+              if resources:
+                  raise SystemExit('Namespace frontend has workloads but no Helm release; refusing to adopt existing resources.')
+          elif len(releases)!=1 or releases[0].get('name')!='frontend' or releases[0].get('status')!='deployed':
               raise SystemExit('Namespace frontend exists without exactly one deployed frontend Helm release; refusing to adopt existing resources.')
           PY
           else

@@ -75,15 +75,15 @@ variable "database_subnet_cidrs" {
 }
 
 variable "workload_namespaces" {
-  description = "Namespaces to create for gateway, keycloak, rabbitmq, observability, specification, formulation, compliance, and label-workflow."
+  description = "Namespaces to create for gateway, keycloak, rabbitmq, observability, specification, formulation, compliance, label-workflow, and frontend."
   type        = map(string)
 
   validation {
     condition = toset(keys(var.workload_namespaces)) == toset([
       "gateway", "keycloak", "rabbitmq", "observability",
-      "specification", "formulation", "compliance", "label-workflow"
+      "specification", "formulation", "compliance", "label-workflow", "frontend"
     ]) && alltrue([for ns in values(var.workload_namespaces) : trimspace(ns) != ""])
-    error_message = "Provide non-empty namespace names for all eight platform and service workloads."
+    error_message = "Provide non-empty namespace names for all nine platform and service workloads."
   }
 }
 
@@ -98,6 +98,11 @@ variable "operator_namespaces" {
     )
     error_message = "Provide non-empty RabbitMQ and Keycloak operator namespace names."
   }
+}
+
+variable "deployer_kubernetes_group" {
+  description = "Kubernetes group mapped to the staging deploy role for narrowly scoped custom-resource access."
+  type        = string
 }
 
 variable "node_groups" {
