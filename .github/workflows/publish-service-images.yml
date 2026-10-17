@@ -1,0 +1,55 @@
+name: Publish service images
+
+# Builds the four business services exactly as CI's containers job does and publishes them to GHCR,
+# recording each registry digest so staging releases can pin images by digest. Manual, main only.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-service-images
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [specification, formulation, compliance, label-workflow]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build for x86 workers, push and record the registry digest
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          repository="ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE}"
+          image="${repository}:${GITHUB_SHA}"
+          docker build --platform linux/amd64 -f "services/${SERVICE}/Dockerfile" \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t "$image" .
+          docker push "$image" 2>&1 | tee "$RUNNER_TEMP/push.log"
+          digest="$(sed -nE 's/.*digest: (sha256:[0-9a-f]{64}).*/\1/p' "$RUNNER_TEMP/push.log" | tail -n 1)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::No registry digest was reported for ${SERVICE}."; exit 1; }
+          mkdir -p release
+          printf '{"service":"%s","commit":"%s","image":"%s","digestReference":"%s@%s"}\n' \
+            "$SERVICE" "$GITHUB_SHA" "$image" "$repository" "$digest" > "release/${SERVICE}.json"
+          printf '| %s | `%s@%s` |\n' "$SERVICE" "$repository" "$digest" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: service-release-${{ matrix.service }}
+          path: release/${{ matrix.service }}.json
+          retention-days: 30
