@@ -215,13 +215,6 @@ jobs:
         run: |
           echo "Deployments, ReplicaSets, and Pods (no specs, env values, Secrets, or application logs):"
           kubectl get deployments,replicasets,pods --namespace "$NAMESPACE" --output=wide || true
-          echo "Container logs (last 200 lines; previous container included for CrashLoopBackOff):"
-          for pod in $(kubectl get pods --namespace "$NAMESPACE" --output=name); do
-            echo "--- ${pod} current ---"
-            kubectl logs "$pod" --namespace "$NAMESPACE" --all-containers=true --tail=200 || true
-            echo "--- ${pod} previous ---"
-            kubectl logs "$pod" --namespace "$NAMESPACE" --all-containers=true --previous --tail=200 || true
-          done
           echo "Warning events:"
           kubectl get events --namespace "$NAMESPACE" --field-selector=type=Warning --sort-by=.metadata.creationTimestamp || true
 
