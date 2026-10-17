@@ -11,7 +11,7 @@ RUN mvn -B -ntp -q -f services/compliance/pom.xml dependency:go-offline
 COPY services/compliance/src services/compliance/src
 RUN mvn -B -ntp -q -f services/compliance/pom.xml -DskipTests package
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre-ubi9-minimal
 WORKDIR /app
 RUN useradd --system --uid 10001 spectrace
 COPY --from=build /workspace/services/compliance/target/app.jar app.jar
