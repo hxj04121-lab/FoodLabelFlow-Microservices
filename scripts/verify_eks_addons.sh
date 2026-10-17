@@ -2,7 +2,7 @@
 set -euo pipefail
 
 mode="${1:-}"
-cluster_name="${STCN_EKS_CLUSTER_NAME:-}"
+cluster_name="${EKS_CLUSTER_NAME:-}"
 region="${AWS_REGION:-ap-southeast-1}"
 gateway_namespace="${STCN_GATEWAY_NAMESPACE:-gateway}"
 gateway_binding="${STCN_GATEWAY_BINDING:-gateway-gateway}"
@@ -10,7 +10,7 @@ target_group_arn="${STCN_ALB_TARGET_GROUP_ARN:-}"
 load_balancer_arn="${STCN_ALB_ARN:-}"
 certificate_arn="${STCN_ACM_CERTIFICATE_ARN:-}"
 if [[ "$region" != "ap-southeast-1" || -z "$cluster_name" ]]; then
-  echo "set STCN_EKS_CLUSTER_NAME and use AWS_REGION=ap-southeast-1" >&2
+  echo "set EKS_CLUSTER_NAME and use AWS_REGION=ap-southeast-1" >&2
   exit 2
 fi
 for command in aws jq; do

@@ -367,6 +367,18 @@ check('RabbitMQ policies match the actual spectrace Operator labels',()=>{
     assert(policy.spec.egress.some(rule=>rule.ports?.some(p=>p.port===5672) && rule.to?.some(peer=>peer.podSelector?.matchLabels?.['app.kubernetes.io/name']==='spectrace')));
   }
 });
+check('Keycloak platform policies select the Operator pods by their app label',()=>{
+  const output=run(['template','review',resolve(root,'platform-network-policies')]).stdout;
+  const docs=parseAllDocuments(output).map(d=>d.toJSON()).filter(Boolean);
+  const keycloak=docs.find(d=>d.metadata.name==='stcn-keycloak-flows');
+  assert.deepEqual(keycloak.spec.podSelector.matchLabels,{app:'keycloak'});
+  for(const name of ['gateway','specification','formulation','compliance','label-workflow']) {
+    const policy=docs.find(d=>d.metadata.name===`stcn-${name}-flows`);
+    const peer=policy.spec.egress.flatMap(rule=>rule.to??[]).find(target=>
+      target.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='keycloak');
+    assert.deepEqual(peer?.podSelector?.matchLabels,{app:'keycloak'},`${name} must select Keycloak Operator pods`);
+  }
+});
 check('staged RabbitMQ bundle renders placement patch and quorum PDB',()=>{
   const r=spawnSync(process.env.KUBECTL_BIN || 'kubectl',['kustomize',resolve(root,'../kubernetes/staging/rabbitmq')],{encoding:'utf8',timeout:60000});
   if(r.error) throw r.error;
