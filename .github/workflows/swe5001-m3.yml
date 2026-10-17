@@ -250,20 +250,17 @@ jobs:
             sleep 2
           done
           curl -fsS "$jwks" > /dev/null
-          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
           SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
           SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/specification?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
           RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
             java -jar services/specification/target/app.jar --server.port=18084 \
             --spectrace.seed-replay.enabled=true > "$evidence/specification.log" 2>&1 &
           caller_pid=$!
-          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
           SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
           SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/compliance?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
           RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
             java -jar services/compliance/target/app.jar --server.port=18086 > "$evidence/compliance.log" 2>&1 &
           compliance_pid=$!
-          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
           SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
           SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/label_workflow?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
           RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
@@ -278,7 +275,6 @@ jobs:
           curl -fsS http://localhost:18084/actuator/health/readiness
           curl -fsS http://localhost:18086/actuator/health/readiness
           python3 frontend/scripts/prepare-ci-compliance-topology.py --wait-specification
-          OIDC_ISSUER_URI="$issuer" SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI="$jwks" \
           SPECTRACE_SECURITY_ISSUERURI="$issuer" SPECTRACE_SECURITY_JWKSETURI="$jwks" SPECTRACE_SECURITY_AUDIENCE=spectrace-api \
           SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3316/formulation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
           RABBITMQ_HOST=localhost SPECTRACE_MESSAGING_DECLARE_TOPOLOGY=true \
