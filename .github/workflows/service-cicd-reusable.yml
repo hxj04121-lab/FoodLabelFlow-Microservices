@@ -236,7 +236,8 @@ jobs:
       image: ${{ steps.image.outputs.ref }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build commit-pinned image locally
+      - id: build
+        name: Build commit-pinned image locally
         env:
           SERVICE_NAME: ${{ inputs.service_name }}
           SERVICE_PATH: ${{ inputs.service_path }}
@@ -245,11 +246,12 @@ jobs:
         run: |
           BUILD_CONTEXT="${BUILD_CONTEXT:-$SERVICE_PATH}"
           docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}" "$BUILD_CONTEXT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
       - name: Trivy container image gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
-          image-ref: ghcr.io/${{ github.repository }}/${{ inputs.service_name }}:${{ github.sha }}
+          image-ref: ${{ steps.build.outputs.image }}
           severity: HIGH,CRITICAL
           exit-code: '1'
       - uses: docker/login-action@v3
