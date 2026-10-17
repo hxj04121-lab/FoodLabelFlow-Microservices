@@ -71,6 +71,8 @@ test('real HTTP access probes accept correct isolation and reject an exposed for
     const input = { gateway: `http://127.0.0.1:${address.port}`, site: target.site,
       orgId: 'org-own', ownProduct: 'own', foreignProduct: 'foreign', callerPath: target.callerPath }
     const checks = await verifyDeployedAccess(request, input, token)
+    const sameOrigin = await verifyDeployedAccess(request, { ...input, site: `${input.gateway}/` }, token)
+    expect(sameOrigin.ownProduct).toBe(200)
     expect(checks.foreignProduct).toBe(403)
     expect(checks.tamperedToken).toBe(401)
     leak = true

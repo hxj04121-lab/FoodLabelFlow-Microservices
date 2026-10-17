@@ -22,7 +22,7 @@ assert(process.env.M3_EXPECTED_ROLES!.split(',').every(role => role.trim()), 'Ex
 
 export default defineConfig({
   testDir: './real-auth-tests', testMatch: 'signin.spec.ts', outputDir: './test-results/deployed-signin', workers: 1, reporter: 'list', timeout: 120000,
-  metadata: { deployed: true, gatewayOrigin: process.env.VITE_GATEWAY_ORIGIN,
+  metadata: { deployed: true, gatewayOrigin: process.env.VITE_GATEWAY_ORIGIN === '/' ? base.origin : process.env.VITE_GATEWAY_ORIGIN,
     authority: process.env.VITE_OIDC_AUTHORITY, audience: process.env.VITE_OIDC_AUDIENCE,
     ownProduct: process.env.M3_OWN_PRODUCT_ID, foreignProduct: process.env.M3_FOREIGN_PRODUCT_ID,
     callerPath: process.env.VITE_CALLER_CLAIMS_PATH, identityOrigin: new URL(process.env.VITE_OIDC_AUTHORITY!).origin },
