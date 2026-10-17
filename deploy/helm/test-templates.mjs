@@ -116,6 +116,20 @@ check('fixed three-replica placement requires c6i.large and compliance group',()
   assert(np.spec.egress.some(r=>r.to?.some(t=>t.podSelector?.matchLabels?.['app.kubernetes.io/name']==='spectrace')&&r.ports[0].port===5672));
   writeFileSync(resolve(evidence,'compliance-three-replicas.json'),JSON.stringify(docs,null,2)+'\n');
 });
+check('service runtime Secret leaves RabbitMQ credentials to the per-service Operator Secret',()=>{
+  const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/service-cicd-reusable.yml'),'utf8'));
+  const step=workflow.jobs.deploy.steps.find(row=>row.name==='Create the service runtime Secret without logging values');
+  assert(step);
+  assert(!Object.keys(step.env).some(key=>key.startsWith('RABBITMQ_')));
+  assert.doesNotMatch(step.run,/RABBITMQ_/);
+  for(const service of ['specification','formulation','compliance','label-workflow']) {
+    const values=parse(readFileSync(resolve(root,`values/${service}.yaml`),'utf8'));
+    const user=values.env.find(row=>row.name==='RABBITMQ_USERNAME');
+    const password=values.env.find(row=>row.name==='RABBITMQ_PASSWORD');
+    assert.equal(user.valueFrom.secretKeyRef.name,`${service}-rabbitmq-user-credentials`);
+    assert.equal(password.valueFrom.secretKeyRef.name,`${service}-rabbitmq-user-credentials`);
+  }
+});
 check('optional Should HPA preserves 1–4 range and fixed per-pod limits',()=>{
   const docs=render('compliance',['--set','autoscaling.enabled=true']);
   const hpa=docs.find(d=>d.kind==='HorizontalPodAutoscaler');
@@ -284,7 +298,8 @@ check('business service release is main-only, M1-gated, digest-pinned, budgeted,
   assert.match(script,/gateway-cors/);
   assert.match(script,/code_challenge_methods_supported/);
   assert.doesNotMatch(script,/\bAVAILABLE_CREDIT_USD\s*=|terraform apply|create namespace|kubectl create ns/i);
-  assert.match(script,/env -u AVAILABLE_CREDIT_USD/);
+  assert.match(script,/env -u AVAILABLE_CREDIT_USD python3 scripts\/aws_staging_budget\.py[\s\S]*--approved-spend-usd "\$APPROVED_STAGING_SPEND_USD" --require-gate/,
+    'Clearing an ambient credit value is fail-closed because the workflow supplies the protected approved-spend input to the required budget gate');
 });
 check('Frontend first install uses only the Terraform namespace and refuses unmanaged workloads',()=>{
   const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/deploy-frontend.yml'),'utf8'));
@@ -462,7 +477,7 @@ check('Keycloak platform policies select the Operator pods by their app label',(
   }
 });
 check('staged RabbitMQ bundle renders placement patch and quorum PDB',()=>{
-  const r=spawnSync(process.env.KUBECTL_BIN || 'kubectl',['kustomize',resolve(root,'../kubernetes/staging/rabbitmq')],{encoding:'utf8',timeout:60000});
+  const r=spawnSync(process.env.KUBECTL_BIN || 'kubectl',['kustomize','--load-restrictor','LoadRestrictionsNone',resolve(root,'../kubernetes/staging/rabbitmq')],{encoding:'utf8',timeout:60000});
   if(r.error) throw r.error;
   assert.equal(r.status,0,r.stderr+'\n'+r.stdout);
   const docs=parseAllDocuments(r.stdout).map(d=>d.toJSON()).filter(Boolean);

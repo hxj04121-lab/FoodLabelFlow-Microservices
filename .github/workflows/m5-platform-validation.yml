@@ -9,9 +9,12 @@ on:
       - '.github/workflows/service-cicd-reusable.yml'
       - '.github/workflows/compliance-kind-ci.yml'
       - '.github/workflows/deploy-business-services.yml'
+      - '.github/workflows/deploy-rabbitmq.yml'
       - '.github/workflows/deploy-frontend.yml'
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
+      - 'scripts/aws_staging_budget.py'
+      - 'infra/aws-staging-budget.json'
       - 'scripts/staging/**'
       - 'deploy/mysql/bootstrap-service-databases.sh'
       - 'tests/test_helm_release_inventory.py'
@@ -20,6 +23,8 @@ on:
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
+      - 'tests/test_aws_staging_budget.py'
+      - 'tests/test_rabbitmq_safe_apply.py'
   push:
     branches: [main]
     paths:
@@ -29,9 +34,12 @@ on:
       - '.github/workflows/service-cicd-reusable.yml'
       - '.github/workflows/compliance-kind-ci.yml'
       - '.github/workflows/deploy-business-services.yml'
+      - '.github/workflows/deploy-rabbitmq.yml'
       - '.github/workflows/deploy-frontend.yml'
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
+      - 'scripts/aws_staging_budget.py'
+      - 'infra/aws-staging-budget.json'
       - 'scripts/staging/**'
       - 'deploy/mysql/bootstrap-service-databases.sh'
       - 'tests/test_helm_release_inventory.py'
@@ -40,6 +48,8 @@ on:
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
+      - 'tests/test_aws_staging_budget.py'
+      - 'tests/test_rabbitmq_safe_apply.py'
 
 permissions:
   contents: read
@@ -60,6 +70,10 @@ jobs:
         working-directory: infra/terraform
       - uses: azure/setup-helm@v4
         with: {version: v4.3.0}
+      - uses: azure/setup-kubectl@v4
+        with: {version: v1.36.1}
+      - run: npm ci --prefix deploy/helm --ignore-scripts --no-audit --no-fund
+      - run: npm test --prefix deploy/helm
       - run: helm lint deploy/helm/platform-network-policies deploy/helm/rabbitmq-topology
       - run: python scripts/check_m5_platform.py
       - name: Verify protected staging release logic without AWS credentials
@@ -68,12 +82,14 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_staging_rds_values.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_service_digests.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_window.py' -v
+          python3 -m unittest discover -s tests -p 'test_aws_staging_budget.py' -v
           bash tests/test-runtime-secrets.sh
           bash tests/test_mysql_bootstrap_workflow_guard.sh
       - name: Verify RabbitMQ per-queue DLQ scrape target
         run: python3 -m unittest discover -s tests -p 'test_alloy_dlq_scrape.py' -v
+      - name: Verify RabbitMQ safe create and retry behavior
+        run: python3 -m unittest discover -s tests -p 'test_rabbitmq_safe_apply.py' -v
       - run: bash -n scripts/verify_eks_addons.sh
-      - uses: azure/setup-kubectl@v4
       - run: kubectl kustomize deploy/operators >/dev/null
       - run: kubectl kustomize deploy/operators/rabbitmq >/dev/null
       - uses: aquasecurity/trivy-action@v0.36.0

@@ -320,10 +320,6 @@ jobs:
           SPRING_DATASOURCE_URL: ${{ secrets[format('STAGING_{0}_SPRING_DATASOURCE_URL', inputs.service_name)] }}
           SPRING_DATASOURCE_USERNAME: ${{ secrets[format('STAGING_{0}_SPRING_DATASOURCE_USERNAME', inputs.service_name)] }}
           SPRING_DATASOURCE_PASSWORD: ${{ secrets[format('STAGING_{0}_SPRING_DATASOURCE_PASSWORD', inputs.service_name)] }}
-          RABBITMQ_HOST: ${{ secrets.STAGING_RABBITMQ_HOST }}
-          RABBITMQ_PORT: ${{ secrets.STAGING_RABBITMQ_PORT }}
-          RABBITMQ_USERNAME: ${{ secrets[format('STAGING_{0}_RABBITMQ_USERNAME', inputs.service_name)] }}
-          RABBITMQ_PASSWORD: ${{ secrets[format('STAGING_{0}_RABBITMQ_PASSWORD', inputs.service_name)] }}
           SPECTRACE_SECURITY_ISSUERURI: ${{ secrets.STAGING_SECURITY_ISSUERURI }}
           SPECTRACE_SECURITY_JWKSETURI: ${{ secrets.STAGING_SECURITY_JWKSETURI }}
           SPECTRACE_SECURITY_AUDIENCE: ${{ secrets.STAGING_SECURITY_AUDIENCE }}
@@ -333,7 +329,6 @@ jobs:
           service = os.environ["SERVICE_NAME"]
           keys = [
               "SPRING_DATASOURCE_URL", "SPRING_DATASOURCE_USERNAME", "SPRING_DATASOURCE_PASSWORD",
-              "RABBITMQ_HOST", "RABBITMQ_PORT", "RABBITMQ_USERNAME", "RABBITMQ_PASSWORD",
               "SPECTRACE_SECURITY_ISSUERURI", "SPECTRACE_SECURITY_JWKSETURI", "SPECTRACE_SECURITY_AUDIENCE",
           ]
           missing = [key for key in keys if not os.environ.get(key)]

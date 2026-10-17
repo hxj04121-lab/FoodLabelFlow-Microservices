@@ -18,6 +18,21 @@ spec:
     limits:
       cpu: "2"
       memory: 2Gi
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: eks.amazonaws.com/nodegroup
+                operator: In
+                values: [general]
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: spectrace
+              app.kubernetes.io/component: rabbitmq
   rabbitmq:
     additionalConfig: |-
       default_queue_type = quorum
@@ -25,6 +40,9 @@ spec:
   override:
     statefulSet:
       spec:
+        persistentVolumeClaimRetentionPolicy:
+          whenDeleted: Retain
+          whenScaled: Retain
         template:
           spec:
             containers:

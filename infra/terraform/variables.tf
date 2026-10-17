@@ -61,12 +61,12 @@ variable "general_desired_size" {
 }
 
 variable "compliance_desired_size" {
-  description = "Desired c6i.large compliance nodes; autoscaler bounds remain 1-4."
+  description = "Desired c6i.large compliance nodes; two are required to place compliance workloads in both staging AZs."
   type        = number
-  default     = 1
+  default     = 2
   validation {
-    condition     = var.compliance_desired_size >= 1 && var.compliance_desired_size <= 4
-    error_message = "Compliance node count must be between one and four."
+    condition     = var.compliance_desired_size >= (var.enable_compliance_node_group ? 2 : 1) && var.compliance_desired_size <= 4
+    error_message = "Compliance node count must be between one and four; enabling the group requires at least two nodes for both AZs."
   }
 }
 
@@ -89,12 +89,22 @@ variable "enable_alb" {
 }
 
 variable "enable_eks_addons" {
-  description = "Install missing EKS controllers, storage, and network policies while preserving the existing ALB."
+  description = "Create only the confirmed-missing EBS CSI add-on, encrypted gp3 StorageClass, and six workload namespaces."
   type        = bool
   default     = false
   validation {
     condition     = !var.enable_eks_addons || var.enable_eks
     error_message = "EKS add-ons require the existing EKS cluster."
+  }
+}
+
+variable "rabbitmq_operator_install_role_arn" {
+  description = "Optional existing IAM role ARN granted cluster-admin access to install RabbitMQ CRDs/operators; requires separate M1 and staging review approval."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.rabbitmq_operator_install_role_arn == "" || can(regex("^arn:aws:iam::[0-9]{12}:role/.+$", var.rabbitmq_operator_install_role_arn))
+    error_message = "rabbitmq_operator_install_role_arn must be empty or an existing AWS IAM role ARN."
   }
 }
 

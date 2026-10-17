@@ -1,0 +1,22 @@
+{{- range $consumer := .Values.consumers }}
+{{- $service := $consumer.service }}
+{{- $namespace := $consumer.namespace }}
+{{- range $queue := $consumer.queues }}
+{{- $queueName := printf "%s.%s" $service $queue.name }}
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Policy
+metadata:
+  name: {{ printf "%s-%s-delivery-policy" $service $queue.name }}
+  namespace: {{ $namespace }}
+spec:
+  name: {{ printf "%s-%s-delivery-policy" $service $queue.name | quote }}
+  pattern: {{ printf "^%s$" (regexQuoteMeta $queueName) | quote }}
+  applyTo: queues
+  definition:
+    delivery-limit: 5
+    dead-letter-exchange: {{ $.Values.rabbitmq.deadLetterExchange | quote }}
+    dead-letter-routing-key: {{ $queueName | quote }}
+  rabbitmqClusterReference: {name: {{ $.Values.rabbitmq.name }}, namespace: {{ $.Values.rabbitmq.namespace }}}
+{{- end }}
+{{- end }}

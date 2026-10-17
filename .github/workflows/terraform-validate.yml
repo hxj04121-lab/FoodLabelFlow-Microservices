@@ -12,6 +12,25 @@ on:
         required: true
         type: boolean
         default: false
+      staging_window_hours:
+        description: Modeled deployment duration (maximum 24 hours)
+        required: false
+        type: number
+        default: 24
+      experiment_hours:
+        description: Planned compliance scale-out hours
+        required: false
+        type: number
+        default: 4
+      k6_hours:
+        description: Planned k6 load-test hours
+        required: false
+        type: number
+        default: 2
+      staging_window_end_sgt:
+        description: Owner-confirmed shutdown time in Asia/Singapore (YYYY-MM-DD HH:MM)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -63,20 +82,44 @@ jobs:
       id-token: write
     env:
       AWS_REGION: ap-southeast-1
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       AWS_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
       STAGING_TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
       TF_PLAN_VARS_JSON: ${{ secrets.TF_PLAN_VARS_JSON }}
+      STAGING_WINDOW_HOURS: ${{ inputs.staging_window_hours }}
+      EXPERIMENT_HOURS: ${{ inputs.experiment_hours }}
+      K6_HOURS: ${{ inputs.k6_hours }}
+      STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
-      - name: Require state backend and IAM role configuration
+      - name: Validate the modeled staging window and publish the cost estimate
         run: |
-          test -n "$AWS_ROLE_ARN" && test -n "$TF_STATE_BUCKET"
+          set -euo pipefail
+          test -n "$STAGING_WINDOW_HOURS" && test -n "$STAGING_WINDOW_END_SGT"
+          python3 platform/staging/validate_window.py "$STAGING_WINDOW_HOURS" "$STAGING_WINDOW_END_SGT" > "$RUNNER_TEMP/staging-window.json"
+          {
+            echo '## Modeled staging window'
+            echo '```json'
+            cat "$RUNNER_TEMP/staging-window.json"
+            echo '```'
+            echo
+            echo '## Estimated staging cost (credit remains unverified)'
+            echo '```text'
+            python3 scripts/aws_staging_budget.py --hours "$STAGING_WINDOW_HOURS" \
+              --experiment-hours "$EXPERIMENT_HOURS" --k6-hours "$K6_HOURS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Require the existing S3 state backend and plan role configuration
+        run: |
+          test -n "$AWS_ACCOUNT_ID" && test -n "$AWS_ROLE_ARN" && test -n "$TF_STATE_BUCKET"
           test -n "$TF_STATE_KEY" && test -n "$STAGING_TF_WORKSPACE" && test -n "$TF_PLAN_VARS_JSON"
+          test "$AWS_ACCOUNT_ID" = 679857346122
+          test "$TF_STATE_BUCKET" = foodlabelflow-staging-tfstate-679857346122-ap-southeast-1
           test "$TF_STATE_KEY" = terraform.tfstate
           test "$STAGING_TF_WORKSPACE" = staging
           umask 077
@@ -85,6 +128,19 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Verify the AWS account and existing staging state object
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
+          aws s3api head-object --bucket "$TF_STATE_BUCKET" --key spectrace/staging/terraform.tfstate \
+            --query '{VersionId:VersionId,LastModified:LastModified}' --output json > "$RUNNER_TEMP/staging-state-head.json"
+          {
+            echo '## Existing staging Terraform State'
+            echo 'S3 key: `spectrace/staging/terraform.tfstate` (existing object required; no workspace creation or state migration)'
+            echo '```json'
+            cat "$RUNNER_TEMP/staging-state-head.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Initialize the existing protected state
         working-directory: infra/terraform
         run: |
@@ -104,6 +160,8 @@ jobs:
         run: |
           umask 077
           if ! terraform plan -input=false -no-color -var-file="$RUNNER_TEMP/staging.tfvars.json" \
+            -var=enable_eks=true -var=enable_eks_addons=true -var=manage_vpc_cni=false \
+            -var=general_desired_size=3 -var=enable_compliance_node_group=true -var=compliance_desired_size=2 \
             -out="$RUNNER_TEMP/staging.tfplan" > "$RUNNER_TEMP/terraform-plan.log" 2>&1; then
             echo '::error::Read-only plan failed; inspect the restricted runner log. No Apply was executed.'
             exit 1

@@ -33,6 +33,31 @@ def action_label(actions):
     return " -> ".join(actions)
 
 
+def grouped_changes(changes):
+    def is_access_control(item):
+        address, resource_type = item["address"].lower(), item["type"]
+        return (
+            resource_type.startswith("aws_iam_")
+            or resource_type in {"aws_eks_access_entry", "aws_eks_access_policy_association"}
+            or (resource_type == "kubernetes_manifest" and any(word in address for word in ("role", "binding", "reader")))
+        )
+
+    return [
+        ("General and Compliance node groups", [item for item in changes if item["type"] == "aws_eks_node_group"]),
+        ("EBS CSI, StorageClass, and workload Namespaces", [
+            item for item in changes
+            if (item["type"] == "aws_eks_addon" and "ebs" in item["address"].lower())
+            or (item["type"] == "kubernetes_manifest" and any(word in item["address"].lower() for word in ("storage_class", "workload_namespace")))
+        ]),
+        ("IAM, RBAC, and EKS Access Entries", [item for item in changes if is_access_control(item)]),
+        ("Existing resources that may be affected", [
+            item for item in changes
+            if any(action in item["change"]["actions"] for action in ("update", "delete", "forget"))
+            or ("create" in item["change"]["actions"] and "delete" in item["change"]["actions"])
+        ]),
+    ]
+
+
 def main():
     try:
         plan = json.load(sys.stdin)
@@ -52,10 +77,25 @@ def main():
         if item.get("type") in PROTECTED_TYPES
         and any(action in item["change"]["actions"] for action in ("delete", "forget"))
     ]
+    counts = {"create": 0, "update": 0, "replace": 0, "delete": 0}
+    for item in changes:
+        actions = item["change"]["actions"]
+        if "create" in actions and "delete" in actions:
+            counts["replace"] += 1
+        elif "delete" in actions or "forget" in actions:
+            counts["delete"] += 1
+        elif "create" in actions:
+            counts["create"] += 1
+        elif "update" in actions:
+            counts["update"] += 1
 
     print("## Terraform resource actions")
     print()
     print("Addresses and actions only; resource values and outputs are omitted.")
+    print()
+    print("Resource counts: create **%d**, update **%d**, replace **%d**, delete **%d**." % (
+        counts["create"], counts["update"], counts["replace"], counts["delete"]
+    ))
     print()
     print("Protected foundation destroy/replacement check: **%s**" % (
         "FAIL" if protected_destructive else "PASS"
@@ -66,6 +106,16 @@ def main():
             print("- `%s` — `%s`" % (item["address"], action_label(item["change"]["actions"])))
     else:
         print("No managed-resource changes.")
+
+    for title, rows in grouped_changes(changes):
+        print()
+        print("### %s" % title)
+        print()
+        if rows:
+            for item in sorted(rows, key=lambda item: item["address"]):
+                print("- `%s` — `%s`" % (item["address"], action_label(item["change"]["actions"])))
+        else:
+            print("No changes.")
 
     if protected_destructive:
         print()
