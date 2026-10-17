@@ -205,7 +205,7 @@ jobs:
           helm upgrade --install "$RELEASE" "$CHART" --namespace "$NAMESPACE" --create-namespace \
             "${values_args[@]}" \
             --set image.repository="${image%:*}" --set image.tag="${image##*:}" --wait --timeout 5m
-          kubectl -n "$NAMESPACE" rollout status "deployment/$RELEASE" --timeout=180s
+          # helm --wait already gates deployment readiness; the chart full name is <release>-<service>.
 
       - name: Capture safe kind readiness diagnostics
         if: ${{ failure() && steps.deploy_kind.outcome == 'failure' }}
