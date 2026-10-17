@@ -17,6 +17,10 @@ permissions:
 
 jobs:
   compliance:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     uses: ./.github/workflows/service-cicd-reusable.yml
     with:
       service_name: compliance

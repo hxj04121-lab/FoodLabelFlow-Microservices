@@ -85,6 +85,20 @@ for(const service of ['compliance','specification','formulation','label-workflow
     else assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='rabbitmq'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='spectrace')));
   });
 }
+check('business services and the shared Label Workflow overlay reach Operator-labeled Keycloak on TCP/8080',()=>{
+  const assertKeycloakRule=(docs,source)=>{
+    const policy=docs.find(d=>d.kind==='NetworkPolicy');
+    assert.deepEqual(policy.spec.policyTypes,['Ingress','Egress']);
+    const rules=policy.spec.egress.filter(rule=>rule.to?.some(peer=>
+      peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='keycloak' &&
+      peer.podSelector?.matchLabels?.app==='keycloak'));
+    assert.equal(rules.length,1,`${source} must select the Keycloak Operator server Pod`);
+    assert.deepEqual(rules[0].ports,[{port:8080,protocol:'TCP'}]);
+    assert(!policy.spec.egress.some(rule=>rule.to?.some(peer=>peer.ipBlock?.cidr==='0.0.0.0/0')),'Default-deny egress remains intact');
+  };
+  for(const service of ['specification','formulation','compliance','label-workflow']) assertKeycloakRule(render(service),service);
+  assertKeycloakRule(render('label-workflow',['--values',resolve(root,'values/staging-shared-label-workflow.yaml')]),'shared Label Workflow overlay');
+});
 check('fixed three-replica placement requires c6i.large and compliance group',()=>{
   const docs=render('compliance',['--set','replicaCount=3']);
   const dep=docs.find(d=>d.kind==='Deployment');
