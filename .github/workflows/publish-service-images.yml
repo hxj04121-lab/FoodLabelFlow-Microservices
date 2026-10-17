@@ -1,7 +1,8 @@
 name: Publish service images
 
-# Builds the four business services exactly as CI's containers job does and publishes them to GHCR,
-# recording each registry digest so staging releases can pin images by digest. Manual, main only.
+# Builds the four business services exactly as CI's containers job does, applies the repository's
+# final-image Trivy gate, and publishes them to GHCR, recording each registry digest so staging
+# releases can pin images by digest. Manual, main only.
 on:
   workflow_dispatch:
 
@@ -26,12 +27,8 @@ jobs:
         service: [specification, formulation, compliance, label-workflow]
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build for x86 workers, push and record the registry digest
+      - id: build
+        name: Build for x86 workers exactly as CI's containers job does
         env:
           SERVICE: ${{ matrix.service }}
         run: |
@@ -41,13 +38,36 @@ jobs:
           docker build --platform linux/amd64 -f "services/${SERVICE}/Dockerfile" \
             --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t "$image" .
-          docker push "$image" 2>&1 | tee "$RUNNER_TEMP/push.log"
+          echo "repository=$repository" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+      # Same final-image policy as service-cicd-reusable.yml, scanned before anything is pushed.
+      # The lower-cased reference from the build step is used; registry names must be lower case.
+      - name: Trivy container image gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.build.outputs.image }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push and record the registry digest
+        env:
+          SERVICE: ${{ matrix.service }}
+          REPOSITORY: ${{ steps.build.outputs.repository }}
+          IMAGE: ${{ steps.build.outputs.image }}
+        run: |
+          set -euo pipefail
+          docker push "$IMAGE" 2>&1 | tee "$RUNNER_TEMP/push.log"
           digest="$(sed -nE 's/.*digest: (sha256:[0-9a-f]{64}).*/\1/p' "$RUNNER_TEMP/push.log" | tail -n 1)"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::No registry digest was reported for ${SERVICE}."; exit 1; }
           mkdir -p release
           printf '{"service":"%s","commit":"%s","image":"%s","digestReference":"%s@%s"}\n' \
-            "$SERVICE" "$GITHUB_SHA" "$image" "$repository" "$digest" > "release/${SERVICE}.json"
-          printf '| %s | `%s@%s` |\n' "$SERVICE" "$repository" "$digest" >> "$GITHUB_STEP_SUMMARY"
+            "$SERVICE" "$GITHUB_SHA" "$IMAGE" "$REPOSITORY" "$digest" > "release/${SERVICE}.json"
+          printf '| %s | `%s@%s` |\n' "$SERVICE" "$REPOSITORY" "$digest" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: service-release-${{ matrix.service }}
