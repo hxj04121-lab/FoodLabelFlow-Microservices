@@ -4,6 +4,22 @@ set -euo pipefail
 : "${MYSQL_HOST:?Set MYSQL_HOST to the private RDS endpoint}"
 : "${MYSQL_ADMIN_USER:?Set MYSQL_ADMIN_USER to the bootstrap administrator}"
 : "${MYSQL_ADMIN_PASSWORD:?Set MYSQL_ADMIN_PASSWORD from a protected secret}"
+if [[ "$MYSQL_HOST" != 127.0.0.1 ]]; then
+  : "${GITHUB_ACTIONS:?RDS bootstrap is restricted to the protected GitHub workflow}"
+  : "${GITHUB_REF:?Set GITHUB_REF}"
+  : "${GITHUB_WORKFLOW:?Set GITHUB_WORKFLOW}"
+  : "${STAGING_WINDOW_VALIDATED:?Set the validated staging budget marker}"
+  [[ "$GITHUB_ACTIONS" == true && "$GITHUB_REF" == refs/heads/main && \
+    "$GITHUB_WORKFLOW" == "STCN-15 staging runtime Secrets" && "$STAGING_WINDOW_VALIDATED" == true && \
+    "$MYSQL_HOST" =~ ^[A-Za-z0-9.-]+\.ap-southeast-1\.rds\.amazonaws\.com$ ]] || {
+    echo "Refusing database bootstrap outside the protected staging window or against a non-RDS host" >&2
+    exit 2
+  }
+fi
+[[ "$MYSQL_ADMIN_USER" =~ ^[A-Za-z0-9_]{1,32}$ ]] || {
+  echo "MYSQL_ADMIN_USER has invalid characters or length" >&2
+  exit 2
+}
 
 services=(specification formulation compliance label_workflow keycloak)
 variables=(SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD KEYCLOAK_DB_PASSWORD)

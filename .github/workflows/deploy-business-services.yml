@@ -1,0 +1,426 @@
+name: Protected Business Services staging release
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_window_hours:
+        description: Owner-approved staging window length in hours
+        type: number
+        required: true
+      experiment_hours:
+        description: Planned compliance experiment hours
+        type: number
+        required: true
+      k6_hours:
+        description: Planned k6 hours
+        type: number
+        required: true
+      staging_window_end_sgt:
+        description: Owner-confirmed shutdown time in Asia/Singapore (YYYY-MM-DD HH:MM)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: business-services-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, staging-vpc]
+    environment: staging
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      GATEWAY_ISSUER: ${{ vars.GATEWAY_ISSUER }}
+      APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
+      STAGING_WINDOW_HOURS: ${{ inputs.staging_window_hours }}
+      STAGING_EXPERIMENT_HOURS: ${{ inputs.experiment_hours }}
+      STAGING_K6_HOURS: ${{ inputs.k6_hours }}
+      STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.1
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.0
+      - name: Validate the approved window, budget cap, and release inputs
+        env:
+          APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          for value in "$AWS_ACCOUNT_ID" "$AWS_REGION" "$EKS_CLUSTER_NAME" "$AWS_ROLE_ARN" "$GATEWAY_ISSUER"; do test -n "$value"; done
+          test "$AWS_REGION" = ap-southeast-1
+          test "$EKS_CLUSTER_NAME" = spectrace-staging
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/commit-sha.txt"
+          printf '%s/actions/runs/%s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > "$RUNNER_TEMP/workflow-run.txt"
+          python3 - "$APPROVED_STAGING_SPEND_USD" <<'PY'
+          from decimal import Decimal, InvalidOperation
+          import sys
+          try:
+              cap = Decimal(sys.argv[1])
+          except InvalidOperation:
+              raise SystemExit('Approved staging spend must be a decimal USD amount')
+          if not cap.is_finite() or cap <= 0 or cap > Decimal('150'):
+              raise SystemExit('Approved staging spend must be within the STCN-17 USD 150 cap')
+          PY
+          python3 platform/staging/validate_window.py "$STAGING_WINDOW_HOURS" "$STAGING_WINDOW_END_SGT" > "$RUNNER_TEMP/staging-window.json"
+          env -u AVAILABLE_CREDIT_USD python3 scripts/aws_staging_budget.py --hours "$STAGING_WINDOW_HOURS" \
+            --experiment-hours "$STAGING_EXPERIMENT_HOURS" --k6-hours "$STAGING_K6_HOURS" \
+            --approved-spend-usd "$APPROVED_STAGING_SPEND_USD" --require-gate \
+            > "$RUNNER_TEMP/business-services-budget-gate.log"
+          python3 scripts/staging/verify_service_digests.py > "$RUNNER_TEMP/service-images.json"
+          port=18101
+          for service in specification formulation compliance label-workflow; do
+            helm lint deploy/helm/spectrace-service --strict --values "deploy/helm/values/${service}.yaml"
+          done
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify the staging identity, node-reader RBAC, and private EKS context
+        run: |
+          set -euo pipefail
+          identity=$(aws sts get-caller-identity --query Arn --output text)
+          aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" > "$RUNNER_TEMP/cluster.json"
+          cluster_arn=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cluster"]["arn"])' "$RUNNER_TEMP/cluster.json")
+          cluster_vpc=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cluster"]["resourcesVpcConfig"]["vpcId"])' "$RUNNER_TEMP/cluster.json")
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cluster"]["status"])' "$RUNNER_TEMP/cluster.json")" = ACTIVE
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" >/dev/null
+          python3 platform/gateway/validate-deploy-target.py --account-id "$AWS_ACCOUNT_ID" \
+            --role-arn "$AWS_ROLE_ARN" --caller-arn "$identity" --region "$AWS_REGION" \
+            --cluster "$EKS_CLUSTER_NAME" --cluster-arn "$cluster_arn" --context "$(kubectl config current-context)"
+          test "$(kubectl auth can-i get nodes)" = yes
+          echo "$cluster_vpc" > "$RUNNER_TEMP/cluster-vpc.txt"
+      - name: Verify the live compliance node group and allocatable capacity
+        run: |
+          set -euo pipefail
+          aws eks describe-nodegroup --cluster-name "$EKS_CLUSTER_NAME" --nodegroup-name compliance \
+            --region "$AWS_REGION" > "$RUNNER_TEMP/compliance-nodegroup.json"
+          kubectl get nodes -l eks.amazonaws.com/nodegroup=compliance -o json > "$RUNNER_TEMP/compliance-nodes.json"
+          python3 - "$RUNNER_TEMP/compliance-nodegroup.json" "$RUNNER_TEMP/compliance-nodes.json" <<'PY'
+          import json, re, sys
+          group=json.load(open(sys.argv[1]))['nodegroup']
+          scaling=group.get('scalingConfig', {})
+          if group.get('status')!='ACTIVE' or group.get('instanceTypes')!=['c6i.large'] or scaling.get('minSize',0)<1 or scaling.get('desiredSize',0)<1 or group.get('health',{}).get('issues'):
+              raise SystemExit('Compliance node group must be healthy, c6i.large, and have at least one desired node.')
+          nodes=json.load(open(sys.argv[2]))['items']
+          ready=[node for node in nodes if any(c.get('type')=='Ready' and c.get('status')=='True' for c in node['status'].get('conditions',[]))]
+          if not ready:
+              raise SystemExit('Compliance node group has no Ready Kubernetes node.')
+          cpu=0
+          memory=0
+          for node in ready:
+              alloc=node['status']['allocatable']
+              value=alloc['cpu']
+              cpu += int(value[:-1])/1000 if value.endswith('m') else float(value)
+              value=alloc['memory']
+              match=re.fullmatch(r'([0-9.]+)(Ki|Mi|Gi|Ti)?',value)
+              if not match: raise SystemExit('Unknown Kubernetes memory quantity.')
+              factor={None:1,'Ki':1024,'Mi':1024**2,'Gi':1024**3,'Ti':1024**4}[match.group(2)]
+              memory += float(match.group(1))*factor
+              taints=node.get('spec',{}).get('taints',[])
+              if not any(t.get('key')=='dedicated' and t.get('value')=='compliance' and t.get('effect')=='NoSchedule' for t in taints):
+                  raise SystemExit('Ready compliance node is missing its dedicated taint.')
+          if cpu < 1 or memory < 2*1024**3:
+              raise SystemExit('Compliance nodes do not have the allocatable CPU and memory requested by the service.')
+          print(f'Compliance group ready: {len(ready)} node(s), {cpu:g} allocatable CPU, {memory/1024**3:.2f} GiB allocatable memory.')
+          PY
+      - name: Resolve the actual private RDS endpoint and subnet CIDRs
+        run: |
+          set -euo pipefail
+          aws rds describe-db-instances --db-instance-identifier spectrace-staging-mysql --region "$AWS_REGION" > "$RUNNER_TEMP/rds.json"
+          mapfile -t subnet_ids < <(python3 - "$RUNNER_TEMP/rds.json" <<'PY'
+          import json, sys
+          rows=json.load(open(sys.argv[1]))['DBInstances']
+          assert len(rows)==1
+          print('\n'.join(row['SubnetIdentifier'] for row in rows[0]['DBSubnetGroup']['Subnets']))
+          PY
+          )
+          test "${#subnet_ids[@]}" -ge 2
+          aws ec2 describe-subnets --subnet-ids "${subnet_ids[@]}" --region "$AWS_REGION" > "$RUNNER_TEMP/rds-subnets.json"
+          python3 scripts/staging/resolve_rds_values.py "$RUNNER_TEMP/rds.json" "$RUNNER_TEMP/rds-subnets.json" \
+            --vpc-id "$(cat "$RUNNER_TEMP/cluster-vpc.txt")" --output "$RUNNER_TEMP/rds-runtime-values.json"
+          python3 - "$RUNNER_TEMP/rds-runtime-values.json" "$RUNNER_TEMP/rds-network-values.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1]))
+          json.dump({'networkPolicy':data['networkPolicy']},open(sys.argv[2],'w'))
+          PY
+      - name: Check installed Gateway, Keycloak, and RabbitMQ prerequisites
+        run: |
+          set -euo pipefail
+          for target in 'gateway gateway-gateway' 'keycloak spectrace-keycloak-service' 'rabbitmq spectrace'; do
+            read -r namespace service <<< "$target"
+            kubectl get service "$service" --namespace "$namespace" -o name >/dev/null
+            kubectl get endpointslices --namespace "$namespace" --selector "kubernetes.io/service-name=$service" \
+              -o json > "$RUNNER_TEMP/${namespace}-endpoints.json"
+            python3 - "$RUNNER_TEMP/${namespace}-endpoints.json" "$namespace" <<'PY'
+          import json, sys
+          slices=json.load(open(sys.argv[1]))['items']
+          ready=[endpoint for row in slices for endpoint in row.get('endpoints',[]) if endpoint.get('conditions',{}).get('ready') is not False and endpoint.get('addresses')]
+          if not ready: raise SystemExit(f'{sys.argv[2]} Service has no ready EndpointSlice target.')
+          PY
+          done
+          kubectl get networkpolicy gateway-gateway --namespace gateway -o json > "$RUNNER_TEMP/gateway-networkpolicy.json"
+          python3 - "$RUNNER_TEMP/gateway-networkpolicy.json" <<'PY'
+          import json, sys
+          policy=json.load(open(sys.argv[1]))['spec']
+          egress=policy.get('egress',[])
+          for service in ('specification','formulation','compliance','label-workflow'):
+              if not any(any(peer.get('namespaceSelector',{}).get('matchLabels',{}).get('kubernetes.io/metadata.name')==service and peer.get('podSelector',{}).get('matchLabels',{}).get('app.kubernetes.io/name')==service for peer in rule.get('to',[])) and any(port.get('port')==8080 for port in rule.get('ports',[])) for rule in egress):
+                  raise SystemExit(f'Gateway NetworkPolicy does not permit service DNS traffic to {service}:8080.')
+          PY
+          kubectl get secret keycloak-db --namespace keycloak -o name >/dev/null
+      - name: Validate service RBAC, runtime secrets, RabbitMQ users, and Helm ownership
+        run: |
+          set -euo pipefail
+          for service in specification formulation compliance label-workflow; do
+            kubectl get serviceaccount default --namespace "$service" >/dev/null
+            for verb in get list watch; do
+              for resource in deployments services serviceaccounts networkpolicies pods endpointslices secrets; do
+                test "$(kubectl auth can-i "$verb" "$resource" --namespace "$service")" = yes
+              done
+            done
+            for verb in create patch update; do
+              for resource in deployments services serviceaccounts networkpolicies secrets; do
+                test "$(kubectl auth can-i "$verb" "$resource" --namespace "$service")" = yes
+              done
+            done
+            kubectl get secret "${service}-runtime" --namespace "$service" -o name >/dev/null
+            kubectl get secret "${service}-rabbitmq-user-credentials" --namespace "$service" -o name >/dev/null
+            kubectl get secret "${service}-runtime" --namespace "$service" -o json | python3 -c 'import json,sys; keys=set(json.load(sys.stdin).get("data",{})); expected={"SPRING_DATASOURCE_URL","SPRING_DATASOURCE_USERNAME","SPRING_DATASOURCE_PASSWORD","SPECTRACE_SECURITY_ISSUERURI","SPECTRACE_SECURITY_JWKSETURI","SPECTRACE_SECURITY_AUDIENCE"}; assert expected <= keys, "runtime Secret is missing required configuration keys"'
+            kubectl get secret "${service}-rabbitmq-user-credentials" --namespace "$service" -o json | python3 -c 'import json,sys; keys=set(json.load(sys.stdin).get("data",{})); assert {"username","password"} <= keys, "RabbitMQ Operator Secret is missing required keys"'
+            helm list --namespace "$service" --all --output json > "$RUNNER_TEMP/${service}-release.json"
+            kubectl get deployments,statefulsets,daemonsets,replicasets,replicationcontrollers,jobs,cronjobs,pods,services,networkpolicies,serviceaccounts,horizontalpodautoscalers,endpointslices \
+              --namespace "$service" -o json > "$RUNNER_TEMP/${service}-inventory.json"
+            python3 scripts/staging/validate_helm_release.py \
+              "$RUNNER_TEMP/${service}-release.json" "$RUNNER_TEMP/${service}-inventory.json" \
+              --namespace "$service" --release "$service" --deployment "${service}-${service}"
+            helm template "$service" deploy/helm/spectrace-service --namespace "$service" \
+              --values "deploy/helm/values/${service}.yaml" --values "$RUNNER_TEMP/rds-network-values.json" \
+              > "$RUNNER_TEMP/${service}-rendered.yaml"
+            kubectl apply --dry-run=server -f "$RUNNER_TEMP/${service}-rendered.yaml" >/dev/null
+          done
+      - name: Install or upgrade the four digest-pinned Helm releases
+        run: |
+          set -euo pipefail
+          for service in specification formulation compliance label-workflow; do
+            helm upgrade --install "$service" deploy/helm/spectrace-service --namespace "$service" \
+              --values "deploy/helm/values/${service}.yaml" --values "$RUNNER_TEMP/rds-network-values.json" \
+              --atomic --wait --timeout 10m
+          done
+      - name: Verify Pods, Service DNS, NetworkPolicies, Gateway CORS, and OIDC discovery
+        env:
+          GATEWAY_ISSUER: ${{ vars.GATEWAY_ISSUER }}
+        run: |
+          set -euo pipefail
+          for service in specification formulation compliance label-workflow; do
+            kubectl rollout status "deployment/${service}-${service}" --namespace "$service" --timeout=5m
+            kubectl get deployment "${service}-${service}" --namespace "$service" -o json > "$RUNNER_TEMP/${service}-deployment.json"
+            kubectl get pods --namespace "$service" --selector "app.kubernetes.io/instance=$service" -o json > "$RUNNER_TEMP/${service}-pods.json"
+            kubectl get service "${service}-${service}" --namespace "$service" -o json > "$RUNNER_TEMP/${service}-service.json"
+            kubectl get networkpolicy "${service}-${service}" --namespace "$service" -o json > "$RUNNER_TEMP/${service}-networkpolicy.json"
+            kubectl get networkpolicy "stcn-${service}-flows" --namespace "$service" -o json > "$RUNNER_TEMP/${service}-platform-networkpolicy.json"
+            kubectl get endpointslices --namespace "$service" --selector "kubernetes.io/service-name=${service}-${service}" -o json > "$RUNNER_TEMP/${service}-endpoints.json"
+            helm status "$service" --namespace "$service" > "$RUNNER_TEMP/${service}-helm-status.txt"
+            helm history "$service" --namespace "$service" --output json > "$RUNNER_TEMP/${service}-helm-history.json"
+            python3 - "$RUNNER_TEMP/service-images.json" "$RUNNER_TEMP/rds-network-values.json" \
+              "$RUNNER_TEMP/${service}-deployment.json" "$RUNNER_TEMP/${service}-pods.json" \
+              "$RUNNER_TEMP/${service}-service.json" "$RUNNER_TEMP/${service}-networkpolicy.json" \
+              "$RUNNER_TEMP/${service}-platform-networkpolicy.json" "$RUNNER_TEMP/${service}-endpoints.json" "$service" <<'PY'
+          import json, sys
+          images=json.load(open(sys.argv[1]))
+          database_cidrs=json.load(open(sys.argv[2]))['networkPolicy']['databaseCidrs']
+          deployment=json.load(open(sys.argv[3]))
+          pods=json.load(open(sys.argv[4]))['items']
+          service=json.load(open(sys.argv[5]))
+          policies=[json.load(open(path))['spec'] for path in sys.argv[6:8]]
+          endpoints=json.load(open(sys.argv[8]))['items']
+          name=sys.argv[9]
+          image=f"{images[name]['repository']}@{images[name]['digest']}"
+          desired=deployment.get('spec',{}).get('replicas',1)
+          if deployment.get('status',{}).get('readyReplicas',0)!=desired or len(pods)!=desired:
+              raise SystemExit(f'{name} Pods are not all Ready.')
+          for pod in pods:
+              if pod.get('status',{}).get('phase')!='Running' or not all(c.get('ready') and c.get('restartCount',0)==0 and c.get('imageID','').endswith('@'+images[name]['digest']) for c in pod.get('status',{}).get('containerStatuses',[])):
+                  raise SystemExit(f'{name} Pod is not healthy or does not run the pinned digest.')
+          containers=deployment['spec']['template']['spec']['containers']
+          if len(containers)!=1 or containers[0].get('image')!=image or deployment['spec']['template']['spec'].get('automountServiceAccountToken') is not False:
+              raise SystemExit(f'{name} Deployment image or service-account token policy is invalid.')
+          env={entry['name']:entry for entry in containers[0].get('env',[])}
+          if env.get('RABBITMQ_HOST',{}).get('value')!='spectrace.rabbitmq.svc.cluster.local' or env.get('RABBITMQ_PORT',{}).get('value')!='5672':
+              raise SystemExit(f'{name} RabbitMQ service address is invalid.')
+          for key,secret_key in (('RABBITMQ_USERNAME','username'),('RABBITMQ_PASSWORD','password')):
+              ref=env.get(key,{}).get('valueFrom',{}).get('secretKeyRef',{})
+              if ref.get('name')!=f'{name}-rabbitmq-user-credentials' or ref.get('key')!=secret_key:
+                  raise SystemExit(f'{name} RabbitMQ credentials are not injected from its isolated Operator Secret.')
+          if not any(entry.get('secretRef',{}).get('name')==f'{name}-runtime' for entry in containers[0].get('envFrom',[])):
+              raise SystemExit(f'{name} runtime Secret is not injected into the container.')
+          if service['spec'].get('type')!='ClusterIP' or service['spec']['ports'][0].get('port')!=8080:
+              raise SystemExit(f'{name} Service DNS endpoint is invalid.')
+          ready=[e for row in endpoints for e in row.get('endpoints',[]) if e.get('conditions',{}).get('ready') is True]
+          if not ready: raise SystemExit(f'{name} Service has no Ready EndpointSlice target.')
+          app_policy=policies[0]
+          if not {'Ingress','Egress'}.issubset(set(app_policy.get('policyTypes',[]))):
+              raise SystemExit(f'{name} NetworkPolicy does not enforce both ingress and egress.')
+          ingress=[peer for rule in app_policy.get('ingress',[]) for peer in rule.get('from',[])]
+          if not any(peer.get('namespaceSelector',{}).get('matchLabels',{}).get('kubernetes.io/metadata.name')=='gateway' and peer.get('podSelector',{}).get('matchLabels',{}).get('app.kubernetes.io/name')=='gateway' for peer in ingress):
+              raise SystemExit(f'{name} NetworkPolicy does not allow Gateway ingress.')
+          egress=[rule for policy in policies for rule in policy.get('egress',[])]
+          has_dns=any(any(peer.get('namespaceSelector',{}).get('matchLabels',{}).get('kubernetes.io/metadata.name')=='kube-system' and peer.get('podSelector',{}).get('matchLabels',{}).get('k8s-app')=='kube-dns' for peer in rule.get('to',[])) and any(port.get('port')==53 for port in rule.get('ports',[])) for rule in egress)
+          has_rabbit=any(any(peer.get('namespaceSelector',{}).get('matchLabels',{}).get('kubernetes.io/metadata.name')=='rabbitmq' and peer.get('podSelector',{}).get('matchLabels',{}).get('app.kubernetes.io/name')=='spectrace' for peer in rule.get('to',[])) and any(port.get('port')==5672 for port in rule.get('ports',[])) for rule in egress)
+          has_keycloak=any(any(peer.get('namespaceSelector',{}).get('matchLabels',{}).get('kubernetes.io/metadata.name')=='keycloak' and peer.get('podSelector',{}).get('matchLabels',{}).get('app')=='keycloak' for peer in rule.get('to',[])) and any(port.get('port')==8080 for port in rule.get('ports',[])) for rule in egress)
+          if not has_dns or not has_rabbit or not has_keycloak:
+              raise SystemExit(f'{name} NetworkPolicies do not allow DNS, RabbitMQ, and Keycloak.')
+          if not all(any(any(peer.get('ipBlock',{}).get('cidr')==cidr for peer in rule.get('to',[])) and any(port.get('port')==3306 for port in rule.get('ports',[])) for rule in egress) for cidr in database_cidrs):
+              raise SystemExit(f'{name} NetworkPolicies do not allow only the active RDS subnet CIDRs on MySQL.')
+          if name=='label-workflow' and not any(any(peer.get('namespaceSelector',{}).get('matchLabels',{}).get('kubernetes.io/metadata.name')=='compliance' and peer.get('podSelector',{}).get('matchLabels',{}).get('app.kubernetes.io/name')=='compliance' for peer in rule.get('to',[])) and any(port.get('port')==8080 for port in rule.get('ports',[])) for rule in app_policy.get('egress',[])):
+              raise SystemExit('Label Workflow cannot reach the Compliance Service.')
+          PY
+            kubectl port-forward --namespace "$service" "service/${service}-${service}" "$port:8080" > "$RUNNER_TEMP/${service}-port-forward.log" 2>&1 &
+            pf_pid=$!
+            trap 'kill "$pf_pid" 2>/dev/null || true' EXIT
+            for attempt in $(seq 1 30); do
+              status=$(curl --silent --show-error --max-time 5 -o "$RUNNER_TEMP/${service}-readiness.json" -w '%{http_code}' "http://127.0.0.1:${port}/actuator/health/readiness" || true)
+              [[ "$status" == 200 ]] && break
+              sleep 2
+            done
+            test "$status" = 200
+            curl --silent --show-error --fail --max-time 15 "http://127.0.0.1:${port}/actuator/health" > "$RUNNER_TEMP/${service}-health.json"
+            python3 - "$RUNNER_TEMP/${service}-health.json" <<'PY'
+          import json, sys
+          if json.load(open(sys.argv[1])).get('status')!='UP':
+              raise SystemExit('Application health did not confirm database and broker connectivity.')
+          PY
+            kill "$pf_pid" 2>/dev/null || true
+            trap - EXIT
+            port=$((port + 1))
+          done
+          diagnostic_pod="staging-gateway-dns-${GITHUB_RUN_ID}"
+          trap 'kubectl delete pod "$diagnostic_pod" --namespace gateway --ignore-not-found=true >/dev/null 2>&1 || true' EXIT
+          cat > "$RUNNER_TEMP/gateway-dns-check.yaml" <<EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: $diagnostic_pod
+            namespace: gateway
+            labels:
+              app.kubernetes.io/name: gateway
+              app.kubernetes.io/instance: gateway
+          spec:
+            automountServiceAccountToken: false
+            restartPolicy: Never
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 101
+              runAsGroup: 101
+              seccompProfile: {type: RuntimeDefault}
+            containers:
+              - name: dns-check
+                image: ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:e6720ddc4416a153c5eecb11d8381bd9d2637e50f9ced6017d6b813f42047051
+                command: [/bin/sh, -c, sleep 600]
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities: {drop: [ALL]}
+          EOF
+          kubectl apply -f "$RUNNER_TEMP/gateway-dns-check.yaml" >/dev/null
+          kubectl wait --for=condition=Ready "pod/$diagnostic_pod" --namespace gateway --timeout=120s
+          kubectl exec --namespace gateway "$diagnostic_pod" -- /bin/sh -c '
+            for host in \
+              specification-specification.specification.svc.cluster.local \
+              formulation-formulation.formulation.svc.cluster.local \
+              compliance-compliance.compliance.svc.cluster.local \
+              label-workflow-label-workflow.label-workflow.svc.cluster.local; do
+              nslookup "$host" >/dev/null
+              wget -q -T 10 -O /dev/null "http://$host:8080/actuator/health/readiness"
+            done
+            nslookup spectrace.rabbitmq.svc.cluster.local >/dev/null
+            nslookup spectrace-keycloak-service.keycloak.svc.cluster.local >/dev/null
+          '
+          kubectl delete pod "$diagnostic_pod" --namespace gateway --wait=true >/dev/null
+          trap - EXIT
+          kubectl port-forward --namespace gateway service/gateway-gateway 18080:8080 > "$RUNNER_TEMP/gateway-port-forward.log" 2>&1 &
+          gateway_pf=$!
+          trap 'kill "$gateway_pf" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            gateway_health=$(curl --silent --show-error --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/actuator/health/readiness || true)
+            [[ "$gateway_health" == 200 ]] && break
+            sleep 2
+          done
+          test "$gateway_health" = 200
+          curl --silent --show-error --max-time 20 -D "$RUNNER_TEMP/gateway-cors.headers" \
+            -o "$RUNNER_TEMP/gateway-cors.body" -X OPTIONS \
+            -H 'Origin: https://staging.52zzx.top' \
+            -H 'Access-Control-Request-Method: PUT' \
+            -H 'Access-Control-Request-Headers: authorization,content-type' \
+            -w '%{http_code}' http://127.0.0.1:18080/api/labels/test/declarations > "$RUNNER_TEMP/gateway-cors.status"
+          python3 - "$RUNNER_TEMP/gateway-cors.status" "$RUNNER_TEMP/gateway-cors.headers" <<'PY'
+          import sys
+          status=open(sys.argv[1]).read().strip()
+          headers=open(sys.argv[2]).read().lower()
+          if status not in {'200','204'} or 'access-control-allow-origin: https://staging.52zzx.top' not in headers or 'access-control-allow-methods:' not in headers:
+              raise SystemExit('Gateway CORS preflight failed for the approved staging origin.')
+          PY
+          curl --silent --show-error --fail --max-time 20 \
+            http://127.0.0.1:18080/auth/realms/spectrace/.well-known/openid-configuration \
+            > "$RUNNER_TEMP/keycloak-openid-configuration.json"
+          python3 - "$RUNNER_TEMP/keycloak-openid-configuration.json" "$GATEWAY_ISSUER" <<'PY'
+          import json, sys
+          discovery=json.load(open(sys.argv[1]))
+          issuer=sys.argv[2]
+          if discovery.get('issuer')!=issuer or 'S256' not in discovery.get('code_challenge_methods_supported',[]):
+              raise SystemExit('Keycloak discovery issuer or PKCE S256 support does not match the staging configuration.')
+          PY
+          kill "$gateway_pf" 2>/dev/null || true
+          trap - EXIT
+      - name: Save sanitized deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-services-staging-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/commit-sha.txt
+            ${{ runner.temp }}/workflow-run.txt
+            ${{ runner.temp }}/staging-window.json
+            ${{ runner.temp }}/business-services-budget-gate.log
+            ${{ runner.temp }}/service-images.json
+            ${{ runner.temp }}/compliance-nodegroup.json
+            ${{ runner.temp }}/compliance-nodes.json
+            ${{ runner.temp }}/rds-runtime-values.json
+            ${{ runner.temp }}/gateway-networkpolicy.json
+            ${{ runner.temp }}/gateway-endpoints.json
+            ${{ runner.temp }}/keycloak-endpoints.json
+            ${{ runner.temp }}/rabbitmq-endpoints.json
+            ${{ runner.temp }}/*-release.json
+            ${{ runner.temp }}/*-inventory.json
+            ${{ runner.temp }}/*-rendered.yaml
+            ${{ runner.temp }}/*-deployment.json
+            ${{ runner.temp }}/*-pods.json
+            ${{ runner.temp }}/*-service.json
+            ${{ runner.temp }}/*-networkpolicy.json
+            ${{ runner.temp }}/*-platform-networkpolicy.json
+            ${{ runner.temp }}/*-endpoints.json
+            ${{ runner.temp }}/*-helm-status.txt
+            ${{ runner.temp }}/*-helm-history.json
+            ${{ runner.temp }}/*-readiness.json
+            ${{ runner.temp }}/*-health.json
+            ${{ runner.temp }}/gateway-cors.*
+            ${{ runner.temp }}/keycloak-openid-configuration.json
+          if-no-files-found: warn
+          retention-days: 7

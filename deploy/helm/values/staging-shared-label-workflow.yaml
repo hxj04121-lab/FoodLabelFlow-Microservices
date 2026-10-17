@@ -9,7 +9,7 @@ networkPolicy:
             matchLabels: {kubernetes.io/metadata.name: rabbitmq}
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: rabbitmq
+              app.kubernetes.io/name: spectrace
       ports: [{port: 5672, protocol: TCP}]
     - to:
         - namespaceSelector:

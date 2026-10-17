@@ -11,7 +11,7 @@ RENDERER = ROOT / "deploy/keycloak/operator/render-server.py"
 
 class KeycloakOperatorRuntimeTest(unittest.TestCase):
     def render(self, **overrides):
-        env = dict(os.environ, MYSQL_HOST="staging-mysql.internal", GATEWAY_ISSUER="https://staging.52zz.top/auth/realms/spectrace")
+        env = dict(os.environ, MYSQL_HOST="spectrace.abc.ap-southeast-1.rds.amazonaws.com", GATEWAY_ISSUER="https://staging.52zz.top/auth/realms/spectrace")
         env.update(overrides)
         return subprocess.run(["python3", str(RENDERER)], env=env, capture_output=True, text=True)
 
@@ -24,7 +24,7 @@ class KeycloakOperatorRuntimeTest(unittest.TestCase):
         self.assertEqual(resource["metadata"]["labels"], {"app": "keycloak"})
         self.assertEqual(resource["spec"]["db"], {
             "vendor": "mysql",
-            "host": "staging-mysql.internal",
+            "host": "spectrace.abc.ap-southeast-1.rds.amazonaws.com",
             "database": "keycloak",
             "usernameSecret": {"name": "keycloak-db", "key": "username"},
             "passwordSecret": {"name": "keycloak-db", "key": "password"},

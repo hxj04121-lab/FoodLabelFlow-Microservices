@@ -208,7 +208,11 @@ spec:
               kubernetes.io/metadata.name: {{ index $.Values.namespaces $service | quote }}
           podSelector:
             matchLabels:
+              {{ if eq $service "keycloak" }}
+              app: keycloak
+              {{ else }}
               app.kubernetes.io/name: {{ $service | quote }}
+              {{ end }}
       ports:
         - {protocol: TCP, port: 4317}
     {{- end }}
@@ -240,7 +244,11 @@ spec:
               kubernetes.io/metadata.name: {{ index $.Values.namespaces $service | quote }}
           podSelector:
             matchLabels:
+              {{ if eq $service "keycloak" }}
+              app: keycloak
+              {{ else }}
               app.kubernetes.io/name: {{ $service | quote }}
+              {{ end }}
       ports:
         - {protocol: TCP, port: 8080}
     {{- end }}

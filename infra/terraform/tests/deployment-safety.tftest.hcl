@@ -53,6 +53,18 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
     error_message = "Storage must remain encrypted and bind only in the consumer's AZ."
   }
   assert {
+    condition = kubernetes_manifest.staging_deployer_node_reader.manifest.rules == [{
+      apiGroups = [""]
+      resources = ["nodes"]
+      verbs     = ["get", "list", "watch"]
+      }] && kubernetes_manifest.staging_deployer_node_reader_binding.manifest.subjects == [{
+      kind     = "Group"
+      name     = "spectrace-staging-deploy"
+      apiGroup = "rbac.authorization.k8s.io"
+    }]
+    error_message = "The staging deployer may only read node inventory through its existing Kubernetes group."
+  }
+  assert {
     condition     = yamldecode(helm_release.cluster_autoscaler.values[0]).fullnameOverride == "cluster-autoscaler" && yamldecode(helm_release.cluster_autoscaler.values[0]).image.tag == "v1.36.0" && yamldecode(helm_release.load_balancer_controller.values[0]).replicaCount == 2
     error_message = "The controllers must use stable names, matching Kubernetes minor version, and declared replicas."
   }

@@ -34,7 +34,6 @@ jobs:
       EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
       AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       GATEWAY_ISSUER: ${{ vars.GATEWAY_ISSUER }}
-      AVAILABLE_CREDIT_USD: ${{ secrets.AVAILABLE_CREDIT_USD }}
       APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
       STAGING_WINDOW_HOURS: ${{ inputs.staging_window_hours }}
       STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
@@ -76,7 +75,7 @@ jobs:
           if origins!='https://hxj04121-lab.github.io,https://staging.52zzx.top' or '*' in origins:
               raise SystemExit('The reviewed PR #72 staging-root CORS origin must be merged before the protected Gateway release.')
           PY
-          if ! python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/gateway-budget-gate.log" 2>&1; then
+          if ! env -u AVAILABLE_CREDIT_USD python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/gateway-budget-gate.log" 2>&1; then
             echo '::error::The existing fail-closed staging funding/pricing gate did not pass; no cluster write was attempted.'
             exit 1
           fi
