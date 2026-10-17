@@ -1,0 +1,5 @@
+apiVersion: v2
+name: rabbitmq-topology
+description: SpecTrace durable event queues, bindings, DLQs and consumer permissions.
+type: application
+version: 0.1.0

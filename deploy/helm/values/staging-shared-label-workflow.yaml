@@ -1,0 +1,27 @@
+# Optional compatibility overlay when Label Workflow and Compliance share the staging namespace.
+env:
+  - name: SPECTRACE_LABEL_WORKFLOW_VALIDATION_BASE_URL
+    value: http://compliance.staging.svc.cluster.local:8080
+networkPolicy:
+  egressRules:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: rabbitmq}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rabbitmq
+      ports: [{port: 5672, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: keycloak}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports: [{port: 8080, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: staging}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: compliance
+      ports: [{port: 8080, protocol: TCP}]

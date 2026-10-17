@@ -196,6 +196,66 @@ check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-
 });
 check('invalid image digest is rejected',()=>run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'--set','image.digest=sha256:short'],false));
 
+check('single-node staging overlay is used only for general-pool services',()=>{
+  for(const service of ['specification','formulation','label-workflow']) {
+    const docs=render(service,['-f',resolve(root,'values/staging-single-node.yaml')]);
+    const zone=docs.find(d=>d.kind==='Deployment').spec.template.spec.topologySpreadConstraints.find(t=>t.topologyKey==='topology.kubernetes.io/zone');
+    assert.equal(zone.minDomains,1,`${service} can use the single-zone general pool`);
+  }
+  const gateway=render('gateway',['-f',resolve(root,'values/staging-single-node.yaml')]).find(d=>d.kind==='Deployment').spec.template.spec;
+  assert.equal(gateway.topologySpreadConstraints,undefined,'Gateway uses its protected one-node staging configuration');
+  run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'-f',resolve(root,'values/staging-single-node.yaml')],false);
+  const compliance=render('compliance',['-f',resolve(root,'values/staging-rds.yaml')]).find(d=>d.kind==='Deployment').spec.template.spec;
+  assert.equal(compliance.topologySpreadConstraints.find(t=>t.topologyKey==='topology.kubernetes.io/zone').minDomains,2);
+  assert.deepEqual(compliance.nodeSelector,{'eks.amazonaws.com/nodegroup':'compliance','node.kubernetes.io/instance-type':'c6i.large'});
+});
+
+check('kind-only Compliance overlay keeps EKS placement and resource requirements',()=>{
+  const staged=render('compliance',['-f',resolve(root,'values/compliance-kind.yaml')]);
+  const pod=staged.find(d=>d.kind==='Deployment').spec.template.spec;
+  assert.equal(pod.topologySpreadConstraints.find(t=>t.topologyKey==='topology.kubernetes.io/zone').minDomains,1);
+  assert.deepEqual(pod.nodeSelector,{'eks.amazonaws.com/nodegroup':'compliance','node.kubernetes.io/instance-type':'c6i.large'});
+  assert.deepEqual(pod.tolerations,[{key:'dedicated',operator:'Equal',value:'compliance',effect:'NoSchedule'}]);
+  assert.deepEqual(pod.containers[0].resources,{requests:{cpu:'1',memory:'2Gi'},limits:{cpu:'1',memory:'2Gi'}});
+  const base=render('compliance').find(d=>d.kind==='Deployment').spec.template.spec;
+  assert.equal(base.topologySpreadConstraints.find(t=>t.topologyKey==='topology.kubernetes.io/zone').minDomains,2);
+  run(['template','review',chart,'-f',resolve(root,'values/compliance.yaml'),'-f',resolve(root,'values/compliance-kind.yaml'),'--set','kindTest=false'],false);
+});
+
+check('staging RDS egress is limited to observed private subnets and MySQL',()=>{
+  for(const service of ['specification','formulation','compliance','label-workflow']) {
+    const np=render(service,['-f',resolve(root,'values/staging-rds.yaml')]).find(d=>d.kind==='NetworkPolicy');
+    const rules=np.spec.egress.filter(r=>r.ports?.some(p=>p.port===3306));
+    assert.deepEqual(rules.flatMap(r=>r.to.map(t=>t.ipBlock?.cidr)),['10.40.64.0/20','10.40.80.0/20']);
+    assert(rules.every(r=>r.ports.length===1));
+    assert(!np.spec.egress.some(r=>r.to?.some(t=>t.ipBlock?.cidr==='0.0.0.0/0')));
+  }
+});
+
+check('staging Gateway reaches backends across their service namespaces',()=>{
+  const np=render('gateway',['-f',resolve(root,'values/staging-gateway.yaml')]).find(d=>d.kind==='NetworkPolicy');
+  const peers=np.spec.egress.flatMap(r=>r.to.filter(t=>t.namespaceSelector).map(t=>[
+    t.namespaceSelector.matchLabels['kubernetes.io/metadata.name'],t.podSelector?.matchLabels?.['app.kubernetes.io/name']
+  ])).filter(([,name])=>['specification','formulation','compliance','label-workflow'].includes(name));
+  assert.deepEqual(peers,[['specification','specification'],['formulation','formulation'],['compliance','compliance'],['label-workflow','label-workflow']]);
+  assert.deepEqual(np.spec.ingress.flatMap(r=>r.from.map(f=>f.ipBlock?.cidr).filter(Boolean)),['10.40.0.0/20','10.40.16.0/20']);
+  assert(np.spec.ingress.some(r=>r.from?.some(f=>f.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='observability'&&f.podSelector?.matchLabels?.['app.kubernetes.io/name']==='grafana-alloy')),'staging ingress retains Alloy metrics access');
+});
+check('shared staging overlay permits Label Workflow to reach Compliance on 8080',()=>{
+  const label=render('label-workflow',['-f',resolve(root,'values/staging-shared-label-workflow.yaml')]);
+  const policy=label.find(d=>d.kind==='NetworkPolicy').spec;
+  const compliance=policy.egress.flatMap(r=>r.to??[]).filter(p=>p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='compliance');
+  assert.deepEqual(compliance.map(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']),['staging']);
+  assert(policy.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='staging'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='compliance')&&r.ports?.some(p=>p.port===8080)));
+  assert.equal(label.find(d=>d.kind==='Deployment').spec.template.spec.containers[0].env.find(e=>e.name==='SPECTRACE_LABEL_WORKFLOW_VALIDATION_BASE_URL')?.value,'http://compliance.staging.svc.cluster.local:8080');
+  const complianceDocs=render('compliance',['-f',resolve(root,'values/staging-shared-compliance.yaml')]);
+  const peers=complianceDocs.find(d=>d.kind==='NetworkPolicy').spec.ingress.flatMap(r=>r.from??[]).filter(p=>p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='label-workflow');
+  assert.deepEqual(peers.map(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']),['staging']);
+  const separated=render('label-workflow').find(d=>d.kind==='NetworkPolicy').spec;
+  assert(separated.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='compliance')));
+  assert(!separated.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='staging')));
+});
+
 const targetGroup='arn:aws:elasticloadbalancing:ap-southeast-1:000000000000:targetgroup/test-gateway/0123456789abcdef';
 check('Gateway binds its existing target group without creating an Ingress/ALB',()=>{
   const docs=render('gateway',['--set-string','targetGroupArn='+targetGroup]);

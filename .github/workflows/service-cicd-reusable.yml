@@ -1,0 +1,420 @@
+name: Reusable service CI/CD
+
+on:
+  workflow_call:
+    inputs:
+      service_name: {type: string, required: true}
+      service_path: {type: string, required: true}
+      dockerfile: {type: string, required: false, default: Dockerfile}
+      build_context: {type: string, required: false, default: ''}
+      maven_reactor_project: {type: string, required: false, default: ''}
+      helm_chart: {type: string, required: true}
+      values_file: {type: string, required: false, default: ''}
+      environment_values_file: {type: string, required: false, default: ''}
+      kind_values_file: {type: string, required: false, default: ''}
+      kind_node_labels: {type: string, required: false, default: ''}
+      kind_node_taints: {type: string, required: false, default: ''}
+      namespace: {type: string, required: true}
+    secrets:
+      SONAR_TOKEN: {required: true}
+      STAGING_SMOKE_JWT: {required: false}
+    outputs:
+      image:
+        value: ${{ jobs.publish.outputs.image }}
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate service inputs
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+          SERVICE_PATH: ${{ inputs.service_path }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          BUILD_CONTEXT: ${{ inputs.build_context }}
+          MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
+          VALUES_FILE: ${{ inputs.values_file }}
+          ENVIRONMENT_VALUES_FILE: ${{ inputs.environment_values_file }}
+          KIND_VALUES_FILE: ${{ inputs.kind_values_file }}
+          KIND_NODE_LABELS: ${{ inputs.kind_node_labels }}
+          KIND_NODE_TAINTS: ${{ inputs.kind_node_taints }}
+        run: |
+          [[ "$SERVICE_NAME" =~ ^[a-z0-9-]+$ ]]
+          [[ "$SERVICE_PATH" != /* && "$SERVICE_PATH" != *..* ]]
+          test -d "$SERVICE_PATH"
+          [[ "$DOCKERFILE" != /* && "$DOCKERFILE" != *..* ]]
+          test -f "$SERVICE_PATH/$DOCKERFILE"
+          BUILD_CONTEXT="${BUILD_CONTEXT:-$SERVICE_PATH}"
+          [[ "$BUILD_CONTEXT" != /* && "$BUILD_CONTEXT" != *..* ]]
+          test -d "$BUILD_CONTEXT"
+          if [[ -n "$MAVEN_REACTOR_PROJECT" ]]; then
+            [[ "$MAVEN_REACTOR_PROJECT" != /* && "$MAVEN_REACTOR_PROJECT" != *..* ]]
+            test -f pom.xml && test -d "$MAVEN_REACTOR_PROJECT"
+          fi
+          for values_file in "$VALUES_FILE" "$ENVIRONMENT_VALUES_FILE" "$KIND_VALUES_FILE"; do
+            if [[ -n "$values_file" ]]; then
+              [[ "$values_file" != /* && "$values_file" != *..* ]]
+              test -f "$values_file"
+            fi
+          done
+          IFS=',' read -r -a node_labels <<< "$KIND_NODE_LABELS"
+          for node_label in "${node_labels[@]}"; do
+            [[ -z "$node_label" || "$node_label" =~ ^[A-Za-z0-9./_-]+=[A-Za-z0-9._-]+$ ]]
+          done
+          IFS=',' read -r -a node_taints <<< "$KIND_NODE_TAINTS"
+          for node_taint in "${node_taints[@]}"; do
+            [[ -z "$node_taint" || "$node_taint" =~ ^[A-Za-z0-9./_-]+=[A-Za-z0-9._-]+:(NoSchedule|PreferNoSchedule|NoExecute)$ ]]
+          done
+      - uses: actions/setup-java@v4
+        if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        if: ${{ hashFiles(format('{0}/package.json', inputs.service_path)) != '' }}
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ format('{0}/package-lock.json', inputs.service_path) }}
+      - name: Build and unit/integration test JVM service
+        if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
+        env:
+          SERVICE_PATH: ${{ inputs.service_path }}
+          MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
+        run: |
+          if [[ -n "$MAVEN_REACTOR_PROJECT" ]]; then
+            mvn -B -ntp verify -pl "$MAVEN_REACTOR_PROJECT" -am
+          else
+            mvn -B -ntp -f "$SERVICE_PATH/pom.xml" verify
+          fi
+      - name: Build and test Node service
+        if: ${{ hashFiles(format('{0}/package.json', inputs.service_path)) != '' }}
+        env:
+          SERVICE_PATH: ${{ inputs.service_path }}
+        run: cd "$SERVICE_PATH" && npm ci && npm test && npm run build
+      - name: Reject unsupported service layout
+        if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) == '' && hashFiles(format('{0}/package.json', inputs.service_path)) == '' }}
+        run: echo "Service must contain pom.xml or package.json" >&2; exit 1
+      - name: Sonar quality gate
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          args: -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ inputs.service_path }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - uses: actions/setup-java@v4
+        if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: OWASP Dependency-Check gate
+        if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) != '' }}
+        env:
+          SERVICE_PATH: ${{ inputs.service_path }}
+          MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
+        run: |
+          if [[ -n "$MAVEN_REACTOR_PROJECT" ]]; then
+            mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false
+          else
+            mvn -B -ntp -f "$SERVICE_PATH/pom.xml" org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false
+          fi
+
+  kind:
+    if: ${{ github.event_name == 'pull_request' }}
+    needs: [checks, security]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1.12.0
+      - uses: azure/setup-helm@v4
+        with: {version: v4.3.0}
+      - name: Configure kind node labels and taints
+        if: ${{ inputs.kind_node_labels != '' || inputs.kind_node_taints != '' }}
+        env:
+          KIND_NODE_LABELS: ${{ inputs.kind_node_labels }}
+          KIND_NODE_TAINTS: ${{ inputs.kind_node_taints }}
+        run: |
+          node="$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')"
+          test -n "$node"
+          IFS=',' read -r -a node_labels <<< "$KIND_NODE_LABELS"
+          for node_label in "${node_labels[@]}"; do
+            [[ -z "$node_label" ]] || kubectl label node "$node" "$node_label" --overwrite
+          done
+          IFS=',' read -r -a node_taints <<< "$KIND_NODE_TAINTS"
+          for node_taint in "${node_taints[@]}"; do
+            [[ -z "$node_taint" ]] || kubectl taint node "$node" "$node_taint" --overwrite
+          done
+      - name: Start the Compliance MySQL dependency
+        if: ${{ inputs.service_name == 'compliance' }}
+        run: |
+          kubectl create namespace compliance --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f deploy/kind/compliance-dependencies.yaml
+          kubectl rollout status deployment/compliance-mysql --namespace compliance --timeout=180s
+      - name: Build and load service image
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+          SERVICE_PATH: ${{ inputs.service_path }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          BUILD_CONTEXT: ${{ inputs.build_context }}
+        run: |
+          BUILD_CONTEXT="${BUILD_CONTEXT:-$SERVICE_PATH}"
+          image="local/${SERVICE_NAME}:${GITHUB_SHA}"
+          docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "$image" "$BUILD_CONTEXT"
+          kind load docker-image "$image"
+          echo "image=$image" >> "$GITHUB_ENV"
+      - name: Trivy container image gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ format('local/{0}:{1}', inputs.service_name, github.sha) }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Deploy service chart to kind
+        env:
+          RELEASE: ${{ inputs.service_name }}
+          NAMESPACE: ${{ inputs.namespace }}
+          CHART: ${{ inputs.helm_chart }}
+          VALUES_FILE: ${{ inputs.values_file }}
+          ENVIRONMENT_VALUES_FILE: ${{ inputs.environment_values_file }}
+          KIND_VALUES_FILE: ${{ inputs.kind_values_file }}
+        run: |
+          values_args=()
+          [[ -z "$VALUES_FILE" ]] || values_args+=(--values "$VALUES_FILE")
+          [[ -z "$ENVIRONMENT_VALUES_FILE" ]] || values_args+=(--values "$ENVIRONMENT_VALUES_FILE")
+          [[ -z "$KIND_VALUES_FILE" ]] || values_args+=(--values "$KIND_VALUES_FILE")
+          helm upgrade --install "$RELEASE" "$CHART" --namespace "$NAMESPACE" --create-namespace \
+            "${values_args[@]}" \
+            --set image.repository="${image%:*}" --set image.tag="${image##*:}" --wait --timeout 5m
+          kubectl -n "$NAMESPACE" rollout status "deployment/$RELEASE" --timeout=180s
+
+  publish:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [checks, security]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build commit-pinned image locally
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+          SERVICE_PATH: ${{ inputs.service_path }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          BUILD_CONTEXT: ${{ inputs.build_context }}
+        run: |
+          BUILD_CONTEXT="${BUILD_CONTEXT:-$SERVICE_PATH}"
+          docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}" "$BUILD_CONTEXT"
+      - name: Trivy container image gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ghcr.io/${{ github.repository }}/${{ inputs.service_name }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: image
+        name: Push image and capture registry digest
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}"
+          push_log="$RUNNER_TEMP/image-push.log"
+          docker push "$image" 2>&1 | tee "$push_log"
+          digest="$(sed -nE 's/.*digest: (sha256:[0-9a-f]{64})([[:space:]].*)?$/\1/p' "$push_log" | tail -n 1)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "Registry push did not return a valid image digest." >&2
+            exit 1
+          }
+          echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}@${digest}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.STAGING_WINDOW_OPEN == 'true' }}
+    needs: [publish]
+    runs-on: [self-hosted, linux, staging-vpc]
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.STAGING_AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enforce the merged STCN-37 budget gate
+        env:
+          STAGING_WINDOW_HOURS: ${{ vars.STAGING_WINDOW_HOURS }}
+          STAGING_EXPERIMENT_HOURS: ${{ vars.STAGING_EXPERIMENT_HOURS }}
+          STAGING_K6_HOURS: ${{ vars.STAGING_K6_HOURS }}
+          AVAILABLE_CREDIT_USD: ${{ vars.STAGING_AVAILABLE_CREDIT_USD }}
+          STAGING_AWS_ACCOUNT_ID: ${{ vars.STAGING_AWS_ACCOUNT_ID }}
+        run: |
+          test -f scripts/aws_staging_budget.py && test -f infra/aws-staging-budget.json || { echo "STCN-37 budget gate is required" >&2; exit 1; }
+          : "${STAGING_WINDOW_HOURS:?set the approved staging window duration}"
+          : "${STAGING_EXPERIMENT_HOURS:?set the approved compliance experiment duration}"
+          : "${STAGING_K6_HOURS:?set the approved k6 test duration}"
+          : "${AVAILABLE_CREDIT_USD:?set the verified available AWS credit balance}"
+          budget_args=(--hours "$STAGING_WINDOW_HOURS" --experiment-hours "$STAGING_EXPERIMENT_HOURS" --k6-hours "$STAGING_K6_HOURS")
+          python3 scripts/aws_staging_budget.py "${budget_args[@]}"
+          python3 scripts/aws_staging_budget.py --require-gate "${budget_args[@]}"
+      - name: Require the separate staging deploy role
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
+        run: test -n "$AWS_DEPLOY_ROLE_ARN" && test "$AWS_DEPLOY_ROLE_ARN" != "$AWS_PLAN_ROLE_ARN"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify the applied EC2 On-Demand quota
+        env:
+          STAGING_AWS_ACCOUNT_ID: ${{ vars.STAGING_AWS_ACCOUNT_ID }}
+        run: python3 scripts/aws_staging_budget.py quota
+      - uses: azure/setup-kubectl@v4
+      - uses: azure/setup-helm@v4
+        with: {version: v4.3.0}
+      - name: Verify and configure the staging EKS target
+        env:
+          CLUSTER_NAME: ${{ vars.STAGING_EKS_CLUSTER_NAME }}
+          EXPECTED_ACCOUNT_ID: ${{ vars.STAGING_AWS_ACCOUNT_ID }}
+          SERVICE_NAME: ${{ inputs.service_name }}
+          NAMESPACE: ${{ inputs.namespace }}
+        run: |
+          test "$NAMESPACE" = "$SERVICE_NAME"
+          test -n "$CLUSTER_NAME" && test -n "$AWS_REGION" && [[ "$EXPECTED_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]
+          actual_account="$(aws sts get-caller-identity --query Account --output text)"
+          test "$actual_account" = "$EXPECTED_ACCOUNT_ID"
+          expected_cluster_arn="arn:aws:eks:${AWS_REGION}:${EXPECTED_ACCOUNT_ID}:cluster/${CLUSTER_NAME}"
+          actual_cluster_arn="$(aws eks describe-cluster --name "$CLUSTER_NAME" --region "$AWS_REGION" --query cluster.arn --output text)"
+          test "$actual_cluster_arn" = "$expected_cluster_arn"
+          aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+          test "$(kubectl config current-context)" = "$expected_cluster_arn"
+          kubectl get namespace "$NAMESPACE" >/dev/null
+      - name: Create the service runtime Secret without logging values
+        if: ${{ inputs.service_name != 'gateway' }}
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+          NAMESPACE: ${{ inputs.namespace }}
+          SPRING_DATASOURCE_URL: ${{ secrets[format('STAGING_{0}_SPRING_DATASOURCE_URL', inputs.service_name)] }}
+          SPRING_DATASOURCE_USERNAME: ${{ secrets[format('STAGING_{0}_SPRING_DATASOURCE_USERNAME', inputs.service_name)] }}
+          SPRING_DATASOURCE_PASSWORD: ${{ secrets[format('STAGING_{0}_SPRING_DATASOURCE_PASSWORD', inputs.service_name)] }}
+          RABBITMQ_HOST: ${{ secrets.STAGING_RABBITMQ_HOST }}
+          RABBITMQ_PORT: ${{ secrets.STAGING_RABBITMQ_PORT }}
+          RABBITMQ_USERNAME: ${{ secrets[format('STAGING_{0}_RABBITMQ_USERNAME', inputs.service_name)] }}
+          RABBITMQ_PASSWORD: ${{ secrets[format('STAGING_{0}_RABBITMQ_PASSWORD', inputs.service_name)] }}
+          SPECTRACE_SECURITY_ISSUERURI: ${{ secrets.STAGING_SECURITY_ISSUERURI }}
+          SPECTRACE_SECURITY_JWKSETURI: ${{ secrets.STAGING_SECURITY_JWKSETURI }}
+          SPECTRACE_SECURITY_AUDIENCE: ${{ secrets.STAGING_SECURITY_AUDIENCE }}
+        run: |
+          python3 - <<'PY' | kubectl apply --namespace "$NAMESPACE" --filename - >/dev/null
+          import json, os, sys
+          service = os.environ["SERVICE_NAME"]
+          keys = [
+              "SPRING_DATASOURCE_URL", "SPRING_DATASOURCE_USERNAME", "SPRING_DATASOURCE_PASSWORD",
+              "RABBITMQ_HOST", "RABBITMQ_PORT", "RABBITMQ_USERNAME", "RABBITMQ_PASSWORD",
+              "SPECTRACE_SECURITY_ISSUERURI", "SPECTRACE_SECURITY_JWKSETURI", "SPECTRACE_SECURITY_AUDIENCE",
+          ]
+          missing = [key for key in keys if not os.environ.get(key)]
+          if missing:
+              sys.exit("Missing protected staging runtime values: " + ", ".join(missing))
+          print(json.dumps({
+              "apiVersion": "v1",
+              "kind": "Secret",
+              "metadata": {"name": f"{service}-runtime", "namespace": os.environ["NAMESPACE"]},
+              "type": "Opaque",
+              "stringData": {key: os.environ[key] for key in keys},
+          }))
+          PY
+      - name: Configure EKS context and deploy commit-pinned image
+        env:
+          CLUSTER_NAME: ${{ vars.STAGING_EKS_CLUSTER_NAME }}
+          NAMESPACE: ${{ inputs.namespace }}
+          SERVICE_NAME: ${{ inputs.service_name }}
+          RELEASE: ${{ inputs.service_name }}
+          CHART: ${{ inputs.helm_chart }}
+          IMAGE: ${{ needs.publish.outputs.image }}
+          VALUES_FILE: ${{ inputs.values_file }}
+          ENVIRONMENT_VALUES_FILE: ${{ inputs.environment_values_file }}
+        run: |
+          test -n "$CLUSTER_NAME" && test -n "$IMAGE"
+          test "$NAMESPACE" = "$SERVICE_NAME"
+          IMAGE_REPOSITORY="${IMAGE%@*}"
+          IMAGE_DIGEST="${IMAGE#*@}"
+          [[ "$IMAGE_REPOSITORY" == ghcr.io/* && "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "Published image must be a GHCR repository pinned by sha256 digest." >&2
+            exit 1
+          }
+          values_args=()
+          [[ -z "$VALUES_FILE" ]] || values_args+=(--values "$VALUES_FILE")
+          [[ -z "$ENVIRONMENT_VALUES_FILE" ]] || values_args+=(--values "$ENVIRONMENT_VALUES_FILE")
+          helm template "$RELEASE" "$CHART" --namespace "$NAMESPACE" \
+            "${values_args[@]}" \
+            --set-string image.repository="$IMAGE_REPOSITORY" \
+            --set-string image.digest="$IMAGE_DIGEST" > "$RUNNER_TEMP/staging-rendered.yaml"
+          grep -Fq -- "$IMAGE_REPOSITORY@$IMAGE_DIGEST" "$RUNNER_TEMP/staging-rendered.yaml" || {
+            echo "Service chart did not render the requested immutable image digest." >&2
+            exit 1
+          }
+          helm upgrade --install "$RELEASE" "$CHART" --namespace "$NAMESPACE" \
+            "${values_args[@]}" \
+            --set-string image.repository="$IMAGE_REPOSITORY" \
+            --set-string image.digest="$IMAGE_DIGEST" --wait --timeout 10m
+      - name: Gateway smoke test and organisation claim check
+        env:
+          GATEWAY_URL: ${{ vars.STAGING_GATEWAY_URL }}
+          SMOKE_JWT: ${{ secrets.STAGING_SMOKE_JWT }}
+          SMOKE_PATH: ${{ vars.STAGING_PROTECTED_SMOKE_PATH }}
+        run: |
+          test -n "$GATEWAY_URL" && test -n "$SMOKE_JWT" && test -n "$SMOKE_PATH"
+          curl --fail --silent --show-error "$GATEWAY_URL/actuator/health"
+          python3 - <<'PY'
+          import base64, json, os
+          payload = os.environ["SMOKE_JWT"].split(".")[1]
+          claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+          assert claims.get("org_id") and claims.get("org_type") and claims.get("roles")
+          PY
+          curl --fail --silent --show-error -H "Authorization: Bearer $SMOKE_JWT" "$GATEWAY_URL$SMOKE_PATH"
+      - name: Record deployment commit, digest, workflow and revision
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+          PUBLISHED_IMAGE: ${{ needs.publish.outputs.image }}
+          EXPECTED_ACCOUNT_ID: ${{ vars.STAGING_AWS_ACCOUNT_ID }}
+          EXPECTED_CLUSTER_NAME: ${{ vars.STAGING_EKS_CLUSTER_NAME }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: >-
+          python3 scripts/staging/record-deployment-evidence.py
+          --service "$SERVICE_NAME"
+          --image "$PUBLISHED_IMAGE"
+          --publish-image "$PUBLISHED_IMAGE"
+          --expected-account-id "$EXPECTED_ACCOUNT_ID"
+          --expected-cluster-name "$EXPECTED_CLUSTER_NAME"
+          --region "$AWS_REGION"
+          --output "$RUNNER_TEMP/stcn-15-deployment-records/$SERVICE_NAME.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stcn-15-deployment-record-${{ inputs.service_name }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/stcn-15-deployment-records/${{ inputs.service_name }}.json
+          if-no-files-found: error
+          retention-days: 90
