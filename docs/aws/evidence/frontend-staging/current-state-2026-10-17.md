@@ -2,6 +2,8 @@
 
 **Checked:** 2026-10-17 15:48 Asia/Singapore. This is live, read-only evidence; older reports and user-provided prior status are not used as current proof.
 
+> Newer AWS API and public HTTP evidence was captured at 16:26–16:30 SGT in [current-state-2026-10-17-1630.md](current-state-2026-10-17-1630.md). Treat this file as the 15:48 baseline only.
+
 ## Access and repository
 
 - AWS STS: `NoCredentials`. AWS Account/Role, ALB, listeners, Target Groups, RDS, quotas, budget, cluster status, and current node capacity are UNKNOWN.

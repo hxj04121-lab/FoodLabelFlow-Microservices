@@ -1,9 +1,11 @@
 # M5 Frontend Staging Handoff
 
-**Evidence time:** 2026-10-17 15:48 Asia/Singapore
+**Evidence time:** 2026-10-17 16:26–16:30 Asia/Singapore
 
-**Deployment result:** BLOCKED; this change set has not been deployed.
+**Deployment result:** BLOCKED; this change set has not been deployed. The Budget API forecast is USD 144.669 against the USD 120 monthly limit, so the protected budget gate must not be bypassed.
 **Staging test window / shutdown time:** NOT CONFIRMED by the user.
+
+The 15:48 capture is retained at [`current-state-2026-10-17.md`](evidence/frontend-staging/current-state-2026-10-17.md). Latest read-only AWS and public HTTP evidence is in [`current-state-2026-10-17-1630.md`](evidence/frontend-staging/current-state-2026-10-17-1630.md).
 
 ## Intended route and release
 
@@ -13,7 +15,25 @@ The chart reuses `deploy/helm/spectrace-service`. Frontend values pin `ghcr.io/h
 
 The protected Gateway release captures the installed Helm values and manifest. It upgrades the existing `gateway` release only after #72 is merged and the current manifest comparison permits only `GATEWAY_ALLOWED_ORIGINS` to change. It preserves the Gateway image, Service, TargetGroupBinding, NetworkPolicy, and other environment values. The frontend listener cutover is a separate explicit workflow input, defaulting to false, and it restores the saved default action if post-change smoke checks fail.
 
-## Current evidence
+## Latest live evidence — 16:26–16:30 SGT
+
+| Acceptance item | Status | Current observation |
+|---|---|---|
+| AWS identity / EKS | PASS / BLOCKED | STS confirmed the requested account and deploy role. EKS is ACTIVE, Kubernetes 1.36, private-only. Local kubectl timed out against the private API; Kubernetes workloads remain UNKNOWN. |
+| Node group / RDS | PASS | `general` is ACTIVE with desired 2 `t3.medium` On-Demand nodes and no EKS-reported health issue. Ready nodes and free CPU/memory remain UNKNOWN. RDS is `available`. |
+| ALB and existing routes | PASS / FAIL | ALB is active. `/auth/*` routes to Keycloak and `/api/*` to Gateway; default action is fixed HTTP 404, matching the public root failure. |
+| Existing Target Groups | PASS | Gateway and Keycloak each have one healthy target. A separate `spectrace-staging-gateway` group is unattached and is not a Frontend target. |
+| Frontend Target Group | BLOCKED | No Frontend Target Group exists in the live account/region inventory; protected variable `FRONTEND_TARGET_GROUP_ARN` is absent. Terraform code declares a Gateway TG only; remote state ownership is UNKNOWN because the S3 backend configuration is empty and no backend config file was found. |
+| Public root / OIDC / anonymous API | FAIL / PASS / PASS | At 16:30 SGT, `/` returned 404; OIDC discovery returned 200; anonymous API returned 401 + Bearer. |
+| CORS preflight | FAIL / PASS | At 16:30 SGT, both valid staging Origin and invalid Origin returned 403 with no CORS allow headers. The allowed Origin is still broken. |
+| Frontend Pod, Service, `/healthz`, assets, SPA route | BLOCKED / NOT_RUN | No deployment occurred and private Kubernetes state could not be queried. |
+| Gateway Pod, actual digest, readiness, Helm values/manifest | BLOCKED | Private Kubernetes API and VPC CloudShell were unavailable; current running image digest is UNKNOWN. The prior digest is historical only. |
+| Keycloak callback / M3 PKCE / backend E2E | BLOCKED / NOT_RUN | M4 must verify the live Realm; M3 browser checks and backend E2E were not run. |
+| Budget | BLOCKED | Budget API reports actual USD 0 and forecast USD 144.669 against USD 120 monthly limit. |
+
+The exact commands, timestamps, and evidence boundaries are recorded in the latest snapshot linked above. No AWS or Kubernetes writes were made.
+
+## Initial public and image evidence — 15:48 SGT
 
 | Acceptance item | Status | Current observation |
 |---|---|---|
@@ -39,13 +59,13 @@ Machine-readable public HTTP and image evidence is in [`evidence/frontend-stagin
 ## GitHub and deployment gates
 
 - `main` was `3c1b6cf3a54fb16a08a0443116e4fa18b719fb43` when this work started. Implementation commit: `bf1d864f199622c9cbd840d4d34ea2d156a3ab8c` on `codex/m5-frontend-staging-upgrade-20261017`; this is a code delivery, not a deployed commit.
-- PR [#75](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/75) is OPEN, non-draft, CLEAN, and awaiting review. At 2026-10-17 16:04 SGT, all checks passed for head `7d7b87a7a118c23c0014b8d644063c4729f60816` (documentation follow-up `7d7b87a` after the implementation commit above).
-- CI run: [39015230927](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/39015230927); Helm run: [39015230997](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/39015230997); [SonarCloud](https://sonarcloud.io/dashboard?id=hxj04121-lab_FoodLabelFlow-Microservices&pullRequest=75) also passed. A protected AWS deployment workflow run URL does not exist; no deployment workflow was dispatched.
+- PR [#75](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/75) is OPEN, non-draft, CLEAN, with review pending. At 2026-10-17 16:16 SGT, all checks passed for head `33275c02b4cf73fa5227b81ca589816969799f6b`.
+- CI run: [39016024113](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/39016024113); Helm run: [39016024124](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/actions/runs/39016024124); SonarCloud and SonarQube passed. No protected AWS deployment workflow run exists.
 - PR [#72](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/72) is OPEN, non-draft, APPROVED, and CLEAN at head `fc9f3ef8085f648f7ac391bbc11288e61bf8354a`; applicable checks are successful. It still needs the repository owner to merge through the normal path before Gateway release.
 - PR [#66](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/66), which carries existing staging controller/TargetGroupBinding support, is still OPEN and Draft at `d686713a2a11ffbc4cb283f476a470e0892de520`. Live CRD/controller readiness is UNKNOWN.
 - PR [#62](https://github.com/hxj04121-lab/FoodLabelFlow-Microservices/pull/62) is CHANGES_REQUESTED at the image tag commit. The latest security finding is that the pull-request `frontend-container` job has job-level `packages: write`; M3 must fix and re-request review. This M5 change does not modify M3's workflow or rebuild the image.
 - The protected `staging` Environment exists with required reviewer and branch-policy rules. Current variable names include `AWS_ACCOUNT_ID`, `AWS_DEPLOY_ROLE_ARN`, `AWS_REGION`, `EKS_CLUSTER_NAME`, and `GATEWAY_ISSUER`; `FRONTEND_TARGET_GROUP_ARN` is not configured. The only listed Environment secret is `APPROVED_STAGING_SPEND_USD`; its value was not read. Runner status is UNKNOWN because the GitHub runner endpoint returned 403.
-- The budget gate was not run. No staging window or shutdown time was entered, and no workflow run exists. Main branch protection details were unavailable from GitHub's branch-protection endpoint (404); no merge or approval was attempted.
+- The AWS Budget API was queried; the protected deployment workflow budget gate was not run. No staging window or shutdown time was entered, and no workflow run exists. Main branch protection details were unavailable from GitHub's branch-protection endpoint (404); no merge or approval was attempted.
 
 ## Cost and network boundary
 
@@ -53,14 +73,15 @@ No AWS resource or security-group rule was created or changed. The deployment de
 
 | Resource | Current evidence | Proposed action / cost boundary |
 |---|---|---|
-| Existing public ALB and HTTPS listener | UNKNOWN from AWS APIs this turn | Reuse; no second ALB. |
-| Frontend Target Group | UNKNOWN; protected ARN variable is missing | Reuse if it exists. If absent, one Target Group is needed. [AWS ELB pricing](https://aws.amazon.com/elasticloadbalancing/pricing/) lists ALB-hour and LCU charges but no separate hourly Target Group charge; additional traffic can increase variable LCU use. Actual delta is UNKNOWN without traffic and account data. |
-| Security-group rule | UNKNOWN | No change authorized. First present exact source SG, destination SG, TCP/8080, rationale, impact, and rollback, then wait for explicit approval. |
-| EKS nodes / RDS / NAT / cluster | UNKNOWN live state | No new nodes, RDS, NAT Gateway, ALB, or cluster. Workflow refuses to scale and does not alter RDS or Terraform. |
+| Existing public ALB and HTTPS listener | ALB `active`; `/auth/*` and `/api/*` rules verified; default action is fixed 404. | Reuse; no second ALB. Root remains 404 until Frontend is deployed and approved listener cutover occurs. |
+| Frontend Target Group | NOT FOUND in the live account/region inventory; protected ARN variable is absent. Terraform code declares Gateway TG only; remote state remains UNKNOWN. | A Frontend TG would be an additional resource if required. Do not create it until Terraform state ownership is established, the budget gate is eligible, and required approval is given. [AWS ELB pricing](https://aws.amazon.com/elasticloadbalancing/pricing/) lists ALB-hour and LCU charges; actual LCU delta is UNKNOWN without traffic data. |
+| Security-group rule | Existing node SG allows TCP/8080 from the ALB SG. Pod SG and NetworkPolicy state are UNKNOWN. | No rule was changed. Confirm the actual Pod path from VPC before proposing any extra rule. |
+| EKS nodes / RDS | Node group `general` ACTIVE, desired 2 `t3.medium`, no EKS-reported issues; RDS `available`. Kubernetes Ready state/capacity UNKNOWN. | Reuse existing nodes and RDS; no scaling or infrastructure writes. |
+| Budget | USD 120 monthly limit; API actual USD 0; forecast USD 144.669. | Forecast exceeds the cap. No staging deployment is eligible under the current budget evidence. |
 
-AWS publishes ALB hourly and LCU-based charges; routing more traffic through the existing ALB can change variable LCU use. The deployment workflow requires the existing fail-closed budget gate and protected staging approval before any write.
+AWS publishes ALB hourly and LCU-based charges; routing more traffic through the existing ALB can change variable LCU use. The current forecast already exceeds the monthly cap; the deployment workflow must remain blocked until the budget gate passes and protected staging approval is granted.
 
-If no Frontend Target Group exists, first query Terraform state/configuration and present the exact resource, pricing/budget impact, and rollback plan for approval. Do not modify security groups until the precise source SG, destination SG, TCP/8080 rule, reason, impact, and rollback are reviewed and explicitly approved.
+The live inventory has no Frontend Target Group. Repository Terraform has a Gateway target group only; its S3 backend block is empty and no backend config was found, so remote state ownership is UNKNOWN. Do not initialize Terraform against a guessed backend or create the target group until its state and cost gates are resolved. The existing ALB-to-node SG TCP/8080 ingress is present; do not modify security groups without a verified Pod path and explicit approval.
 
 ## Verification run locally
 
@@ -73,13 +94,15 @@ If no Frontend Target Group exists, first query Terraform state/configuration an
 
 ## Rollback and next actions
 
-1. **Repository owner:** merge PR #72 normally after confirming current-head approvals and checks.
-2. **Staging environment owner:** verify/create the Frontend Target Group under the cost/approval rule and configure its ARN as the protected `FRONTEND_TARGET_GROUP_ARN`; confirm whether PR #66's controller/CRD is already live.
-3. **GitHub maintainer:** confirm `staging-vpc` runner status and OIDC access. The workstation cannot verify them.
-4. **User / authorized staging approver:** supply a test-window duration and Singapore shutdown time when manually dispatching a release. The workflow validates both and retains the budget gate.
-5. **M5:** after the dependencies are ready, dispatch Frontend with listener activation disabled, verify all three Target Groups and in-cluster routes, then run the approved Gateway release after #72 is on `main`. Enable Frontend default routing only after the CORS checks pass.
-6. **M4:** verify the live Keycloak redirect URI, post-logout URI, Web Origins, and PKCE S256 without reimporting/resetting the Realm.
-7. **M3:** verify browser PKCE login/logout and authenticated API calls; report backend business E2E separately.
+1. **Repository owner:** merge PR #72 normally; it is approved, clean, and still open.
+2. **Reviewer and repository owner:** review and merge PR #75; checks pass at latest head `33275c02b4cf73fa5227b81ca589816969799f6b`.
+3. **Budget owner / user:** resolve the USD 144.669 forecast against the USD 120 monthly limit before any deployment write.
+4. **Staging environment owner:** establish remote Terraform state ownership, provision the missing Frontend Target Group only after budget/approval gates pass, configure its ARN as protected `FRONTEND_TARGET_GROUP_ARN`, and confirm whether PR #66's controller/CRD is live.
+5. **GitHub maintainer / CloudShell owner:** restore VPC runner/CloudShell access. The current `staging-deploy` shell could not start. Restart warned it would delete the environment home directory, so it was not run.
+6. **User / authorized staging approver:** supply test-window duration and Singapore shutdown time when manually dispatching a release. The workflow validates both and retains the budget gate.
+7. **M5:** after the dependencies are ready, dispatch Frontend with listener activation disabled, verify all Target Groups and in-cluster routes, then run the approved Gateway release after #72 is on `main`. Enable Frontend default routing only after valid CORS checks pass.
+8. **M4:** verify live Keycloak redirect URI, post-logout URI, Web Origins, and PKCE S256 without reimporting/resetting the Realm.
+9. **M3:** verify browser PKCE login/logout and authenticated API calls; report backend business E2E separately.
 
 If listener smoke fails after activation, the workflow restores the captured HTTPS default action. Gateway upgrade acceptance failure triggers Helm rollback to the previous release. Neither path deletes the ALB, Gateway, Keycloak, or RDS.
 
@@ -98,4 +121,4 @@ No AWS console screenshots were available in this session. If GUI captures are r
 9. Browser root page, asset requests, Keycloak discovery, API 401/Bearer, allowed and rejected CORS preflights, and M3 PKCE login/logout.
 10. Protected workflow approval, run URL, summary, and sanitized artifacts.
 
-The current equivalent CLI evidence is limited to public HTTP responses and the anonymous GHCR manifest/config in the linked evidence directory. AWS/EKS CLI evidence must be captured by the authorized VPC runner or CloudShell after access is restored.
+The latest equivalent AWS evidence includes read-only account, EKS, node-group, ALB/listener, target-health, RDS, budget, and security-group queries. Kubernetes workload state still requires an authorized VPC runner or CloudShell after access is restored.
