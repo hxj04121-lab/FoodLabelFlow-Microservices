@@ -47,6 +47,7 @@ resource "aws_iam_role" "addons" {
   }
 }
 
+# shortcut: the frontend Target Group ID is generated after provisioning; replace this fixed-name ARN pattern with its exact ARN when available.
 resource "aws_iam_policy" "load_balancer_controller" {
   name   = "${var.cluster_name}-aws-load-balancer-controller"
   policy = file("${path.module}/policies/aws-load-balancer-controller.json")

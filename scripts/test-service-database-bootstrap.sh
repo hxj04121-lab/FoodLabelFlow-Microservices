@@ -14,8 +14,8 @@ done
 docker exec "$container" mysqladmin --user=root --password="$root_password" ping --silent >/dev/null
 docker cp deploy/mysql/bootstrap-service-databases.sh "$container:/tmp/bootstrap-service-databases.sh"
 
-services=(specification formulation compliance label_workflow)
-variables=(SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD)
+services=(specification formulation compliance label_workflow keycloak)
+variables=(SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD KEYCLOAK_DB_PASSWORD)
 bootstrap_env=()
 passwords=()
 for i in "${!services[@]}"; do

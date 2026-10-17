@@ -1,0 +1,84 @@
+name: Protected one-time Keycloak Operator bootstrap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keycloak-operator-staging-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  install:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, staging-vpc]
+    environment: staging
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      AWS_ROLE_ARN: ${{ vars.AWS_OPERATOR_INSTALL_ROLE_ARN }}
+      AVAILABLE_CREDIT_USD: ${{ vars.STAGING_AVAILABLE_CREDIT_USD }}
+      APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.1
+      - name: Require one-time cluster install role and pass the budget gate
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test -n "$AWS_ACCOUNT_ID" && test -n "$AWS_REGION" && test -n "$EKS_CLUSTER_NAME" && test -n "$AWS_ROLE_ARN"
+          test "$AWS_ROLE_ARN" != "${{ vars.AWS_DEPLOY_ROLE_ARN }}"
+          kubectl kustomize deploy/keycloak/operator/crds > "$RUNNER_TEMP/keycloak-operator-crds.yaml"
+          if ! python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/keycloak-operator-budget-gate.log" 2>&1; then
+            echo '::error::The protected staging funding/pricing gate did not pass; no cluster write was attempted.'
+            exit 1
+          fi
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify target and temporary cluster-scoped install authorization
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
+          test "$EKS_CLUSTER_NAME" = spectrace-staging
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" >/dev/null
+          for verb in get create patch watch; do
+            test "$(kubectl auth can-i "$verb" customresourcedefinitions.apiextensions.k8s.io)" = yes
+          done
+          for resource in roles rolebindings; do
+            for verb in get create patch; do
+              test "$(kubectl auth can-i "$verb" "$resource" --namespace keycloak)" = yes
+            done
+          done
+          test "$(kubectl auth can-i escalate roles/keycloak-operator --namespace keycloak)" = yes
+          test "$(kubectl auth can-i bind roles/keycloak-operator --namespace keycloak)" = yes
+          for resource in serviceaccounts services deployments; do
+            for verb in get create patch; do
+              test "$(kubectl auth can-i "$verb" "$resource" --namespace keycloak-system)" = yes
+            done
+          done
+          for verb in get watch; do
+            test "$(kubectl auth can-i "$verb" deployments/keycloak-operator --namespace keycloak-system)" = yes
+          done
+      - name: Install pinned CRDs and namespace-scoped Operator resources
+        run: |
+          set -euo pipefail
+          kubectl apply -f "$RUNNER_TEMP/keycloak-operator-crds.yaml"
+          kubectl apply -f deploy/keycloak/operator/rbac.yaml
+          kubectl apply -f deploy/keycloak/operator/operator.yaml
+          kubectl rollout status deployment/keycloak-operator --namespace keycloak-system --timeout=5m
+          kubectl wait --for=condition=Established crd/keycloaks.k8s.keycloak.org --timeout=2m
+          kubectl wait --for=condition=Established crd/keycloakrealmimports.k8s.keycloak.org --timeout=2m

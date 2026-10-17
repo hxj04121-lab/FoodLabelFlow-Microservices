@@ -42,20 +42,28 @@ fi
 namespaces=(specification formulation compliance label-workflow)
 schemas=(specification formulation compliance label_workflow)
 variables=(SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD)
+for namespace in "${namespaces[@]}" keycloak; do
+  kubectl get serviceaccount default --namespace "$namespace" >/dev/null
+  test "$(kubectl auth can-i create secrets --namespace "$namespace")" = yes || {
+    echo "Refusing runtime Secret operation: deploy role cannot create Secrets in $namespace" >&2
+    exit 1
+  }
+done
 
 if [[ "$action" == apply ]]; then
   : "${MYSQL_HOST:?Set MYSQL_HOST to the private RDS endpoint}"
   : "${RABBITMQ_HOST:?Set RABBITMQ_HOST to the private RabbitMQ service hostname}"
   : "${RABBITMQ_USERNAME:?Set the RabbitMQ runtime username}"
   : "${RABBITMQ_PASSWORD:?Set the RabbitMQ runtime password}"
-  : "${STAGING_GATEWAY_URL:?Set STAGING_GATEWAY_URL to the approved HTTPS origin}"
+  : "${GATEWAY_ISSUER:?Set GATEWAY_ISSUER to the approved staging realm issuer}"
   : "${SPECTRACE_SECURITY_JWKSETURI:?Set the internal Keycloak JWKS URI}"
   [[ "$MYSQL_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9]$ && "$MYSQL_HOST" != *..* ]] || { echo "MYSQL_HOST must be a DNS hostname" >&2; exit 2; }
   [[ "$RABBITMQ_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9]$ && "$RABBITMQ_HOST" != *..* ]] || { echo "RABBITMQ_HOST must be a DNS hostname" >&2; exit 2; }
-  [[ "$STAGING_GATEWAY_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$ ]] || { echo "STAGING_GATEWAY_URL must be an HTTPS origin without a path" >&2; exit 2; }
+  [[ "$GATEWAY_ISSUER" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/auth/realms/spectrace$ ]] || { echo "GATEWAY_ISSUER must be the HTTPS /auth/realms/spectrace URL" >&2; exit 2; }
   [[ "$SPECTRACE_SECURITY_JWKSETURI" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/auth/realms/spectrace/protocol/openid-connect/certs$ ]] || { echo "SPECTRACE_SECURITY_JWKSETURI must be the Keycloak realm JWKS URL" >&2; exit 2; }
   [[ "$RABBITMQ_USERNAME" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || { echo "RABBITMQ_USERNAME has invalid characters or length" >&2; exit 2; }
   [[ "$RABBITMQ_PASSWORD" =~ ^[A-Za-z0-9_-]{32,128}$ ]] || { echo "RABBITMQ_PASSWORD must be a 32-128 character generated secret" >&2; exit 2; }
+  [[ "${KEYCLOAK_DB_PASSWORD:-}" =~ ^[A-Za-z0-9_-]{32,128}$ ]] || { echo "KEYCLOAK_DB_PASSWORD must be a 32-128 character generated secret" >&2; exit 2; }
   for variable in "${variables[@]}"; do
     value="${!variable:-}"
     if [[ ! "$value" =~ ^[A-Za-z0-9_-]{32,128}$ ]]; then
@@ -69,7 +77,6 @@ for i in "${!namespaces[@]}"; do
   namespace="${namespaces[$i]}"
   schema="${schemas[$i]}"
   secret_name="${namespace}-runtime"
-  kubectl get namespace "$namespace" >/dev/null
 
   if [[ "$action" == delete ]]; then
     kubectl --namespace "$namespace" delete secret "$secret_name" --ignore-not-found=true >/dev/null
@@ -84,7 +91,7 @@ for i in "${!namespaces[@]}"; do
         "RABBITMQ_HOST=${RABBITMQ_HOST}" \
         "RABBITMQ_USERNAME=${RABBITMQ_USERNAME}" \
         "RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}" \
-        "SPECTRACE_SECURITY_ISSUERURI=${STAGING_GATEWAY_URL%/}/auth/realms/spectrace" \
+        "SPECTRACE_SECURITY_ISSUERURI=${GATEWAY_ISSUER}" \
         "SPECTRACE_SECURITY_JWKSETURI=${SPECTRACE_SECURITY_JWKSETURI}" \
         "SPECTRACE_SECURITY_AUDIENCE=spectrace-api") \
       --dry-run=client --output=yaml | kubectl apply --server-side \
@@ -92,3 +99,15 @@ for i in "${!namespaces[@]}"; do
   fi
   printf '%s runtime Secret %s/%s\n' "$action" "$namespace" "$secret_name"
 done
+
+if [[ "$action" == delete ]]; then
+  kubectl --namespace keycloak delete secret keycloak-db --ignore-not-found=true >/dev/null
+else
+  kubectl --namespace keycloak create secret generic keycloak-db \
+    --from-env-file=<(printf '%s\n' \
+      'username=keycloak' \
+      "password=${KEYCLOAK_DB_PASSWORD}") \
+    --dry-run=client --output=yaml | kubectl apply --server-side \
+      --field-manager=stcn15-runtime-secrets -f - >/dev/null
+fi
+printf '%s runtime Secret keycloak/keycloak-db\n' "$action"

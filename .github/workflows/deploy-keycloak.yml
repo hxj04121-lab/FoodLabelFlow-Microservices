@@ -1,0 +1,89 @@
+name: Protected Keycloak staging release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keycloak-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, staging-vpc]
+    environment: staging
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      GATEWAY_ISSUER: ${{ vars.GATEWAY_ISSUER }}
+      MYSQL_HOST: ${{ vars.MYSQL_HOST }}
+      AVAILABLE_CREDIT_USD: ${{ vars.STAGING_AVAILABLE_CREDIT_USD }}
+      APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.1
+      - name: Require protected staging settings and pass the budget gate
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test -n "$AWS_ACCOUNT_ID" && test -n "$AWS_REGION" && test -n "$EKS_CLUSTER_NAME" && test -n "$AWS_ROLE_ARN"
+          test -n "$GATEWAY_ISSUER" && test -n "$MYSQL_HOST"
+          python3 -m unittest discover -s tests -p 'test_keycloak_operator_*.py' -v
+          python3 deploy/keycloak/operator/render-server.py > "$RUNNER_TEMP/keycloak-server.json"
+          if ! python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/keycloak-budget-gate.log" 2>&1; then
+            echo '::error::The protected staging funding/pricing gate did not pass; no cluster write was attempted.'
+            exit 1
+          fi
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify target, operator, namespace, Secret, and namespaced permissions
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
+          test "$EKS_CLUSTER_NAME" = spectrace-staging
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" >/dev/null
+          context=$(kubectl config current-context)
+          cluster_arn=$(aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --query 'cluster.arn' --output text)
+          python3 platform/gateway/validate-deploy-target.py \
+            --account-id "$AWS_ACCOUNT_ID" --role-arn "$AWS_ROLE_ARN" \
+            --caller-arn "$(aws sts get-caller-identity --query Arn --output text)" \
+            --region "$AWS_REGION" --cluster "$EKS_CLUSTER_NAME" --cluster-arn "$cluster_arn" --context "$context"
+          kubectl get serviceaccount default --namespace keycloak >/dev/null
+          kubectl get secret keycloak-db --namespace keycloak >/dev/null
+          kubectl rollout status deployment/keycloak-operator --namespace keycloak-system --timeout=60s
+          kubectl api-resources --api-group=k8s.keycloak.org --output=name | grep -Fxq keycloaks.k8s.keycloak.org
+          kubectl api-resources --api-group=elbv2.k8s.aws --output=name | grep -Fxq targetgroupbindings.elbv2.k8s.aws
+          for resource in keycloaks/spectrace-keycloak targetgroupbindings/spectrace-keycloak; do
+            for verb in get patch watch; do
+              test "$(kubectl auth can-i "$verb" "$resource" --namespace keycloak)" = yes
+            done
+            kind=${resource%%/*}
+            test "$(kubectl auth can-i create "$kind" --namespace keycloak)" = yes
+          done
+      - name: Apply the Keycloak Server CR and existing TargetGroupBinding
+        run: |
+          set -euo pipefail
+          kubectl apply --server-side --field-manager=keycloak-staging-deploy -f "$RUNNER_TEMP/keycloak-server.json"
+          kubectl wait --for=condition=Ready keycloak/spectrace-keycloak --namespace keycloak --timeout=15m
+          kubectl rollout status statefulset/spectrace-keycloak --namespace keycloak --timeout=10m
+          kubectl apply --server-side --field-manager=keycloak-staging-deploy -f deploy/kubernetes/staging/keycloak-targetgroupbinding.yaml
+          kubectl get targetgroupbinding spectrace-keycloak --namespace keycloak -o json | \
+            jq -e '.spec.targetGroupARN == "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-keycloak/6c9f10642dd79519" and .spec.targetType == "ip" and .spec.serviceRef.name == "spectrace-keycloak-service" and .spec.serviceRef.port == 8080' >/dev/null
+          kubectl get endpointslices --namespace keycloak -l kubernetes.io/service-name=spectrace-keycloak-service -o json | \
+            jq -e '[.items[].endpoints[]? | select(.conditions.ready == true)] | length > 0' >/dev/null

@@ -19,11 +19,14 @@ cat > "$tmp_dir/bin/kubectl" <<'MOCK'
 set -euo pipefail
 printf '%s\n' "$*" >> "$TEST_CAPTURE_DIR/args"
 case "$1 ${2:-}" in
+  "auth can-i")
+    printf 'yes\n'
+    ;;
   "config current-context")
     printf '%s\n' "$FAKE_CONTEXT"
     ;;
-  "get namespace")
-    printf 'namespace/%s\n' "$3"
+  "get serviceaccount")
+    printf 'serviceaccount/%s\n' "$3"
     ;;
   "--namespace "*)
     namespace="$2"
@@ -69,13 +72,14 @@ export MYSQL_HOST=staging-mysql.example.invalid
 export RABBITMQ_HOST=rabbitmq.rabbitmq.svc.cluster.local
 export RABBITMQ_USERNAME=spectrace-staging
 export RABBITMQ_PASSWORD=rabbitmq-password-012345678901234567890
-export STAGING_GATEWAY_URL=https://gateway.example.invalid
+export GATEWAY_ISSUER=https://gateway.example.invalid/auth/realms/spectrace
 export SPECTRACE_SECURITY_JWKSETURI=http://keycloak.keycloak.svc.cluster.local:8080/auth/realms/spectrace/protocol/openid-connect/certs
 export FAKE_CONTEXT="arn:aws:eks:${AWS_REGION}:${STAGING_AWS_ACCOUNT_ID}:cluster/${STAGING_EKS_CLUSTER_NAME}"
 export SPECIFICATION_DB_PASSWORD=specification-password-012345678901
 export FORMULATION_DB_PASSWORD=formulation-password-012345678901
 export COMPLIANCE_DB_PASSWORD=compliance-password-012345678901
 export LABEL_WORKFLOW_DB_PASSWORD=label-workflow-password-0123456789
+export KEYCLOAK_DB_PASSWORD=keycloak-password-012345678901234
 
 bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/output"
 for spec in \
@@ -91,18 +95,21 @@ for spec in \
   grep -Fqx "RABBITMQ_HOST=${RABBITMQ_HOST}" "$tmp_dir/captures/${namespace}.env"
   grep -Fqx "RABBITMQ_USERNAME=${RABBITMQ_USERNAME}" "$tmp_dir/captures/${namespace}.env"
   grep -Fqx "RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}" "$tmp_dir/captures/${namespace}.env"
-  grep -Fqx "SPECTRACE_SECURITY_ISSUERURI=${STAGING_GATEWAY_URL}/auth/realms/spectrace" "$tmp_dir/captures/${namespace}.env"
+  grep -Fqx "SPECTRACE_SECURITY_ISSUERURI=${GATEWAY_ISSUER}" "$tmp_dir/captures/${namespace}.env"
   grep -Fqx "SPECTRACE_SECURITY_JWKSETURI=${SPECTRACE_SECURITY_JWKSETURI}" "$tmp_dir/captures/${namespace}.env"
   grep -Fqx 'SPECTRACE_SECURITY_AUDIENCE=spectrace-api' "$tmp_dir/captures/${namespace}.env"
   grep -Fq "apply runtime Secret ${namespace}/${namespace}-runtime" "$tmp_dir/output"
-  for secret in "$password" "$RABBITMQ_PASSWORD" "$RABBITMQ_USERNAME"; do
+  for secret in "$password" "$RABBITMQ_PASSWORD" "$RABBITMQ_USERNAME" "$KEYCLOAK_DB_PASSWORD"; do
     if grep -Fq "$secret" "$tmp_dir/output"; then
       echo "FAIL runtime credential appeared in command output" >&2
       exit 1
     fi
   done
 done
-for variable in SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD RABBITMQ_USERNAME RABBITMQ_PASSWORD; do
+grep -Fqx 'username=keycloak' "$tmp_dir/captures/keycloak.env"
+grep -Fqx "password=${KEYCLOAK_DB_PASSWORD}" "$tmp_dir/captures/keycloak.env"
+grep -Fq "apply runtime Secret keycloak/keycloak-db" "$tmp_dir/output"
+for variable in SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD KEYCLOAK_DB_PASSWORD RABBITMQ_USERNAME RABBITMQ_PASSWORD; do
   if grep -Fq "${!variable}" "$tmp_dir/captures/args"; then
     echo "FAIL database password appeared in kubectl arguments" >&2
     exit 1
@@ -141,7 +148,7 @@ if SPECIFICATION_DB_PASSWORD=too-short bash "$repo_root/scripts/staging/apply-ru
 fi
 ! grep -Fq too-short "$tmp_dir/invalid-password"
 
-if STAGING_GATEWAY_URL=http://gateway.example.invalid bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/invalid-issuer" 2>&1; then
+if GATEWAY_ISSUER=http://gateway.example.invalid/auth/realms/spectrace bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/invalid-issuer" 2>&1; then
   echo "FAIL non-HTTPS OIDC issuer origin was accepted" >&2
   exit 1
 fi
@@ -172,8 +179,8 @@ fi
 ! grep -Fq too-short "$tmp_dir/invalid-rabbitmq-password"
 ! grep -q 'create secret' "$tmp_dir/invalid-rabbitmq-password"
 
-unset MYSQL_HOST RABBITMQ_HOST RABBITMQ_USERNAME RABBITMQ_PASSWORD STAGING_GATEWAY_URL SPECTRACE_SECURITY_JWKSETURI SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD
+unset MYSQL_HOST RABBITMQ_HOST RABBITMQ_USERNAME RABBITMQ_PASSWORD GATEWAY_ISSUER SPECTRACE_SECURITY_JWKSETURI SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD KEYCLOAK_DB_PASSWORD
 export STAGING_WINDOW_OPEN=false
 bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" delete > "$tmp_dir/deleted-output"
-[[ $(wc -l < "$tmp_dir/captures/deleted") -eq 4 ]]
+[[ $(wc -l < "$tmp_dir/captures/deleted") -eq 5 ]]
 echo "PASS runtime Secret injection and cleanup: isolated DBs, broker/OIDC configuration, exact staging context and redaction"

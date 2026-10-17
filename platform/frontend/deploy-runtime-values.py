@@ -15,7 +15,7 @@ def build_values(env=os.environ):
         raise ValueError("AWS_ACCOUNT_ID and AWS_REGION must come from the protected staging Environment")
     expected_arn = (
         rf"arn:aws:elasticloadbalancing:{re.escape(region)}:{account}:"
-        r"targetgroup/[A-Za-z0-9-]+/[a-f0-9]{16}"
+        r"targetgroup/foodlabelflow-staging-frontend/[a-f0-9]{16}"
     )
     if not re.fullmatch(expected_arn, target_group):
         raise ValueError("FRONTEND_TARGET_GROUP_ARN must belong to the protected account and region")

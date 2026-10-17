@@ -1,10 +1,10 @@
 name: SWE5001 Helm template
 on:
   pull_request:
-    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'platform/gateway/**', 'platform/frontend/**', 'platform/staging/**', 'tests/test_gateway_deploy_*.py', 'tests/test_frontend_*.py', 'tests/test_staging_window.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/deploy-frontend.yml', '.github/workflows/swe5001-helm.yml']
+    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'deploy/keycloak/operator/**', 'deploy/kubernetes/staging/keycloak-targetgroupbinding.yaml', 'infra/terraform/modules/eks-addons/manifests/**', 'infra/terraform/modules/github-oidc/main.tf', 'platform/gateway/**', 'platform/frontend/**', 'platform/staging/**', 'tests/test_gateway_deploy_*.py', 'tests/test_keycloak_operator_*.py', 'tests/test_frontend_*.py', 'tests/test_staging_window.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/deploy-frontend.yml', '.github/workflows/deploy-keycloak.yml', '.github/workflows/install-keycloak-operator.yml', '.github/workflows/swe5001-helm.yml']
   push:
     branches: ['feature/stcn-48-*']
-    paths: ['deploy/helm/**', 'platform/gateway/**', 'platform/frontend/**', 'platform/staging/**', 'tests/test_gateway_deploy_*.py', 'tests/test_frontend_*.py', 'tests/test_staging_window.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/deploy-frontend.yml', '.github/workflows/swe5001-helm.yml']
+    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'deploy/keycloak/operator/**', 'deploy/kubernetes/staging/keycloak-targetgroupbinding.yaml', 'infra/terraform/modules/eks-addons/manifests/**', 'infra/terraform/modules/github-oidc/main.tf', 'platform/gateway/**', 'platform/frontend/**', 'platform/staging/**', 'tests/test_gateway_deploy_*.py', 'tests/test_keycloak_operator_*.py', 'tests/test_frontend_*.py', 'tests/test_staging_window.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/deploy-frontend.yml', '.github/workflows/deploy-keycloak.yml', '.github/workflows/install-keycloak-operator.yml', '.github/workflows/swe5001-helm.yml']
 permissions:
   contents: read
 jobs:
@@ -28,6 +28,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund && npm test
       - name: Validate protected Gateway runtime and target configuration
         run: python3 -m unittest discover -s tests -p 'test_gateway_deploy_*.py' -v
+      - name: Validate protected Keycloak manifest rendering
+        run: python3 -m unittest discover -s tests -p 'test_keycloak_operator_*.py' -v
       - uses: actions/upload-artifact@v4
         if: always()
         with:

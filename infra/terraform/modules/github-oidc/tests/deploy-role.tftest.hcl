@@ -25,16 +25,17 @@ run "deploy_role_trust_and_access_are_staging_scoped" {
   command = plan
 
   variables {
-    repository           = "hxj04121-lab/FoodLabelFlow-Microservices"
-    repository_owner_id  = "245486830"
-    repository_id        = "1388701923"
-    environment          = "staging"
-    branch               = "main"
-    state_bucket_name    = ""
-    cluster_name         = "spectrace-staging"
-    create_provider      = false
-    provider_thumbprints = []
-    tags                 = {}
+    repository                = "hxj04121-lab/FoodLabelFlow-Microservices"
+    repository_owner_id       = "245486830"
+    repository_id             = "1388701923"
+    environment               = "staging"
+    branch                    = "main"
+    state_bucket_name         = ""
+    cluster_name              = "spectrace-staging"
+    create_provider           = false
+    provider_thumbprints      = []
+    deployer_kubernetes_group = "spectrace-staging-deploy"
+    tags                      = {}
   }
 
   assert {
@@ -65,7 +66,12 @@ run "deploy_role_trust_and_access_are_staging_scoped" {
   }
 
   assert {
-    condition     = aws_eks_access_entry.deploy[0].type == "STANDARD" && aws_eks_access_policy_association.deploy[0].policy_arn == "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy" && aws_eks_access_policy_association.deploy[0].access_scope[0].type == "namespace" && toset(aws_eks_access_policy_association.deploy[0].access_scope[0].namespaces) == toset(["gateway", "specification", "formulation", "compliance", "label-workflow"])
-    error_message = "The deploy role must receive namespace-scoped edit access only for the five application namespaces."
+    condition     = aws_eks_access_entry.deploy[0].type == "STANDARD" && aws_eks_access_policy_association.deploy[0].policy_arn == "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy" && aws_eks_access_policy_association.deploy[0].access_scope[0].type == "namespace" && toset(aws_eks_access_policy_association.deploy[0].access_scope[0].namespaces) == toset(["gateway", "keycloak", "specification", "formulation", "compliance", "label-workflow", "frontend"])
+    error_message = "The deploy role must receive namespace-scoped edit access only for the seven application namespaces."
+  }
+
+  assert {
+    condition     = length(aws_eks_access_entry.deploy[0].kubernetes_groups) == 1 && contains(aws_eks_access_entry.deploy[0].kubernetes_groups, "spectrace-staging-deploy")
+    error_message = "The namespace-scoped deploy role needs only the dedicated group used for custom Keycloak and TargetGroupBinding RBAC."
   }
 }
