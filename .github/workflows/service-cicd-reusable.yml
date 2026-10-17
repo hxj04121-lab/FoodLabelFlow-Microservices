@@ -188,7 +188,8 @@ jobs:
           image-ref: ${{ format('local/{0}:{1}', inputs.service_name, github.sha) }}
           severity: HIGH,CRITICAL
           exit-code: '1'
-      - name: Deploy service chart to kind
+      - id: deploy_kind
+        name: Deploy service chart to kind
         env:
           RELEASE: ${{ inputs.service_name }}
           NAMESPACE: ${{ inputs.namespace }}
