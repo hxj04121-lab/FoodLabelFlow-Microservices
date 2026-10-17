@@ -118,7 +118,7 @@ else:
                 path.write_text(stub)
                 path.chmod(0o700)
             env = dict(os.environ, PATH=f"{tmp}:{os.environ['PATH']}",
-                       STCN_EKS_CLUSTER_NAME="offline-test", AWS_REGION="ap-southeast-1")
+                       EKS_CLUSTER_NAME="offline-test", AWS_REGION="ap-southeast-1")
             env.pop("STCN_GATEWAY_BINDING", None)
             env.pop("STCN_ACM_CERTIFICATE_ARN", None)
             if mode == "deploy":

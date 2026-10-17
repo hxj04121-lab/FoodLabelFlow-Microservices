@@ -44,7 +44,7 @@ spec:
               kubernetes.io/metadata.name: {{ $keycloakNS | quote }}
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: keycloak
+              app: keycloak
       ports:
         - {protocol: TCP, port: 8080}
     - to:

@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode="${1:-}"
-cluster_name="${STCN_EKS_CLUSTER_NAME:-}"
+cluster_name="${EKS_CLUSTER_NAME:-}"
 region="${AWS_REGION:-ap-southeast-1}"
 gateway_namespace="${STCN_GATEWAY_NAMESPACE:-gateway}"
 gateway_binding="${STCN_GATEWAY_BINDING:-gateway-gateway}"
@@ -16,7 +16,7 @@ keycloak_target_group_arn="${STCN_KEYCLOAK_TARGET_GROUP_ARN:-}"
 vpc_id="${STCN_VPC_ID:-}"
 
 if [[ "$region" != "ap-southeast-1" || -z "$cluster_name" ]]; then
-  echo "set STCN_EKS_CLUSTER_NAME and use AWS_REGION=ap-southeast-1" >&2
+  echo "set EKS_CLUSTER_NAME and use AWS_REGION=ap-southeast-1" >&2
   exit 2
 fi
 for command in aws jq; do

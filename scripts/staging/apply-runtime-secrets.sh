@@ -22,18 +22,18 @@ if [[ "$action" == apply && "$STAGING_WINDOW_OPEN" != true ]]; then
 fi
 
 : "${AWS_REGION:?Set AWS_REGION}"
-: "${STAGING_AWS_ACCOUNT_ID:?Set STAGING_AWS_ACCOUNT_ID}"
-: "${STAGING_EKS_CLUSTER_NAME:?Set STAGING_EKS_CLUSTER_NAME}"
+: "${AWS_ACCOUNT_ID:?Set AWS_ACCOUNT_ID}"
+: "${EKS_CLUSTER_NAME:?Set EKS_CLUSTER_NAME}"
 [[ "$AWS_REGION" == ap-southeast-1 ]] || { echo "AWS_REGION must be ap-southeast-1" >&2; exit 2; }
-[[ "$STAGING_AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "STAGING_AWS_ACCOUNT_ID must be 12 digits" >&2; exit 2; }
-[[ "$STAGING_EKS_CLUSTER_NAME" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid staging cluster name" >&2; exit 2; }
+[[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "AWS_ACCOUNT_ID must be 12 digits" >&2; exit 2; }
+[[ "$EKS_CLUSTER_NAME" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid EKS cluster name" >&2; exit 2; }
 actual_account_id="$(aws sts get-caller-identity --query Account --output text)"
-[[ "$actual_account_id" == "$STAGING_AWS_ACCOUNT_ID" ]] || {
-  echo "Refusing runtime Secret operation: STS account does not match STAGING_AWS_ACCOUNT_ID" >&2
+[[ "$actual_account_id" == "$AWS_ACCOUNT_ID" ]] || {
+  echo "Refusing runtime Secret operation: STS account does not match AWS_ACCOUNT_ID" >&2
   exit 2
 }
 
-expected_context="arn:aws:eks:${AWS_REGION}:${STAGING_AWS_ACCOUNT_ID}:cluster/${STAGING_EKS_CLUSTER_NAME}"
+expected_context="arn:aws:eks:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster/${EKS_CLUSTER_NAME}"
 if [[ "$(kubectl config current-context)" != "$expected_context" ]]; then
   echo "Refusing runtime Secret operation: current Kubernetes context is not the configured staging cluster" >&2
   exit 2
