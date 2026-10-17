@@ -40,5 +40,5 @@ metadata:
   name: staging-smoke
   namespace: rabbitmq
 spec:
-  tags: []
+  tags: [management]
   rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}

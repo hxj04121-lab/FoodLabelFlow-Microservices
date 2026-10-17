@@ -63,6 +63,10 @@ permissions = [item for item in yaml.safe_load_all((ROOT / "deploy/operators/rab
 assert len(users) == len(permissions) == 5
 assert all(item["kind"] == "User" for item in users)
 assert all(item["kind"] == "Permission" for item in permissions)
+smoke_user = next(item for item in users if item["metadata"]["name"] == "staging-smoke")
+assert smoke_user["spec"]["tags"] == ["management"], "Only the HTTP API smoke user needs the Management tag."
+assert all(item["spec"]["tags"] == [] for item in users if item is not smoke_user), \
+    "Business service users must keep the default least-privilege tags."
 for service in ("specification", *expected):
     user = next(item for item in permissions if item["spec"]["user"] == f"{service}-rabbitmq")
     assert user["metadata"]["namespace"] == service
@@ -165,10 +169,40 @@ rabbitmq_steps = rabbitmq_job["steps"]
 rabbitmq_script = "\n".join(step.get("run", "") for step in rabbitmq_steps)
 assert "env -u AVAILABLE_CREDIT_USD" in rabbitmq_script and "--approved-spend-usd \"$APPROVED_STAGING_SPEND_USD\" --require-gate" in rabbitmq_script
 assert "terraform apply" not in rabbitmq_script and "kubectl create namespace" not in rabbitmq_script
+assert "kubectl apply" not in rabbitmq_script and "--all-namespaces" not in rabbitmq_script
+assert "STAGING_WINDOW_VALIDATED=true" in rabbitmq_script
+assert "apply_rabbitmq_owned.py" in rabbitmq_script
+assert 'kubectl get secret "${user}-user-credentials" --namespace "$namespace" -o name' in rabbitmq_script
+assert "refusing to adopt them" in rabbitmq_script and "statefulsets,pods,persistentvolumeclaims" in rabbitmq_script
 assert all(url in rabbitmq_script for url in ("cert-manager/releases/download/v1.21.2", "cluster-operator/releases/download/v2.22.3", "messaging-topology-operator/releases/download/v1.20.2"))
 topology_step = next(step["run"] for step in rabbitmq_steps if step.get("name") == "Apply durable topology from the reviewed chart")
 assert topology_step.index("00-exchanges") < topology_step.index("10-queues") < topology_step.index("20-bindings") < topology_step.index("30-policies")
+assert "namespaces=(rabbitmq specification formulation compliance label-workflow)" in topology_step
 assert "staging-smoke.smoke" in rabbitmq_script and 'delivery_mode\\":2' in rabbitmq_script
+rabbitmq_service_role = yaml.safe_load((ROOT / "infra/terraform/modules/eks-addons/manifests/rabbitmq-service-deployer-role.yaml.tmpl").read_text())
+assert set(rabbitmq_service_role["rules"][0]["resources"]) == {"users", "permissions", "queues", "bindings", "policies"}
+assert "exchanges.rabbitmq.com --namespace rabbitmq" in rabbitmq_script
+assert set(rabbitmq_service_role["rules"][0]["verbs"]) == {"get", "list", "watch", "create", "patch"}
+assert rabbitmq_service_role["rules"][1] == {
+    "apiGroups": [""], "resources": ["secrets"],
+    "resourceNames": ["${namespace}-rabbitmq-user-credentials"], "verbs": ["get"]
+}
+rabbitmq_role = yaml.safe_load((ROOT / "infra/terraform/modules/eks-addons/manifests/rabbitmq-deployer-role.yaml.tmpl").read_text())
+assert all("delete" not in rule["verbs"] and "update" not in rule["verbs"] for rule in rabbitmq_role["rules"])
+safe_apply = (ROOT / "scripts/staging/apply_rabbitmq_owned.py").read_text()
+assert '"diff", "--server-side", "--force-conflicts"' in safe_apply and '"create", "--field-manager", FIELD_MANAGER' in safe_apply
+assert "kubectl apply" not in safe_apply and "kubectl delete" not in safe_apply
+
+terraform_workflow = yaml.load((ROOT / ".github/workflows/terraform-validate.yml").read_text(), Loader=yaml.BaseLoader)
+terraform_plan = terraform_workflow["jobs"]["plan"]
+assert terraform_plan["if"] == "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_plan }}"
+assert terraform_plan["environment"] == "staging"
+terraform_plan_script = "\n".join(step.get("run", "") for step in terraform_plan["steps"])
+assert "terraform state list" in terraform_plan_script and "terraform plan" in terraform_plan_script
+assert "aws s3api head-object" in terraform_plan_script and "spectrace/staging/terraform.tfstate" in terraform_plan_script
+assert "foodlabelflow-staging-tfstate-679857346122-ap-southeast-1" in terraform_plan_script
+assert "terraform apply" not in terraform_plan_script and "terraform import" not in terraform_plan_script
+assert "scripts/aws_staging_budget.py --hours" in terraform_plan_script
 for step in rabbitmq_steps:
     if step.get("run"):
         subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)

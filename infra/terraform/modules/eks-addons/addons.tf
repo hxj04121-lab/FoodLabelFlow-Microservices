@@ -83,6 +83,33 @@ resource "kubernetes_manifest" "rabbitmq_deployer_rolebinding" {
   depends_on = [kubernetes_manifest.rabbitmq_deployer_role]
 }
 
+resource "kubernetes_manifest" "rabbitmq_service_deployer_role" {
+  for_each = {
+    for namespace, name in var.workload_namespaces : namespace => name
+    if !contains(["rabbitmq", "frontend"], namespace)
+  }
+
+  manifest = yamldecode(templatefile("${path.module}/manifests/rabbitmq-service-deployer-role.yaml.tmpl", {
+    namespace = each.value
+  }))
+
+  depends_on = [kubernetes_manifest.workload_namespace]
+}
+
+resource "kubernetes_manifest" "rabbitmq_service_deployer_rolebinding" {
+  for_each = {
+    for namespace, name in var.workload_namespaces : namespace => name
+    if !contains(["rabbitmq", "frontend"], namespace)
+  }
+
+  manifest = yamldecode(templatefile("${path.module}/manifests/rabbitmq-service-deployer-rolebinding.yaml.tmpl", {
+    namespace = each.value
+    group     = var.deployer_kubernetes_group
+  }))
+
+  depends_on = [kubernetes_manifest.rabbitmq_service_deployer_role]
+}
+
 resource "kubernetes_manifest" "staging_deployer_node_reader" {
   manifest = {
     apiVersion = "rbac.authorization.k8s.io/v1"

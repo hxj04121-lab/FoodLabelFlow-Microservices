@@ -24,6 +24,7 @@ on:
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
       - 'tests/test_aws_staging_budget.py'
+      - 'tests/test_rabbitmq_safe_apply.py'
   push:
     branches: [main]
     paths:
@@ -48,6 +49,7 @@ on:
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
       - 'tests/test_aws_staging_budget.py'
+      - 'tests/test_rabbitmq_safe_apply.py'
 
 permissions:
   contents: read
@@ -85,6 +87,8 @@ jobs:
           bash tests/test_mysql_bootstrap_workflow_guard.sh
       - name: Verify RabbitMQ per-queue DLQ scrape target
         run: python3 -m unittest discover -s tests -p 'test_alloy_dlq_scrape.py' -v
+      - name: Verify RabbitMQ safe create and retry behavior
+        run: python3 -m unittest discover -s tests -p 'test_rabbitmq_safe_apply.py' -v
       - run: bash -n scripts/verify_eks_addons.sh
       - run: kubectl kustomize deploy/operators >/dev/null
       - run: kubectl kustomize deploy/operators/rabbitmq >/dev/null
