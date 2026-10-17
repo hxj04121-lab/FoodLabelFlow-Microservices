@@ -182,7 +182,7 @@ resource "aws_eks_node_group" "compliance" {
 
   scaling_config {
     desired_size = var.compliance_desired_size
-    min_size     = 1
+    min_size     = 2
     max_size     = 4
   }
 

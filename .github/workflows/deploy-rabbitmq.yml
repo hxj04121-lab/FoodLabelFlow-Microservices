@@ -1,0 +1,244 @@
+name: Protected RabbitMQ staging deployment and smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_window_hours:
+        description: Owner-approved staging window length in hours
+        type: number
+        required: true
+      staging_window_end_sgt:
+        description: Owner-confirmed shutdown time in Asia/Singapore (YYYY-MM-DD HH:MM)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rabbitmq-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, staging-vpc]
+    environment: staging
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AWS_OPERATOR_INSTALL_ROLE_ARN: ${{ vars.AWS_OPERATOR_INSTALL_ROLE_ARN }}
+      APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
+      STAGING_WINDOW_HOURS: ${{ inputs.staging_window_hours }}
+      STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.1
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.0
+      - name: Validate owner-approved time and fail-closed budget
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          for value in "$AWS_ACCOUNT_ID" "$AWS_REGION" "$EKS_CLUSTER_NAME" "$AWS_DEPLOY_ROLE_ARN" "$AWS_OPERATOR_INSTALL_ROLE_ARN" "$APPROVED_STAGING_SPEND_USD"; do test -n "$value"; done
+          test "$AWS_REGION" = ap-southeast-1
+          test "$EKS_CLUSTER_NAME" = spectrace-staging
+          python3 - "$APPROVED_STAGING_SPEND_USD" <<'PY'
+          from decimal import Decimal, InvalidOperation
+          import sys
+          try:
+              spend = Decimal(sys.argv[1])
+          except InvalidOperation:
+              raise SystemExit('Approved staging spend must be a decimal USD amount')
+          if not spend.is_finite() or spend <= 0 or spend > Decimal('150'):
+              raise SystemExit('Approved staging spend must be within the STCN-17 USD 150 cap')
+          PY
+          python3 platform/staging/validate_window.py "$STAGING_WINDOW_HOURS" "$STAGING_WINDOW_END_SGT" > "$RUNNER_TEMP/rabbitmq-window.json"
+          env -u AVAILABLE_CREDIT_USD python3 scripts/aws_staging_budget.py --hours "$STAGING_WINDOW_HOURS" \
+            --experiment-hours 0 --k6-hours 0 --approved-spend-usd "$APPROVED_STAGING_SPEND_USD" --require-gate \
+            > "$RUNNER_TEMP/rabbitmq-budget-gate.log"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify the protected deploy identity, storage, namespaces, and node capacity
+        run: |
+          set -euo pipefail
+          identity=$(aws sts get-caller-identity --query Arn --output text)
+          aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" > "$RUNNER_TEMP/cluster.json"
+          cluster_arn=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cluster"]["arn"])' "$RUNNER_TEMP/cluster.json")
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cluster"]["status"])' "$RUNNER_TEMP/cluster.json")" = ACTIVE
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" >/dev/null
+          python3 platform/gateway/validate-deploy-target.py --account-id "$AWS_ACCOUNT_ID" \
+            --role-arn "$AWS_DEPLOY_ROLE_ARN" --caller-arn "$identity" --region "$AWS_REGION" \
+            --cluster "$EKS_CLUSTER_NAME" --cluster-arn "$cluster_arn" --context "$(kubectl config current-context)"
+          kubectl get csidriver ebs.csi.aws.com -o name >/dev/null
+          kubectl get storageclass ebs-gp3 -o json > "$RUNNER_TEMP/ebs-gp3.json"
+          python3 - "$RUNNER_TEMP/ebs-gp3.json" <<'PY'
+          import json,sys
+          row=json.load(open(sys.argv[1]))
+          if row.get('provisioner')!='ebs.csi.aws.com' or row.get('parameters',{}).get('type')!='gp3' or row.get('parameters',{}).get('encrypted')!='true' or row.get('reclaimPolicy')!='Retain' or row.get('volumeBindingMode')!='WaitForFirstConsumer':
+              raise SystemExit('ebs-gp3 must use encrypted gp3, WaitForFirstConsumer, and Retain.')
+          PY
+          for ns in rabbitmq specification formulation compliance label-workflow frontend; do kubectl get namespace "$ns" -o name >/dev/null; done
+          test "$(kubectl auth can-i get nodes)" = yes
+          kubectl get nodes -l eks.amazonaws.com/nodegroup=general -o json > "$RUNNER_TEMP/general-nodes.json"
+          kubectl get nodes -l eks.amazonaws.com/nodegroup=compliance -o json > "$RUNNER_TEMP/compliance-nodes.json"
+          aws eks describe-nodegroup --cluster-name "$EKS_CLUSTER_NAME" --nodegroup-name compliance --region "$AWS_REGION" > "$RUNNER_TEMP/compliance-nodegroup.json"
+          python3 - "$RUNNER_TEMP/general-nodes.json" "$RUNNER_TEMP/compliance-nodes.json" "$RUNNER_TEMP/compliance-nodegroup.json" <<'PY'
+          import json,sys
+          def ready(path):
+              nodes=json.load(open(path))['items']
+              return [node for node in nodes if any(c.get('type')=='Ready' and c.get('status')=='True' for c in node['status'].get('conditions',[]))]
+          general=ready(sys.argv[1])
+          hosts={n.get('metadata',{}).get('labels',{}).get('kubernetes.io/hostname') for n in general}
+          zones={n.get('metadata',{}).get('labels',{}).get('topology.kubernetes.io/zone') for n in general}
+          if len(general)<3 or len(hosts)<3 or len(zones)<2 or None in hosts or None in zones:
+              raise SystemExit('RabbitMQ requires three Ready general nodes across both staging AZs.')
+          group=json.load(open(sys.argv[3]))['nodegroup']; scale=group.get('scalingConfig',{})
+          compliance=ready(sys.argv[2]); czones={n.get('metadata',{}).get('labels',{}).get('topology.kubernetes.io/zone') for n in compliance}
+          if group.get('status')!='ACTIVE' or group.get('instanceTypes')!=['c6i.large'] or scale.get('minSize',0)<2 or scale.get('desiredSize',0)<2 or group.get('health',{}).get('issues') or len(compliance)<2 or len(czones)<2 or None in czones:
+              raise SystemExit('Compliance requires two Ready c6i.large nodes in both staging AZs.')
+          for node in compliance:
+              if not any(t.get('key')=='dedicated' and t.get('value')=='compliance' and t.get('effect')=='NoSchedule' for t in node.get('spec',{}).get('taints',[])):
+                  raise SystemExit('A compliance node is missing the dedicated=compliance:NoSchedule taint.')
+          print(f'General: {len(general)} Ready nodes across {len(zones)} AZs; Compliance: {len(compliance)} Ready nodes across {len(czones)} AZs.')
+          PY
+          test "$(kubectl auth can-i create rabbitmqclusters.rabbitmq.com --namespace rabbitmq)" = yes
+          test "$(kubectl auth can-i create pods/portforward --namespace rabbitmq)" = yes
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_OPERATOR_INSTALL_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify the separate cluster-admin role and EKS target
+        run: |
+          set -euo pipefail
+          identity=$(aws sts get-caller-identity --query Arn --output text)
+          aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" > "$RUNNER_TEMP/operator-cluster.json"
+          cluster_arn=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cluster"]["arn"])' "$RUNNER_TEMP/operator-cluster.json")
+          python3 platform/gateway/validate-deploy-target.py --account-id "$AWS_ACCOUNT_ID" \
+            --role-arn "$AWS_OPERATOR_INSTALL_ROLE_ARN" --caller-arn "$identity" --region "$AWS_REGION" \
+            --cluster "$EKS_CLUSTER_NAME" --cluster-arn "$cluster_arn" --context "$(kubectl config current-context)"
+      - name: Install pinned cert-manager and RabbitMQ Operators with the protected operator role
+        run: |
+          set -euo pipefail
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" >/dev/null
+          for crd in rabbitmqclusters.rabbitmq.com users.rabbitmq.com permissions.rabbitmq.com exchanges.rabbitmq.com queues.rabbitmq.com bindings.rabbitmq.com policies.rabbitmq.com; do
+            test -z "$(kubectl get crd "$crd" --ignore-not-found -o name)" || { echo "::error::Found pre-existing $crd; inspect operator ownership before continuing."; exit 1; }
+          done
+          for target in 'cert-manager cert-manager' 'cert-manager cert-manager-webhook' 'cert-manager cert-manager-cainjector' 'rabbitmq-system rabbitmq-cluster-operator' 'rabbitmq-system messaging-topology-operator'; do
+            read -r namespace deployment <<< "$target"
+            test -z "$(kubectl get deployment "$deployment" --namespace "$namespace" --ignore-not-found -o name)" || { echo "::error::Found pre-existing $namespace/$deployment; inspect its owner and version before continuing."; exit 1; }
+          done
+          curl --fail --location --silent --show-error \
+            https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml \
+            --output "$RUNNER_TEMP/cert-manager.yaml"
+          curl --fail --location --silent --show-error \
+            https://github.com/rabbitmq/cluster-operator/releases/download/v2.22.3/cluster-operator.yml \
+            --output "$RUNNER_TEMP/rabbitmq-cluster-operator.yaml"
+          curl --fail --location --silent --show-error \
+            https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.2/messaging-topology-operator-with-certmanager.yaml \
+            --output "$RUNNER_TEMP/rabbitmq-topology-operator.yaml"
+          kubectl apply -f "$RUNNER_TEMP/cert-manager.yaml"
+          for deployment in cert-manager cert-manager-webhook cert-manager-cainjector; do kubectl rollout status "deployment/$deployment" --namespace cert-manager --timeout=5m; done
+          kubectl apply -f "$RUNNER_TEMP/rabbitmq-cluster-operator.yaml"
+          kubectl rollout status deployment/rabbitmq-cluster-operator --namespace rabbitmq-system --timeout=5m
+          kubectl apply -f "$RUNNER_TEMP/rabbitmq-topology-operator.yaml"
+          kubectl rollout status deployment/messaging-topology-operator --namespace rabbitmq-system --timeout=5m
+          for crd in rabbitmqclusters.rabbitmq.com users.rabbitmq.com permissions.rabbitmq.com exchanges.rabbitmq.com queues.rabbitmq.com bindings.rabbitmq.com policies.rabbitmq.com; do kubectl wait --for=condition=Established "crd/$crd" --timeout=2m; done
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify the limited RabbitMQ deploy role and install the three-node Cluster
+        run: |
+          set -euo pipefail
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" >/dev/null
+          test "$(kubectl auth can-i create rabbitmqclusters.rabbitmq.com --namespace rabbitmq)" = yes
+          test -z "$(kubectl get rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq --ignore-not-found -o name)" || { echo '::error::A RabbitMQ Cluster already exists; do not replace a running broker.'; exit 1; }
+          test -z "$(kubectl get users.rabbitmq.com staging-smoke --namespace rabbitmq --ignore-not-found -o name)" || { echo '::error::RabbitMQ smoke resources already exist; inspect before retrying.'; exit 1; }
+          kubectl apply -f deploy/operators/rabbitmq/rabbitmq-cluster.yaml
+          kubectl apply -f deploy/kubernetes/staging/rabbitmq/rabbitmq-pdb.yaml
+          kubectl wait --for=condition=Ready pods --namespace rabbitmq --selector app.kubernetes.io/name=spectrace --timeout=15m
+          kubectl get pods --namespace rabbitmq --selector app.kubernetes.io/name=spectrace -o json > "$RUNNER_TEMP/rabbitmq-pods.json"
+          kubectl get pvc --namespace rabbitmq -o json > "$RUNNER_TEMP/rabbitmq-pvcs.json"
+          kubectl get nodes -o json > "$RUNNER_TEMP/all-nodes.json"
+          python3 - "$RUNNER_TEMP/rabbitmq-pods.json" "$RUNNER_TEMP/rabbitmq-pvcs.json" "$RUNNER_TEMP/all-nodes.json" <<'PY'
+          import json,sys
+          pods=json.load(open(sys.argv[1]))['items']
+          pvcs=json.load(open(sys.argv[2]))['items']
+          nodes={p.get('spec',{}).get('nodeName') for p in pods}
+          inventory={n['metadata']['name']:n for n in json.load(open(sys.argv[3]))['items']}
+          zones={inventory[name].get('metadata',{}).get('labels',{}).get('topology.kubernetes.io/zone') for name in nodes if name in inventory}
+          if len(pods)!=3 or len(nodes)!=3 or len(zones)<2 or None in nodes or None in zones:
+              raise SystemExit('RabbitMQ quorum replicas must be Ready on three distinct nodes across both AZs.')
+          if len(pvcs)!=3 or any(p.get('status',{}).get('phase')!='Bound' or p.get('spec',{}).get('storageClassName')!='ebs-gp3' for p in pvcs):
+              raise SystemExit('Each RabbitMQ broker must have a Bound ebs-gp3 PVC.')
+          print('Three RabbitMQ replicas are Ready on distinct nodes; all three gp3 PVCs are Bound.')
+          PY
+          kubectl apply -f deploy/operators/rabbitmq/users.yaml
+          for user in specification-rabbitmq formulation-rabbitmq compliance-rabbitmq label-workflow-rabbitmq staging-smoke; do kubectl wait --for=condition=Ready "user/$user" --namespace "$(test "$user" = staging-smoke && echo rabbitmq || echo "${user%-rabbitmq}")" --timeout=5m; done
+          kubectl apply -f deploy/operators/rabbitmq/permissions.yaml
+          for target in 'specification specification-rabbitmq' 'formulation formulation-rabbitmq' 'compliance compliance-rabbitmq' 'label-workflow label-workflow-rabbitmq' 'rabbitmq staging-smoke'; do read -r namespace permission <<< "$target"; kubectl wait --for=condition=Ready "permission/$permission" --namespace "$namespace" --timeout=5m; done
+      - name: Apply durable topology from the reviewed chart
+        run: |
+          set -euo pipefail
+          for kind in 00-exchanges 10-queues 20-bindings 30-policies; do
+            helm template rabbitmq-topology deploy/helm/rabbitmq-topology --namespace rabbitmq \
+              --show-only "templates/${kind}.yaml" > "$RUNNER_TEMP/${kind}.yaml"
+            kubectl apply -f "$RUNNER_TEMP/${kind}.yaml"
+            case "$kind" in
+              00-exchanges) resource=exchanges.rabbitmq.com; expected=2 ;;
+              10-queues) resource=queues.rabbitmq.com; expected=14 ;;
+              20-bindings) resource=bindings.rabbitmq.com; expected=15 ;;
+              30-policies) resource=policies.rabbitmq.com; expected=7 ;;
+            esac
+            deadline=$((SECONDS + 300))
+            until kubectl get "$resource" --all-namespaces -o json > "$RUNNER_TEMP/topology.json" && \
+              python3 - "$RUNNER_TEMP/topology.json" "$expected" <<'PY'
+          import json,sys
+          rows=json.load(open(sys.argv[1]))['items']
+          expected=int(sys.argv[2])
+          ready=lambda row:any(c.get('type')=='Ready' and c.get('status')=='True' for c in row.get('status',{}).get('conditions',[]))
+          if len(rows)!=expected or not all(map(ready,rows)): raise SystemExit(1)
+          PY
+              do
+                test "$SECONDS" -lt "$deadline" || { echo "::error::Timed out waiting for $resource to become Ready."; exit 1; }
+                sleep 5
+            done
+          done
+      - name: Publish and consume one isolated RabbitMQ smoke message
+        run: |
+          set -euo pipefail
+          credentials=$(kubectl get secret staging-smoke-user-credentials --namespace rabbitmq -o json | python3 -c 'import base64,json,sys; d=json.load(sys.stdin)["data"]; print(base64.b64decode(d["username"]).decode()); print(base64.b64decode(d["password"]).decode())')
+          mapfile -t credential_values <<< "$credentials"
+          rabbit_user=${credential_values[0]}
+          rabbit_password=${credential_values[1]}
+          test -n "$rabbit_user" && test -n "$rabbit_password"
+          echo "::add-mask::$rabbit_user"
+          echo "::add-mask::$rabbit_password"
+          kubectl port-forward --namespace rabbitmq service/spectrace 15672:15672 > "$RUNNER_TEMP/rabbitmq-port-forward.log" 2>&1 &
+          port_forward_pid=$!
+          trap 'kill "$port_forward_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do curl --silent --output /dev/null http://127.0.0.1:15672/ && break || sleep 1; done
+          payload="m5-rabbitmq-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          publish=$(curl --fail --silent --show-error -u "$rabbit_user:$rabbit_password" -H 'content-type: application/json' \
+            --data "{\"properties\":{\"delivery_mode\":2},\"routing_key\":\"staging.smoke\",\"payload\":\"$payload\",\"payload_encoding\":\"string\"}" \
+            http://127.0.0.1:15672/api/exchanges/%2F/spectrace.events/publish)
+          python3 -c 'import json,sys; assert json.load(sys.stdin).get("routed") is True, "Smoke message was not routed"' <<< "$publish"
+          messages=$(curl --fail --silent --show-error -u "$rabbit_user:$rabbit_password" -H 'content-type: application/json' \
+            --data '{"count":1,"ackmode":"ack_requeue_false","encoding":"auto","truncate":50000}' \
+            http://127.0.0.1:15672/api/queues/%2F/staging-smoke.smoke/get)
+          python3 -c 'import json,sys; expected=sys.argv[1]; rows=json.load(sys.stdin); assert any(row.get("payload") == expected for row in rows), "Smoke message was not consumed from the isolated queue"' "$payload" <<< "$messages"

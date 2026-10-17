@@ -8,34 +8,12 @@ spec:
   rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
 ---
 apiVersion: rabbitmq.com/v1beta1
-kind: Permission
-metadata:
-  name: specification-rabbitmq
-  namespace: specification
-spec:
-  vhost: /
-  user: specification-rabbitmq
-  permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^$"}
-  rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
----
-apiVersion: rabbitmq.com/v1beta1
 kind: User
 metadata:
   name: formulation-rabbitmq
   namespace: formulation
 spec:
   tags: []
-  rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
----
-apiVersion: rabbitmq.com/v1beta1
-kind: Permission
-metadata:
-  name: formulation-rabbitmq
-  namespace: formulation
-spec:
-  vhost: /
-  user: formulation-rabbitmq
-  permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^formulation\\.specification-published$"}
   rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
 ---
 apiVersion: rabbitmq.com/v1beta1
@@ -48,17 +26,6 @@ spec:
   rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
 ---
 apiVersion: rabbitmq.com/v1beta1
-kind: Permission
-metadata:
-  name: compliance-rabbitmq
-  namespace: compliance
-spec:
-  vhost: /
-  user: compliance-rabbitmq
-  permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^compliance\\.(specification-published|formula-published|label-published)$"}
-  rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
----
-apiVersion: rabbitmq.com/v1beta1
 kind: User
 metadata:
   name: label-workflow-rabbitmq
@@ -68,12 +35,10 @@ spec:
   rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
 ---
 apiVersion: rabbitmq.com/v1beta1
-kind: Permission
+kind: User
 metadata:
-  name: label-workflow-rabbitmq
-  namespace: label-workflow
+  name: staging-smoke
+  namespace: rabbitmq
 spec:
-  vhost: /
-  user: label-workflow-rabbitmq
-  permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^label-workflow\\.(formula-published|impact-finding)$"}
+  tags: []
   rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}

@@ -1,0 +1,32 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spectrace-staging-deployer-rabbitmq
+  namespace: ${namespace}
+rules:
+  - apiGroups: ["rabbitmq.com"]
+    resources:
+      - rabbitmqclusters
+      - users
+      - permissions
+      - exchanges
+      - queues
+      - bindings
+      - policies
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "persistentvolumeclaims", "endpoints", "endpointslices"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["staging-smoke-user-credentials"]
+    verbs: ["get"]

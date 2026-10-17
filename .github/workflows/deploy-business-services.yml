@@ -117,12 +117,13 @@ jobs:
           import json, re, sys
           group=json.load(open(sys.argv[1]))['nodegroup']
           scaling=group.get('scalingConfig', {})
-          if group.get('status')!='ACTIVE' or group.get('instanceTypes')!=['c6i.large'] or scaling.get('minSize',0)<1 or scaling.get('desiredSize',0)<1 or group.get('health',{}).get('issues'):
-              raise SystemExit('Compliance node group must be healthy, c6i.large, and have at least one desired node.')
+          if group.get('status')!='ACTIVE' or group.get('instanceTypes')!=['c6i.large'] or scaling.get('minSize',0)<2 or scaling.get('desiredSize',0)<2 or group.get('health',{}).get('issues'):
+              raise SystemExit('Compliance node group must be healthy c6i.large capacity with at least two minimum and desired nodes.')
           nodes=json.load(open(sys.argv[2]))['items']
           ready=[node for node in nodes if any(c.get('type')=='Ready' and c.get('status')=='True' for c in node['status'].get('conditions',[]))]
-          if not ready:
-              raise SystemExit('Compliance node group has no Ready Kubernetes node.')
+          zones={node.get('metadata',{}).get('labels',{}).get('topology.kubernetes.io/zone') for node in ready}
+          if len(ready)<2 or len(zones)<2 or None in zones:
+              raise SystemExit('Compliance needs Ready c6i.large nodes in both staging Availability Zones.')
           cpu=0
           memory=0
           for node in ready:

@@ -3,7 +3,7 @@ kind: StorageClass
 metadata:
   name: ebs-gp3
 provisioner: ebs.csi.aws.com
-reclaimPolicy: Delete
+reclaimPolicy: Retain
 allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer
 parameters:

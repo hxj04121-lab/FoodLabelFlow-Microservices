@@ -8,7 +8,7 @@ output "autoscaler_node_groups" {
     {
       general = {
         asg_name = aws_eks_node_group.general.resources[0].autoscaling_groups[0].name
-        min_size = 1
+        min_size = 2
         max_size = 3
       }
     },

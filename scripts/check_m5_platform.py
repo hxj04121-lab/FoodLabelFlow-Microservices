@@ -26,13 +26,13 @@ expected = {
     "formulation": {"specification-published"},
     "label-workflow": {"formula-published", "impact-finding"},
 }
-assert len(queues) == 12, "each of six consumer queues needs one durable queue and one DLQ"
-assert len(bindings) == 13 and len(policies) == 6, \
-    "six queues need six event and six DLQ bindings, plus the second LabelPublished routing key"
+assert len(queues) == 14, "the six service queues plus the isolated smoke queue each need a durable queue and one DLQ"
+assert len(bindings) == 15 and len(policies) == 7, \
+    "seven queues need seven event and seven DLQ bindings, plus the second LabelPublished routing key"
 assert not users and not permissions, "service users are owned by deploy/operators/rabbitmq/users.yaml"
 assert {x["metadata"]["name"] for x in policies} == {
     f"{service}-{queue}-delivery-policy" for service, names in expected.items() for queue in names
-}
+} | {"staging-smoke-smoke-delivery-policy"}
 for service, names in expected.items():
     entries = [q for q in queues if q["metadata"]["namespace"] == service]
     assert {q["spec"]["name"].split(".", 1)[1].removesuffix(".dlq") for q in entries} == names
@@ -58,11 +58,11 @@ assert len(impact_bindings) == 1
 assert impact_bindings[0]["routingKey"] == "impact.finding.v1", \
     "ImpactFinding.v1 must bind to canonical impact.finding.v1, not the hyphenated queue name"
 
-user_resources = list(yaml.safe_load_all((ROOT / "deploy/operators/rabbitmq/users.yaml").read_text()))
-user_resources = [item for item in user_resources if item]
-users = [item for item in user_resources if item["kind"] == "User"]
-permissions = [item for item in user_resources if item["kind"] == "Permission"]
-assert len(users) == len(permissions) == 4
+users = [item for item in yaml.safe_load_all((ROOT / "deploy/operators/rabbitmq/users.yaml").read_text()) if item]
+permissions = [item for item in yaml.safe_load_all((ROOT / "deploy/operators/rabbitmq/permissions.yaml").read_text()) if item]
+assert len(users) == len(permissions) == 5
+assert all(item["kind"] == "User" for item in users)
+assert all(item["kind"] == "Permission" for item in permissions)
 for service in ("specification", *expected):
     user = next(item for item in permissions if item["spec"]["user"] == f"{service}-rabbitmq")
     assert user["metadata"]["namespace"] == service
@@ -78,6 +78,8 @@ cluster = yaml.safe_load((ROOT / "deploy/operators/rabbitmq/rabbitmq-cluster.yam
 assert cluster["spec"]["replicas"] == 3
 assert cluster["spec"]["persistence"] == {"storageClassName": "ebs-gp3", "storage": "8Gi"}
 assert "default_queue_type = quorum" in cluster["spec"]["rabbitmq"]["additionalConfig"]
+assert cluster["spec"]["override"]["statefulSet"]["spec"]["persistentVolumeClaimRetentionPolicy"] == {"whenDeleted": "Retain", "whenScaled": "Retain"}
+assert users[-1]["metadata"]["name"] == permissions[-1]["metadata"]["name"] == "staging-smoke"
 
 network = list(yaml.safe_load_all(render("deploy/helm/platform-network-policies")))
 names = {item["metadata"]["name"] for item in network if item}
@@ -146,7 +148,30 @@ deploy_steps = service_workflow["jobs"]["deploy"]["steps"]
 assert next(i for i, step in enumerate(deploy_steps) if step.get("name") == "Create the service runtime Secret without logging values") < next(
     i for i, step in enumerate(deploy_steps) if step.get("name") == "Configure EKS context and deploy commit-pinned image"
 )
-assert 'enableNetworkPolicy = "true"' in (ROOT / "infra/terraform/modules/eks-addons/addons.tf").read_text()
+addons = (ROOT / "infra/terraform/modules/eks-addons/addons.tf").read_text()
+assert 'aws-ebs-csi-driver' in addons
+assert 'helm_release' not in addons and 'aws_load_balancer_controller' not in addons
+assert 'enableNetworkPolicy' not in addons, "Enabling storage foundations must not rewrite existing node network policy."
+
+rabbitmq_workflow = yaml.load((ROOT / ".github/workflows/deploy-rabbitmq.yml").read_text(), Loader=yaml.BaseLoader)
+assert list(rabbitmq_workflow["on"]) == ["workflow_dispatch"]
+rabbitmq_job = rabbitmq_workflow["jobs"]["deploy"]
+assert rabbitmq_job["if"] == "github.ref == 'refs/heads/main'"
+assert rabbitmq_job["runs-on"] == ["self-hosted", "linux", "staging-vpc"]
+assert rabbitmq_job["environment"] == "staging"
+assert rabbitmq_job["permissions"] == {"contents": "read", "id-token": "write"}
+assert rabbitmq_job["env"]["AWS_OPERATOR_INSTALL_ROLE_ARN"] == "${{ vars.AWS_OPERATOR_INSTALL_ROLE_ARN }}"
+rabbitmq_steps = rabbitmq_job["steps"]
+rabbitmq_script = "\n".join(step.get("run", "") for step in rabbitmq_steps)
+assert "env -u AVAILABLE_CREDIT_USD" in rabbitmq_script and "--approved-spend-usd \"$APPROVED_STAGING_SPEND_USD\" --require-gate" in rabbitmq_script
+assert "terraform apply" not in rabbitmq_script and "kubectl create namespace" not in rabbitmq_script
+assert all(url in rabbitmq_script for url in ("cert-manager/releases/download/v1.21.2", "cluster-operator/releases/download/v2.22.3", "messaging-topology-operator/releases/download/v1.20.2"))
+topology_step = next(step["run"] for step in rabbitmq_steps if step.get("name") == "Apply durable topology from the reviewed chart")
+assert topology_step.index("00-exchanges") < topology_step.index("10-queues") < topology_step.index("20-bindings") < topology_step.index("30-policies")
+assert "staging-smoke.smoke" in rabbitmq_script and 'delivery_mode\\":2' in rabbitmq_script
+for step in rabbitmq_steps:
+    if step.get("run"):
+        subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
 
 compliance_caller = yaml.load((ROOT / ".github/workflows/compliance-kind-ci.yml").read_text(), Loader=yaml.BaseLoader)
 compliance_inputs = compliance_caller["jobs"]["compliance"]["with"]
