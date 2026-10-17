@@ -201,6 +201,11 @@ terraform_plan_script = "\n".join(step.get("run", "") for step in terraform_plan
 assert "terraform state list" in terraform_plan_script and "terraform plan" in terraform_plan_script
 assert "aws s3api head-object" in terraform_plan_script and "spectrace/staging/terraform.tfstate" in terraform_plan_script
 assert "foodlabelflow-staging-tfstate-679857346122-ap-southeast-1" in terraform_plan_script
+for planned_var in (
+    "-var=enable_eks=true", "-var=enable_eks_addons=true", "-var=manage_vpc_cni=false",
+    "-var=general_desired_size=3", "-var=enable_compliance_node_group=true", "-var=compliance_desired_size=2",
+):
+    assert planned_var in terraform_plan_script, f"Protected Plan must explicitly review {planned_var}."
 assert "terraform apply" not in terraform_plan_script and "terraform import" not in terraform_plan_script
 assert "scripts/aws_staging_budget.py --hours" in terraform_plan_script
 for step in rabbitmq_steps:
