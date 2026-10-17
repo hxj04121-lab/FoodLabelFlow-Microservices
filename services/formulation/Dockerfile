@@ -11,9 +11,9 @@ RUN mvn -B -ntp -q -f services/formulation/pom.xml dependency:go-offline
 COPY services/formulation/src services/formulation/src
 RUN mvn -B -ntp -q -f services/formulation/pom.xml -DskipTests package
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-RUN useradd --system --uid 10001 spectrace
+RUN adduser -S -D -H -u 10001 spectrace
 COPY --from=build /workspace/services/formulation/target/app.jar app.jar
 USER 10001
 EXPOSE 8080
