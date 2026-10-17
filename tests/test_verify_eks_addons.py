@@ -27,7 +27,7 @@ class VerifyAddonsTest(unittest.TestCase):
     def run_check(self, mode="foundations", *, enforced=True, encrypted=True,
                   gateway_healthy=True, keycloak_healthy=True, correct_route=True,
                   correct_gateway_route=True, correct_vpc=True, keycloak_binding=True,
-                  gateway_has_targets=True, keycloak_has_targets=True):
+                  gateway_has_targets=True, keycloak_has_targets=True, reclaim_policy="Retain"):
         rules = [
             {"Conditions": [{"Field": "path-pattern", "Values": ["/auth/*"]}],
              "Actions": [{"Type": "forward", "TargetGroupArn": KEYCLOAK_TG}]},
@@ -45,7 +45,7 @@ class VerifyAddonsTest(unittest.TestCase):
             ]}}}},
             "apiservice": {"status": {"conditions": [{"type": "Available", "status": "True"}]}},
             "storageclass": {"provisioner": "ebs.csi.aws.com", "volumeBindingMode": "WaitForFirstConsumer",
-                             "reclaimPolicy": "Delete", "allowVolumeExpansion": True,
+                             "reclaimPolicy": reclaim_policy, "allowVolumeExpansion": True,
                              "parameters": {"type": "gp3", "encrypted": str(encrypted).lower()}},
             "networkpolicy": {"items": [
                 self.policy("kube-system", "stcn-kube-system-required-traffic", {}),
@@ -137,6 +137,15 @@ else:
 
     def test_unencrypted_storage_is_rejected(self):
         self.assertNotEqual(self.run_check(encrypted=False).returncode, 0)
+
+    def test_nonretained_storage_is_rejected(self):
+        self.assertNotEqual(self.run_check(reclaim_policy="Delete").returncode, 0)
+
+    def test_addons_module_does_not_own_existing_controllers_or_network_policies(self):
+        module = ROOT / "infra/terraform/modules/eks-addons"
+        source = "\n".join(path.read_text() for path in module.glob("*.tf"))
+        self.assertNotRegex(source, r'resource\s+"helm_release"')
+        self.assertNotRegex(source, r'resource\s+"kubernetes_manifest"\s+"(?:keycloak|network_policy)')
 
     def test_https_path_routes_and_both_bindings(self):
         result = self.run_check("deploy")

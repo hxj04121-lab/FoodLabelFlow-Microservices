@@ -13,6 +13,7 @@ on:
       - '.github/workflows/deploy-frontend.yml'
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
+      - 'scripts/verify_eks_addons.sh'
       - 'scripts/aws_staging_budget.py'
       - 'infra/aws-staging-budget.json'
       - 'scripts/staging/**'
@@ -25,6 +26,7 @@ on:
       - 'tests/test_staging_window.py'
       - 'tests/test_aws_staging_budget.py'
       - 'tests/test_rabbitmq_safe_apply.py'
+      - 'tests/test_verify_eks_addons.py'
   push:
     branches: [main]
     paths:
@@ -38,6 +40,7 @@ on:
       - '.github/workflows/deploy-frontend.yml'
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
+      - 'scripts/verify_eks_addons.sh'
       - 'scripts/aws_staging_budget.py'
       - 'infra/aws-staging-budget.json'
       - 'scripts/staging/**'
@@ -50,6 +53,7 @@ on:
       - 'tests/test_staging_window.py'
       - 'tests/test_aws_staging_budget.py'
       - 'tests/test_rabbitmq_safe_apply.py'
+      - 'tests/test_verify_eks_addons.py'
 
 permissions:
   contents: read
@@ -89,7 +93,9 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_alloy_dlq_scrape.py' -v
       - name: Verify RabbitMQ safe create and retry behavior
         run: python3 -m unittest discover -s tests -p 'test_rabbitmq_safe_apply.py' -v
-      - run: bash -n scripts/verify_eks_addons.sh
+      - run: |
+          bash -n scripts/verify_eks_addons.sh
+          python3 -m unittest discover -s tests -p 'test_verify_eks_addons.py' -v
       - run: kubectl kustomize deploy/operators >/dev/null
       - run: kubectl kustomize deploy/operators/rabbitmq >/dev/null
       - uses: aquasecurity/trivy-action@v0.36.0
