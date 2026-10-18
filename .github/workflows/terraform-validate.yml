@@ -215,7 +215,17 @@ jobs:
               'module.eks_addons[0].helm_release.network_policies' \
               'module.eks_addons[0].helm_release.cluster_autoscaler' \
               'module.eks_addons[0].helm_release.metrics_server' \
-              'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_role["keycloak"]'; do
+              'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_role["gateway"]' \
+              'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_role["keycloak"]' \
+              'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_role["frontend"]' \
+              'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_rolebinding["gateway"]' \
+              'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_rolebinding["keycloak"]' \
+              'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_rolebinding["frontend"]' \
+              'module.eks_addons[0].kubernetes_manifest.workload_namespace["gateway"]' \
+              'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak"]' \
+              'module.eks_addons[0].kubernetes_manifest.workload_namespace["observability"]' \
+              'module.eks_addons[0].kubernetes_manifest.workload_namespace["rabbitmq-system"]' \
+              'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak-system"]'; do
               if grep -Fxq "$address" "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"; then
                 printf -- '- `%s`: owned by Terraform State; inspect its planned action.\n' "$address"
               else

@@ -34,6 +34,17 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
             "module.rds[0].aws_db_instance.this",
             "module.edge[0].aws_lb.this",
             "module.edge[0].aws_lb_target_group.gateway",
+            'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_role["gateway"]',
+            'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_role["keycloak"]',
+            'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_role["frontend"]',
+            'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_rolebinding["gateway"]',
+            'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_rolebinding["keycloak"]',
+            'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_rolebinding["frontend"]',
+            'module.eks_addons[0].kubernetes_manifest.workload_namespace["gateway"]',
+            'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak"]',
+            'module.eks_addons[0].kubernetes_manifest.workload_namespace["observability"]',
+            'module.eks_addons[0].kubernetes_manifest.workload_namespace["rabbitmq-system"]',
+            'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak-system"]',
         ):
             self.assertIn(address, workflow)
         self.assertIn("does not prove there is no AWS drift", workflow)
