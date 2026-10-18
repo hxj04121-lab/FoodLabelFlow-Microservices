@@ -129,6 +129,7 @@ jobs:
       EXPERIMENT_HOURS: ${{ inputs.experiment_hours }}
       K6_HOURS: ${{ inputs.k6_hours }}
       STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
+      M5_TF_TEMP_SUFFIX: foodlabelflow-m5-plan-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -137,12 +138,15 @@ jobs:
       - name: Validate the modeled staging window and publish the cost estimate
         run: |
           set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX"
+          chmod 700 "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX"
           test -n "$STAGING_WINDOW_HOURS" && test -n "$STAGING_WINDOW_END_SGT"
-          python3 platform/staging/validate_window.py "$STAGING_WINDOW_HOURS" "$STAGING_WINDOW_END_SGT" > "$RUNNER_TEMP/staging-window.json"
+          python3 platform/staging/validate_window.py "$STAGING_WINDOW_HOURS" "$STAGING_WINDOW_END_SGT" > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging-window.json"
           {
             echo '## Modeled staging window'
             echo '```json'
-            cat "$RUNNER_TEMP/staging-window.json"
+            cat "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging-window.json"
             echo '```'
             echo
             echo '## Estimated staging cost (credit remains unverified)'
@@ -161,7 +165,7 @@ jobs:
           test "$TF_STATE_KEY" = terraform.tfstate
           test "$STAGING_TF_WORKSPACE" = staging
           umask 077
-          printf '%s' "$TF_PLAN_VARS_JSON" > "$RUNNER_TEMP/staging.tfvars.json"
+          printf '%s' "$TF_PLAN_VARS_JSON" > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfvars.json"
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
@@ -171,8 +175,8 @@ jobs:
           set -euo pipefail
           test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
           aws s3api head-object --bucket "$TF_STATE_BUCKET" --key spectrace/staging/terraform.tfstate \
-            --query '{VersionId:VersionId,LastModified:LastModified,Size:ContentLength}' --output json > "$RUNNER_TEMP/staging-state-head.json"
-          actual_version_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["VersionId"])' "$RUNNER_TEMP/staging-state-head.json")"
+            --query '{VersionId:VersionId,LastModified:LastModified,Size:ContentLength}' --output json > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging-state-head.json"
+          actual_version_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["VersionId"])' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging-state-head.json")"
           test "$actual_version_id" != "None" && test "$actual_version_id" != "null"
           test "$actual_version_id" = "$EXPECTED_STATE_VERSION_ID"
           {
@@ -180,7 +184,7 @@ jobs:
             echo 'S3 key: `spectrace/staging/terraform.tfstate` (existing object required; no workspace creation or state migration)'
             echo 'The supplied CloudShell VersionId must match this object before planning; an unchanged VersionId does not prove there is no AWS drift.'
             echo '```json'
-            cat "$RUNNER_TEMP/staging-state-head.json"
+            cat "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging-state-head.json"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Initialize the existing protected state
@@ -190,16 +194,16 @@ jobs:
           terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=$TF_STATE_KEY" -backend-config="region=$AWS_REGION" \
             -backend-config="workspace_key_prefix=spectrace" \
-            -backend-config="encrypt=true" -backend-config="use_lockfile=true" > "$RUNNER_TEMP/terraform-init.log" 2>&1
-          terraform workspace select "$STAGING_TF_WORKSPACE" > "$RUNNER_TEMP/terraform-workspace.log" 2>&1
+            -backend-config="encrypt=true" -backend-config="use_lockfile=true" > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-init.log" 2>&1
+          terraform workspace select "$STAGING_TF_WORKSPACE" > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-workspace.log" 2>&1
           test "$(terraform workspace show)" = "$STAGING_TF_WORKSPACE"
-          terraform state list > "$RUNNER_TEMP/terraform-state-addresses.txt"
-          grep -Fxq 'module.eks[0].aws_eks_cluster.this' "$RUNNER_TEMP/terraform-state-addresses.txt"
-          grep -Fxq 'module.network.aws_vpc.this' "$RUNNER_TEMP/terraform-state-addresses.txt"
-          grep -Fxq 'module.eks[0].aws_eks_node_group.general' "$RUNNER_TEMP/terraform-state-addresses.txt"
-          grep -Fxq 'module.rds[0].aws_db_instance.this' "$RUNNER_TEMP/terraform-state-addresses.txt"
-          grep -Fxq 'module.edge[0].aws_lb.this' "$RUNNER_TEMP/terraform-state-addresses.txt"
-          grep -Fxq 'module.edge[0].aws_lb_target_group.gateway' "$RUNNER_TEMP/terraform-state-addresses.txt"
+          terraform state list > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"
+          grep -Fxq 'module.eks[0].aws_eks_cluster.this' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"
+          grep -Fxq 'module.network.aws_vpc.this' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"
+          grep -Fxq 'module.eks[0].aws_eks_node_group.general' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"
+          grep -Fxq 'module.rds[0].aws_db_instance.this' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"
+          grep -Fxq 'module.edge[0].aws_lb.this' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"
+          grep -Fxq 'module.edge[0].aws_lb_target_group.gateway' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"
           {
             echo '## Existing Terraform ownership checks'
             echo 'Verified workspace: `staging`; required VPC, EKS cluster/general node group, RDS, ALB, and Gateway target-group addresses are present.'
@@ -212,7 +216,7 @@ jobs:
               'module.eks_addons[0].helm_release.cluster_autoscaler' \
               'module.eks_addons[0].helm_release.metrics_server' \
               'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_role["keycloak"]'; do
-              if grep -Fxq "$address" "$RUNNER_TEMP/terraform-state-addresses.txt"; then
+              if grep -Fxq "$address" "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"; then
                 printf -- '- `%s`: owned by Terraform State; inspect its planned action.\n' "$address"
               else
                 printf -- '- `%s`: not in Terraform State; out-of-state Helm/Kubernetes ownership remains unverified.\n' "$address"
@@ -223,10 +227,10 @@ jobs:
         working-directory: infra/terraform
         run: |
           umask 077
-          if ! terraform plan -input=false -no-color -var-file="$RUNNER_TEMP/staging.tfvars.json" \
+          if ! terraform plan -input=false -no-color -var-file="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfvars.json" \
             -var=enable_eks=true -var=enable_eks_addons=true -var=manage_vpc_cni=false \
             -var=general_desired_size=3 -var=enable_compliance_node_group=true -var=compliance_desired_size=2 \
-            -out="$RUNNER_TEMP/staging.tfplan" > "$RUNNER_TEMP/terraform-plan.log" 2>&1; then
+            -out="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-plan.log" 2>&1; then
             echo '::error::Read-only plan failed; inspect the restricted runner log. No Apply was executed.'
             exit 1
           fi
@@ -234,8 +238,8 @@ jobs:
         run: |
           set -euo pipefail
           aws s3api head-object --bucket "$TF_STATE_BUCKET" --key spectrace/staging/terraform.tfstate \
-            --query '{VersionId:VersionId,LastModified:LastModified,Size:ContentLength}' --output json > "$RUNNER_TEMP/staging-state-head-after.json"
-          after_version_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["VersionId"])' "$RUNNER_TEMP/staging-state-head-after.json")"
+            --query '{VersionId:VersionId,LastModified:LastModified,Size:ContentLength}' --output json > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging-state-head-after.json"
+          after_version_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["VersionId"])' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging-state-head-after.json")"
           test "$after_version_id" != "None" && test "$after_version_id" != "null"
           test "$after_version_id" = "$EXPECTED_STATE_VERSION_ID"
           echo 'S3 State VersionId was unchanged before and after this read-only Plan. This does not prove absence of AWS drift.' >> "$GITHUB_STEP_SUMMARY"
@@ -243,9 +247,28 @@ jobs:
         working-directory: infra/terraform
         run: |
           set -euo pipefail
-          if ! terraform show -json "$RUNNER_TEMP/staging.tfplan" | python3 "$GITHUB_WORKSPACE/scripts/terraform_plan_summary.py" >> "$GITHUB_STEP_SUMMARY"; then
+          if ! terraform show -json "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" | python3 "$GITHUB_WORKSPACE/scripts/terraform_plan_summary.py" >> "$GITHUB_STEP_SUMMARY"; then
             echo '::error::The redacted plan summary failed or found a protected foundation delete/replacement; no Apply was executed.'
             exit 1
           fi
-          sha256sum "$RUNNER_TEMP/staging.tfplan"
+          sha256sum "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan"
           echo "Read-only plan completed for source $GITHUB_SHA. No Apply was executed."
+      - name: Remove private Terraform plan artifacts
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$RUNNER_TEMP" "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX" <<'PY'
+          from pathlib import Path
+          import shutil
+          import sys
+
+          runner_temp = Path(sys.argv[1]).resolve()
+          plan_dir = Path(sys.argv[2])
+          if plan_dir.parent.resolve() != runner_temp or not plan_dir.name.startswith("foodlabelflow-m5-plan-"):
+              raise SystemExit("refusing to remove a path outside the dedicated Plan temp directory")
+          if plan_dir.is_symlink():
+              plan_dir.unlink()
+          elif plan_dir.exists():
+              shutil.rmtree(plan_dir)
+          PY

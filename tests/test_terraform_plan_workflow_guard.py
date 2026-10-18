@@ -38,6 +38,32 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
             self.assertIn(address, workflow)
         self.assertIn("does not prove there is no AWS drift", workflow)
 
+    def test_private_plan_artifacts_are_removed_after_success_or_failure(self):
+        workflow = WORKFLOW.read_text()
+
+        self.assertIn('M5_TF_TEMP_SUFFIX: foodlabelflow-m5-plan-${{ github.run_id }}-${{ github.run_attempt }}', workflow)
+        self.assertIn('if: ${{ always() }}', workflow)
+        self.assertIn('name: Remove private Terraform plan artifacts', workflow)
+        self.assertIn('shutil.rmtree(plan_dir)', workflow)
+        self.assertGreater(
+            workflow.index('name: Remove private Terraform plan artifacts'),
+            workflow.index('sha256sum "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan"'),
+        )
+        for filename in (
+            "staging-window.json",
+            "staging.tfvars.json",
+            "staging.tfplan",
+            "terraform-state-addresses.txt",
+            "terraform-init.log",
+            "terraform-workspace.log",
+            "terraform-plan.log",
+            "staging-state-head.json",
+            "staging-state-head-after.json",
+        ):
+            self.assertIn(f'$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/{filename}', workflow)
+        self.assertNotIn('$RUNNER_TEMP/staging.tfvars.json', workflow)
+        self.assertNotIn('$RUNNER_TEMP/staging.tfplan', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
