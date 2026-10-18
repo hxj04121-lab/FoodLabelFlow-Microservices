@@ -19,7 +19,7 @@ public final class ZerodepDockerHttpClient implements DockerHttpClient {
 
     private final ApacheDockerHttpClient delegate;
 
-    private ZerodepDockerHttpClient(ApacheDockerHttpClient delegate) {
+    ZerodepDockerHttpClient(ApacheDockerHttpClient delegate) {
         this.delegate = delegate;
     }
 
