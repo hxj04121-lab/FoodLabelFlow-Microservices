@@ -1,6 +1,5 @@
 package com.spectrace.platform.test;
 
-import org.testcontainers.mysql.MySQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 
 /** Container images pinned to the versions used locally (deploy/local) and in staging. */
@@ -13,8 +12,8 @@ public final class SpectraceContainers {
     }
 
     /** MySQL with the service's own database name, as on RDS (architecture v3 §7.1). */
-    public static MySQLContainer mysql(String database) {
-        return new MySQLContainer(MYSQL_IMAGE).withDatabaseName(database);
+    public static SpectraceMySqlContainer mysql(String database) {
+        return new SpectraceMySqlContainer(MYSQL_IMAGE).withDatabaseName(database);
     }
 
     public static RabbitMQContainer rabbitmq() {

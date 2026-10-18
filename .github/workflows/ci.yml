@@ -247,6 +247,17 @@ jobs:
           npx playwright test --grep-invert 'captures.*live'
           npm run test:signin
           npx nyc report --reporter=lcov --reporter=text-summary
+      - name: Upload browser-test failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonarqube-playwright-failure-evidence
+          path: |
+            frontend/test-results/**/test-failed-*.png
+            frontend/test-results/**/error-context.md
+            !frontend/test-results/signin/**
+          if-no-files-found: warn
+          retention-days: 7
       - name: Cache SonarQube packages
         uses: actions/cache@v4
         with:
