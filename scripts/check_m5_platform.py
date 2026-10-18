@@ -146,7 +146,12 @@ deploy_steps = service_workflow["jobs"]["deploy"]["steps"]
 assert next(i for i, step in enumerate(deploy_steps) if step.get("name") == "Create the service runtime Secret without logging values") < next(
     i for i, step in enumerate(deploy_steps) if step.get("name") == "Configure EKS context and deploy commit-pinned image"
 )
-assert 'enableNetworkPolicy = "true"' in (ROOT / "infra/terraform/modules/eks-addons/addons.tf").read_text()
+addons = (ROOT / "infra/terraform/modules/eks-addons/addons.tf").read_text()
+assert "aws-ebs-csi-driver" in addons
+assert "var.manage_vpc_cni ? 1 : 0" in addons
+assert "enableNetworkPolicy" not in addons, "Storage add-on planning must not rewrite the existing aws-node network policy configuration."
+assert "default     = false" in (ROOT / "infra/terraform/variables.tf").read_text()
+assert "-var=manage_vpc_cni=false" in (ROOT / ".github/workflows/terraform-validate.yml").read_text()
 
 compliance_caller = yaml.load((ROOT / ".github/workflows/compliance-kind-ci.yml").read_text(), Loader=yaml.BaseLoader)
 compliance_inputs = compliance_caller["jobs"]["compliance"]["with"]
