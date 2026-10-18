@@ -22,6 +22,14 @@ def fixture():
 
 
 class AwsStagingBudgetTests(unittest.TestCase):
+    def test_gateway_gate_uses_the_approved_window_without_unrequested_workloads(self):
+        workflow = Path(__file__).resolve().parents[1] / ".github/workflows/deploy-gateway.yml"
+        source = workflow.read_text()
+        self.assertIn(
+            'scripts/aws_staging_budget.py --require-gate --hours "$STAGING_WINDOW_HOURS" --experiment-hours 0 --k6-hours 0',
+            source,
+        )
+
     def test_unverified_quota_exits_nonzero(self):
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             with patch("sys.argv", ["aws_staging_budget.py", "quota"]):

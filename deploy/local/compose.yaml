@@ -5,8 +5,6 @@
 name: spectrace-local
 
 x-identity: &identity
-  OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://localhost:8180/auth/realms/spectrace}
-  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
   SPECTRACE_SECURITY_ISSUERURI: ${OIDC_ISSUER_URI:-http://localhost:8180/auth/realms/spectrace}
   SPECTRACE_SECURITY_JWKSETURI: http://keycloak:8080/auth/realms/spectrace/protocol/openid-connect/certs
   SPECTRACE_SECURITY_AUDIENCE: spectrace-api

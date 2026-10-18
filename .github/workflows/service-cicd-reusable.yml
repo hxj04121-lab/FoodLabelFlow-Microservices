@@ -131,9 +131,11 @@ jobs:
           MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
         run: |
           if [[ -n "$MAVEN_REACTOR_PROJECT" ]]; then
-            mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DsuppressionFiles="$GITHUB_WORKSPACE/.github/security/owasp-dependency-check-suppressions.xml"
+            # The check-only goal does not build reactor siblings; install them first so the service POM can resolve.
+            mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am -DskipTests install
+            mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DsuppressionFiles="$GITHUB_WORKSPACE/.github/security/owasp-dependency-check-suppressions.xml,$GITHUB_WORKSPACE/security/owasp-suppressions.xml"
           else
-            mvn -B -ntp -f "$SERVICE_PATH/pom.xml" org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DsuppressionFiles="$GITHUB_WORKSPACE/.github/security/owasp-dependency-check-suppressions.xml"
+            mvn -B -ntp -f "$SERVICE_PATH/pom.xml" org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DsuppressionFiles="$GITHUB_WORKSPACE/.github/security/owasp-dependency-check-suppressions.xml,$GITHUB_WORKSPACE/security/owasp-suppressions.xml"
           fi
 
   kind:
@@ -177,7 +179,7 @@ jobs:
           BUILD_CONTEXT="${BUILD_CONTEXT:-$SERVICE_PATH}"
           image="local/${SERVICE_NAME}:${GITHUB_SHA}"
           docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "$image" "$BUILD_CONTEXT"
-          kind load docker-image "$image"
+          kind load docker-image --name chart-testing "$image"
           echo "image=$image" >> "$GITHUB_ENV"
       - name: Trivy container image gate
         uses: aquasecurity/trivy-action@v0.36.0
@@ -186,7 +188,8 @@ jobs:
           image-ref: ${{ format('local/{0}:{1}', inputs.service_name, github.sha) }}
           severity: HIGH,CRITICAL
           exit-code: '1'
-      - name: Deploy service chart to kind
+      - id: deploy_kind
+        name: Deploy service chart to kind
         env:
           RELEASE: ${{ inputs.service_name }}
           NAMESPACE: ${{ inputs.namespace }}
@@ -202,7 +205,18 @@ jobs:
           helm upgrade --install "$RELEASE" "$CHART" --namespace "$NAMESPACE" --create-namespace \
             "${values_args[@]}" \
             --set image.repository="${image%:*}" --set image.tag="${image##*:}" --wait --timeout 5m
-          kubectl -n "$NAMESPACE" rollout status "deployment/$RELEASE" --timeout=180s
+          # helm --wait already gates deployment readiness; the chart full name is <release>-<service>.
+
+      - name: Capture safe kind readiness diagnostics
+        if: ${{ failure() && steps.deploy_kind.outcome == 'failure' }}
+        continue-on-error: true
+        env:
+          NAMESPACE: ${{ inputs.namespace }}
+        run: |
+          echo "Deployments, ReplicaSets, and Pods (no specs, env values, Secrets, or application logs):"
+          kubectl get deployments,replicasets,pods --namespace "$NAMESPACE" --output=wide || true
+          echo "Warning events:"
+          kubectl get events --namespace "$NAMESPACE" --field-selector=type=Warning --sort-by=.metadata.creationTimestamp || true
 
   publish:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -215,7 +229,8 @@ jobs:
       image: ${{ steps.image.outputs.ref }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build commit-pinned image locally
+      - id: build
+        name: Build commit-pinned image locally
         env:
           SERVICE_NAME: ${{ inputs.service_name }}
           SERVICE_PATH: ${{ inputs.service_path }}
@@ -224,11 +239,12 @@ jobs:
         run: |
           BUILD_CONTEXT="${BUILD_CONTEXT:-$SERVICE_PATH}"
           docker build -f "$SERVICE_PATH/$DOCKERFILE" -t "ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}" "$BUILD_CONTEXT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}/${SERVICE_NAME}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
       - name: Trivy container image gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
-          image-ref: ghcr.io/${{ github.repository }}/${{ inputs.service_name }}:${{ github.sha }}
+          image-ref: ${{ steps.build.outputs.image }}
           severity: HIGH,CRITICAL
           exit-code: '1'
       - uses: docker/login-action@v3

@@ -10,6 +10,15 @@ function jwt(payload: object) {
   return `${input}.${sign('RSA-SHA256', Buffer.from(input), privateKey).toString('base64url')}`
 }
 
+test('optional font CSS cannot block the sign-in entry when the font host hangs', async ({ page }) => {
+  let requested = false
+  await page.route('https://fonts.googleapis.com/**', () => { requested = true })
+  // Leave the font request pending: authentication must load without its response.
+  await page.goto('/', { timeout: 5000 })
+  await expect(page.getByRole('button', { name: 'Continue with Keycloak', exact: true })).toBeEnabled()
+  await expect.poll(() => requested).toBe(true)
+})
+
 test('root metadata resolves same-origin and rejects a foreign Gateway target', async ({ request, baseURL }) => {
   const response = await request.get('g1-release.json')
   expect(response.status()).toBe(200)
