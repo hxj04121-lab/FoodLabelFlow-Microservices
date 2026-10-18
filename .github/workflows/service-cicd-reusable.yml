@@ -228,7 +228,8 @@ jobs:
           [[ -z "$KIND_VALUES_FILE" ]] || values_args+=(--values "$KIND_VALUES_FILE")
           helm upgrade --install "$RELEASE" "$CHART" --namespace "$NAMESPACE" --create-namespace \
             "${values_args[@]}" \
-            --set image.repository="${image%:*}" --set image.tag="${image##*:}" --wait --timeout 5m
+            --set image.repository="${image%:*}" --set image.tag="${image##*:}" \
+            --set-string image.digest= --wait --timeout 5m
           # helm --wait already gates deployment readiness; the chart full name is <release>-<service>.
 
       - name: Capture safe kind readiness diagnostics
