@@ -1,5 +1,11 @@
 # M5 Frontend Staging Handoff
 
+**18 October M3 image update:** the intended deployment image below has been
+superseded by the [verified M3 refresh](../swe5001/evidence/G1-M3-frontend-refresh-20261018.md).
+Current Helm/workflow pins use digest `sha256:51cec191cc08899cbbe0bb8d87bbceb02562351709312f64c9254c80ccbc5492`.
+The dated AWS, budget and deployment observations below remain historical evidence;
+M3 has not revalidated them or executed a protected release.
+
 **Evidence time:** 2026-10-17 16:26–16:30 Asia/Singapore
 
 **Deployment result:** BLOCKED; this change set has not been deployed. The Budget API forecast is USD 144.669 against the USD 120 monthly limit, so the protected budget gate must not be bypassed.

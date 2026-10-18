@@ -2,8 +2,8 @@ serviceName: frontend
 replicaCount: 1
 image:
   repository: ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend
-  tag: ad9bf12fc702ebd269a44cc2bedc02349c2fac81
-  digest: sha256:e6720ddc4416a153c5eecb11d8381bd9d2637e50f9ced6017d6b813f42047051
+  tag: ff58f59b366fed4368d183d55cf8bc93d8ea2580
+  digest: sha256:51cec191cc08899cbbe0bb8d87bbceb02562351709312f64c9254c80ccbc5492
   pullPolicy: IfNotPresent
 containerPort: 8080
 service:

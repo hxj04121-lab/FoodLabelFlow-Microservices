@@ -233,6 +233,15 @@ NOT RUN; no business workload readiness or E2E result is inferred from these
 public checks. M3's delivered image remains available for the owner-controlled
 frontend rollout.
 
+The [18 October frontend refresh](../evidence/G1-M3-frontend-refresh-20261018.md)
+adds the accepted PR74 design to a newly published, verified image and updates both
+deployment pins. Optional font CSS no longer blocks the login entry; the fresh
+fixture regression is 72/72, Pages 7/7 and root checks 3/3. The delivery receipt
+separates CI/image evidence from AWS rollout. A maker credential has now been
+delivered privately, but full expected subjects, checker/data inputs and a current
+window remain incomplete. The fresh root check is still 404, so staging browser
+acceptance and business E2E remain NOT RUN/PENDING.
+
 From `frontend`, use `npm run build`, `npm run test:types`, `npm run test:signin`,
 `npm run test:pages` and `npm run test:deployed-config` for independent validation.
 `npm run test:deployed` is the read-only live G1 smoke; `npm run test:demo` is the

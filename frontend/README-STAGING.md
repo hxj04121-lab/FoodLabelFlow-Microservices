@@ -4,6 +4,25 @@ This deploys the existing authenticated Workspace / Labels / Impact inbox at `/`
 It does not merge the separate legacy Catalog UI. The old `Dockerfile` and
 `nginx.conf` remain for the local baseline; use **Dockerfile.staging** for EKS.
 
+## Verified image refresh — 18 October 2026
+
+The current deployment candidate includes accepted main PR #74 and the optional-font
+loading fix. Image source: `ff58f59b366fed4368d183d55cf8bc93d8ea2580`.
+
+```text
+ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:51cec191cc08899cbbe0bb8d87bbceb02562351709312f64c9254c80ccbc5492
+```
+
+The matching SHA tag is `ff58f59b366fed4368d183d55cf8bc93d8ea2580`.
+Both the Helm values and all four protected-release digest guards now use this
+verified image. Port **8080**, static health **GET `/healthz` -> 200 `ok`**,
+root SPA, same-origin API and PKCE client configuration are unchanged.
+
+See the [18 October delivery and remaining acceptance steps](../docs/swe5001/evidence/G1-M3-frontend-refresh-20261018.md)
+and its [machine-readable receipt](../docs/swe5001/evidence/G1-M3-frontend-release-20261018.json).
+The image is published; the EKS deployment and ALB root cutover remain M5's protected
+release, subject to M1 approval. Image delivery is not live browser acceptance.
+
 ## Confirm before rollout
 
 | Input | Value / owner |
