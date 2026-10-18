@@ -144,16 +144,16 @@ jobs:
           MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
-          args=(-B -ntp org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DdataDirectory="$HOME/.cache/dependency-check" -DsuppressionFile="$GITHUB_WORKSPACE/security/owasp-suppressions.xml")
+          nvd_args=()
           if [[ -n "${NVD_API_KEY:-}" ]]; then
-            args+=("-DnvdApiKeyEnvironmentVariable=NVD_API_KEY")
+            nvd_args+=("-DnvdApiKeyEnvironmentVariable=NVD_API_KEY")
           fi
           if [[ -n "$MAVEN_REACTOR_PROJECT" ]]; then
             # The check-only goal does not build reactor siblings; install them first so the service POM can resolve.
             mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am -DskipTests install
-            mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am "${args[@]}"
+            mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DdataDirectory="$HOME/.cache/dependency-check" -DsuppressionFile="$GITHUB_WORKSPACE/security/owasp-suppressions.xml" "${nvd_args[@]}"
           else
-            mvn -B -ntp -f "$SERVICE_PATH/pom.xml" "${args[@]}"
+            mvn -B -ntp -f "$SERVICE_PATH/pom.xml" org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DdataDirectory="$HOME/.cache/dependency-check" -DsuppressionFile="$GITHUB_WORKSPACE/security/owasp-suppressions.xml" "${nvd_args[@]}"
           fi
       - name: Save Dependency-Check data cache
         if: ${{ always() && steps.dependency-check-cache-restore.outputs.cache-hit != 'true' }}
