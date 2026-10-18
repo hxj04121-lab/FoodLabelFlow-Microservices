@@ -124,7 +124,8 @@ jobs:
           path: ~/.cache/dependency-check
           key: ${{ runner.os }}-dependency-check-${{ steps.dependency-check-cache-key.outputs.date }}-${{ hashFiles('backend/pom.xml') }}
           restore-keys: |
-            ${{ runner.os }}-dependency-check-      - name: Trivy filesystem gate
+            ${{ runner.os }}-dependency-check-
+      - name: Trivy filesystem gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -153,7 +154,6 @@ jobs:
             mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am "${args[@]}"
           else
             mvn -B -ntp -f "$SERVICE_PATH/pom.xml" "${args[@]}"
-          fi
           fi
       - name: Save Dependency-Check data cache
         if: ${{ always() && steps.dependency-check-cache-restore.outputs.cache-hit != 'true' }}
