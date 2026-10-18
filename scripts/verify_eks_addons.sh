@@ -38,7 +38,7 @@ case "$mode" in
     ' >/dev/null
     kubectl -n kube-system rollout status deployment/ebs-csi-controller --timeout=180s
     kubectl get apiservice v1beta1.metrics.k8s.io -o json | jq -e 'any(.status.conditions[]; .type == "Available" and .status == "True")' >/dev/null
-    kubectl get storageclass ebs-gp3 -o json | jq -e '.provisioner == "ebs.csi.aws.com" and .volumeBindingMode == "WaitForFirstConsumer" and .reclaimPolicy == "Delete" and .parameters.type == "gp3" and .parameters.encrypted == "true" and .allowVolumeExpansion == true' >/dev/null
+    kubectl get storageclass ebs-gp3 -o json | jq -e '.provisioner == "ebs.csi.aws.com" and .volumeBindingMode == "WaitForFirstConsumer" and .reclaimPolicy == "Retain" and .parameters.type == "gp3" and .parameters.encrypted == "true" and .allowVolumeExpansion == true' >/dev/null
     kubectl --namespace kube-system get networkpolicies -o json | jq -e 'any(.items[]; .metadata.name == "stcn-kube-system-required-traffic")' >/dev/null
     kubectl --namespace "$gateway_namespace" get networkpolicies -o json | jq -e 'any(.items[]; .metadata.name == "stcn-default-deny-gateway")' >/dev/null
     if [[ "$mode" == "deploy" ]]; then

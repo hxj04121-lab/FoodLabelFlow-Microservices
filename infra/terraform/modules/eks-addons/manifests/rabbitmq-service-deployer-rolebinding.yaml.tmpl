@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spectrace-staging-deployer-rabbitmq
+  namespace: ${namespace}
+subjects:
+  - kind: Group
+    name: ${group}
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: spectrace-staging-deployer-rabbitmq
+  apiGroup: rbac.authorization.k8s.io

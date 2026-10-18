@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from pathlib import Path
 
 REGION = "ap-southeast-1"
+STAGING_SPEND_CAP_USD = Decimal("150")
 BULK = "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/{service}/current/{region}/index.csv"
 
 # Pricing rows are selected from AWS's public regional Price List CSVs. No AWS credentials are used.
@@ -100,8 +101,8 @@ def load_config(path, now=None):
     if data.get("region") != REGION:
         raise ValueError(f"region must be {REGION}")
     resources = data["resources"]
-    if resources.get("general_nodes") != 3 or resources.get("compliance_baseline_nodes") != 1 or resources.get("compliance_scaleout_max_nodes") != 3 or resources.get("k6_instance_type") != "c6i.large" or resources.get("rds_class") != "db.t3.small" or resources.get("rds_multi_az") is not True or resources.get("rds_gp3_gib") != 20:
-        raise ValueError("resource configuration differs from the approved STCN-37 architecture")
+    if resources.get("general_nodes") != 3 or resources.get("compliance_baseline_nodes") != 2 or resources.get("compliance_scaleout_max_nodes") != 2 or resources.get("k6_instance_type") != "c6i.large" or resources.get("rabbitmq_replicas") != 3 or resources.get("rabbitmq_pvc_gib") != 8 or resources.get("rds_class") != "db.t3.small" or resources.get("rds_multi_az") is not True or resources.get("rds_gp3_gib") != 20:
+        raise ValueError("resource configuration differs from the reviewed M5 staging architecture")
     if data.get("required_standard_vcpu") != 16 or data.get("recommended_standard_vcpu") != 20:
         raise ValueError("Standard On-Demand quota values must be 16 required and 20 recommended vCPU")
     max_age = decimal(data.get("pricing_max_age_hours"), "pricing_max_age_hours")
@@ -144,8 +145,8 @@ def estimate(data, hours, experiment_hours, k6_hours):
     r, a = data["resources"], data["assumptions"]
     hourly = [
         ("EKS standard control plane", "eks-standard-cluster-hour", 1, hours),
-        ("3 x t3.medium baseline nodes", "ec2-t3-medium-linux-hour", 3, hours),
-        ("Compliance baseline c6i.large", "ec2-c6i-large-linux-hour", 1, hours),
+        (f"{r['general_nodes']} x t3.medium baseline nodes", "ec2-t3-medium-linux-hour", r["general_nodes"], hours),
+        (f"{r['compliance_baseline_nodes']} x compliance c6i.large", "ec2-c6i-large-linux-hour", r["compliance_baseline_nodes"], hours),
         ("Compliance experiment scale-out c6i.large", "ec2-c6i-large-linux-hour", r["compliance_scaleout_max_nodes"], experiment_hours),
         ("k6 c6i.large", "ec2-c6i-large-linux-hour", 1, k6_hours),
         ("RDS db.t3.small Multi-AZ", "rds-mysql-db-t3-small-multi-az-hour", 1, hours),
@@ -165,9 +166,10 @@ def estimate(data, hours, experiment_hours, k6_hours):
     month_fraction = Decimal(str(hours)) / Decimal("730")
     storage = [
         ("RDS Multi-AZ gp3 storage (20 GiB)", "rds-mysql-gp3-multi-az-gib-month", r["rds_gp3_gib"] * month_fraction),
-        ("EBS gp3 root volumes assumption", "ebs-gp3-gib-month", a["ebs_gib_per_node"] * (3 + 1) * month_fraction),
+        ("EBS gp3 root volumes assumption", "ebs-gp3-gib-month", a["ebs_gib_per_node"] * (r["general_nodes"] + r["compliance_baseline_nodes"]) * month_fraction),
         ("Compliance scale-out EBS assumption", "ebs-gp3-gib-month", r["compliance_scaleout_max_nodes"] * a["ebs_gib_per_node"] * Decimal(str(experiment_hours)) / Decimal("730")),
         ("k6 EBS assumption", "ebs-gp3-gib-month", a["ebs_gib_per_node"] * Decimal(str(k6_hours)) / Decimal("730")),
+        (f"RabbitMQ retained gp3 PVCs ({r['rabbitmq_replicas']} x {r['rabbitmq_pvc_gib']} GiB)", "ebs-gp3-gib-month", r["rabbitmq_replicas"] * r["rabbitmq_pvc_gib"] * month_fraction),
         ("S3 state storage assumption", "s3-standard-gib-month", a["s3_state_gib"] * month_fraction),
     ]
     for label, sku, quantity in storage:
@@ -211,6 +213,8 @@ def report(data, hours, experiment_hours, k6_hours, credit, approved_spend=None,
     spend_amount = Decimal("0") if approved_spend is None else decimal(approved_spend, "owner-approved spend limit")
     if credit_amount < 0 or spend_amount < 0:
         raise ValueError("available credit and owner-approved spend limit must be non-negative")
+    if spend_amount > STAGING_SPEND_CAP_USD:
+        raise ValueError("owner-approved staging spend cannot exceed the STCN-17 USD 150 cap")
     remaining = credit_amount + spend_amount - final
     passed = final <= credit_amount + spend_amount
     print("Available AWS credit:      UNVERIFIED" if credit is None else f"Available AWS credit:      ${credit_amount:.2f} (explicit input)")

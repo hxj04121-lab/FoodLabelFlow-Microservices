@@ -30,6 +30,11 @@ class StagingWindowTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_window("1", "2026-10-17T17:00:00+08:00", self.now)
 
+    def test_rejects_a_shutdown_after_the_stcn17_authorization_expires(self):
+        self.assertEqual(build_window("2", "2026-10-23 08:00", self.now)["plannedEndSgt"], "2026-10-23T08:00:00+08:00")
+        with self.assertRaisesRegex(ValueError, "expires at 2026-10-23 00:00 UTC"):
+            build_window("2", "2026-10-23 08:01", self.now)
+
 
 if __name__ == "__main__":
     unittest.main()

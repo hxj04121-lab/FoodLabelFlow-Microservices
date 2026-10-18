@@ -47,10 +47,11 @@ class AwsStagingBudgetTests(unittest.TestCase):
         lines = dict(rows)
         p = {key: Decimal(row["price_usd"]) for key, row in data["prices"].items()}
         self.assertEqual(lines["3 x t3.medium baseline nodes"], 3 * 24 * p["ec2-t3-medium-linux-hour"])
-        self.assertEqual(lines["Compliance baseline c6i.large"], 24 * p["ec2-c6i-large-linux-hour"])
-        self.assertEqual(lines["Compliance experiment scale-out c6i.large"], 3 * 4 * p["ec2-c6i-large-linux-hour"])
+        self.assertEqual(lines["2 x compliance c6i.large"], 2 * 24 * p["ec2-c6i-large-linux-hour"])
+        self.assertEqual(lines["Compliance experiment scale-out c6i.large"], 2 * 4 * p["ec2-c6i-large-linux-hour"])
         self.assertEqual(lines["k6 c6i.large"], 2 * p["ec2-c6i-large-linux-hour"])
         self.assertEqual(lines["RDS db.t3.small Multi-AZ"], 24 * p["rds-mysql-db-t3-small-multi-az-hour"])
+        self.assertEqual(lines["RabbitMQ retained gp3 PVCs (3 x 8 GiB)"], Decimal("24") * (Decimal("24") / Decimal("730")) * p["ebs-gp3-gib-month"])
 
     def test_safety_margin_is_20_percent(self):
         data = fixture()
@@ -170,6 +171,9 @@ class AwsStagingBudgetTests(unittest.TestCase):
         for value in ('NaN', 'Infinity', '-Infinity', '-1'):
             with self.subTest(value=value):
                 self.assertEqual(self.run_cli('--require-gate', spend_env=value).returncode, 2)
+
+    def test_gate_cli_approved_spend_above_stcn17_cap_blocks(self):
+        self.assertEqual(self.run_cli('--require-gate', spend_env='150.01').returncode, 2)
 
     def test_gate_cli_invalid_balance_blocks(self):
         for value in ('NaN', 'Infinity', '-Infinity', '-1'):

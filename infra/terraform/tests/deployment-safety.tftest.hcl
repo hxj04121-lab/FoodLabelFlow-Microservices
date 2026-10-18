@@ -30,19 +30,11 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
   command = plan
   module { source = "./modules/eks-addons" }
   variables {
-    cluster_name                = "deployment-test"
-    cluster_version             = "1.36"
-    cluster_oidc_provider_arn   = "arn:aws:iam::000000000000:oidc-provider/oidc.eks.example.test/id/test"
-    cluster_autoscaler_role_arn = "arn:aws:iam::000000000000:role/test-autoscaler"
-    vpc_id                      = "vpc-test"
-    vpc_cidr                    = "10.0.0.0/16"
-    public_subnet_cidrs         = ["10.0.0.0/24", "10.0.1.0/24"]
-    private_subnet_cidrs        = ["10.0.16.0/24", "10.0.17.0/24"]
-    database_subnet_cidrs       = ["10.0.16.0/24", "10.0.17.0/24"]
-    workload_namespaces         = { gateway = "gateway", keycloak = "keycloak", rabbitmq = "rabbitmq", observability = "observability", specification = "specification", formulation = "formulation", compliance = "compliance", label-workflow = "label-workflow", frontend = "frontend" }
-    operator_namespaces         = { rabbitmq = "rabbitmq-system", keycloak = "keycloak-system" }
-    deployer_kubernetes_group   = "spectrace-staging-deploy"
-    node_groups                 = { general = { asg_name = "test-general", min_size = 1, max_size = 3 }, compliance = { asg_name = "test-compliance", min_size = 1, max_size = 4 } }
+    cluster_name              = "deployment-test"
+    cluster_version           = "1.36"
+    cluster_oidc_provider_arn = "arn:aws:iam::000000000000:oidc-provider/oidc.eks.example.test/id/test"
+    workload_namespaces       = { rabbitmq = "rabbitmq", specification = "specification", formulation = "formulation", compliance = "compliance", label-workflow = "label-workflow", frontend = "frontend" }
+    deployer_kubernetes_group = "spectrace-staging-deploy"
   }
   assert {
     condition     = length(aws_eks_addon.vpc_cni) == 0 && !contains(keys(aws_iam_role.addons), "vpc_cni") && aws_eks_addon.ebs_csi.addon_name == "aws-ebs-csi-driver"
@@ -53,41 +45,28 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
     error_message = "Storage must remain encrypted and bind only in the consumer's AZ."
   }
   assert {
-    condition     = yamldecode(helm_release.cluster_autoscaler.values[0]).fullnameOverride == "cluster-autoscaler" && yamldecode(helm_release.cluster_autoscaler.values[0]).image.tag == "v1.36.0" && yamldecode(helm_release.load_balancer_controller.values[0]).replicaCount == 2
-    error_message = "The controllers must use stable names, matching Kubernetes minor version, and declared replicas."
+    condition     = kubernetes_manifest.ebs_gp3_storage_class.manifest.reclaimPolicy == "Retain"
+    error_message = "RabbitMQ data volumes must survive PVC deletion until reviewed cleanup."
   }
   assert {
-    condition = (
-      length(jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement) == 2 &&
-      toset(one([
-        for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Action
-        if contains(statement.Action, "elasticloadbalancing:RegisterTargets")
-        ])) == toset([
-        "elasticloadbalancing:ModifyTargetGroup",
-        "elasticloadbalancing:ModifyTargetGroupAttributes",
-        "elasticloadbalancing:RegisterTargets",
-        "elasticloadbalancing:DeregisterTargets"
-      ]) &&
-      toset(one([
-        for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Resource
-        if contains(statement.Action, "elasticloadbalancing:RegisterTargets")
-        ])) == toset([
-        "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-keycloak/6c9f10642dd79519",
-        "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-gateway/b8c46985507e8b58",
-        "arn:aws:elasticloadbalancing:ap-southeast-1:679857346122:targetgroup/foodlabelflow-staging-frontend/*"
-        ]) && alltrue([
-        for action in flatten([for statement in jsondecode(aws_iam_policy.load_balancer_controller.policy).Statement : statement.Action]) :
-        startswith(action, "ec2:Describe") || startswith(action, "ec2:Get") ||
-        startswith(action, "elasticloadbalancing:Describe") ||
-        contains([
-          "elasticloadbalancing:ModifyTargetGroup",
-          "elasticloadbalancing:ModifyTargetGroupAttributes",
-          "elasticloadbalancing:RegisterTargets",
-          "elasticloadbalancing:DeregisterTargets"
-        ], action)
-      ])
-    )
-    error_message = "The TGB-only controller must register targets only on the two existing groups and the name-scoped frontend group, without mutating ALB infrastructure."
+    condition     = toset([for namespace in kubernetes_manifest.workload_namespace : namespace.manifest.metadata.name]) == toset(["rabbitmq", "specification", "formulation", "compliance", "label-workflow", "frontend"])
+    error_message = "Only the six confirmed missing workload namespaces may be created."
+  }
+  assert {
+    condition = kubernetes_manifest.staging_deployer_node_reader.manifest.rules == [{
+      apiGroups = [""]
+      resources = ["nodes"]
+      verbs     = ["get", "list", "watch"]
+      }] && kubernetes_manifest.staging_deployer_node_reader_binding.manifest.subjects == [{
+      kind     = "Group"
+      name     = "spectrace-staging-deploy"
+      apiGroup = "rbac.authorization.k8s.io"
+    }]
+    error_message = "The staging deployer may only read node inventory through its existing Kubernetes group."
+  }
+  assert {
+    condition     = length(aws_iam_role.addons) == 1 && contains(keys(aws_iam_role.addons), "ebs_csi") && length(aws_eks_addon.vpc_cni) == 0
+    error_message = "EBS CSI is the only enabled add-on; the live VPC CNI and load balancer controller remain externally owned."
   }
 }
 
@@ -163,7 +142,7 @@ run "addons_preserve_existing_edge_and_cni" {
     outputs = { vpc_cni_addon_version = null, ebs_csi_addon_version = "test-version" }
   }
   assert {
-    condition     = length(module.edge) == 1 && length(aws_iam_role_policy_attachment.node_vpc_cni_fallback) == 1 && aws_security_group_rule.gateway_from_alb[0].from_port == 8080
+    condition     = length(module.edge) == 1 && length(aws_iam_role_policy_attachment.node_vpc_cni_fallback) == 1 && length(aws_eks_access_entry.rabbitmq_operator_install) == 0 && aws_security_group_rule.gateway_from_alb[0].from_port == 8080
     error_message = "Enabling missing foundations must keep the existing ALB and self-managed CNI permissions."
   }
 }

@@ -1,0 +1,18 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spectrace-staging-deployer-rabbitmq
+  namespace: ${namespace}
+rules:
+  - apiGroups: ["rabbitmq.com"]
+    resources:
+      - users
+      - permissions
+      - queues
+      - bindings
+      - policies
+    verbs: ["get", "list", "watch", "create", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["${namespace}-rabbitmq-user-credentials"]
+    verbs: ["get"]
