@@ -2,3 +2,17 @@
 kindTest: true
 spread:
   minimumZones: 1
+networkPolicy:
+  # The chart replaces list values when kind values are layered over EKS values.
+  # Repeat the RabbitMQ rule and add the in-cluster MySQL Pod used by kind.
+  egressRules:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: rabbitmq}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: rabbitmq}
+      ports: [{port: 5672, protocol: TCP}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: compliance-mysql}
+      ports: [{port: 3306, protocol: TCP}]

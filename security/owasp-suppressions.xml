@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <!--
+      OWASP Dependency-Check maps the Micrometer Prometheus registry exporter to
+      the Prometheus server CPE because both use version 1.17.1.  CVE-2026-42154
+      affects the Prometheus server HTTP remote-read endpoint, not this Java
+      metrics registry client.  Re-check this suppression when Micrometer or its
+      CPE mapping changes.
+    -->
+    <suppress>
+        <notes>False positive: CVE-2026-42154 affects Prometheus server 3.5.3/3.11.3, not the Micrometer Prometheus registry client.</notes>
+        <gav regex="true">^io\.micrometer:micrometer-registry-prometheus:1\.17\.1$</gav>
+        <cve>CVE-2026-42154</cve>
+    </suppress>
+</suppressions>

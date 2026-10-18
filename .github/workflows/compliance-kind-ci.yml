@@ -17,6 +17,13 @@ permissions:
 
 jobs:
   compliance:
+    # The reusable workflow declares main-only publish/deploy jobs that need these
+    # scopes. Keep the grant scoped to this caller job; its PR jobs retain their
+    # own contents:read permissions and never inherit a write-capable token.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     uses: ./.github/workflows/service-cicd-reusable.yml
     with:
       service_name: compliance

@@ -42,6 +42,11 @@ spec:
       labels:
         app.kubernetes.io/name: compliance-mysql
     spec:
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: compliance
+          effect: NoSchedule
       containers:
         - name: mysql
           image: mysql:8.4
