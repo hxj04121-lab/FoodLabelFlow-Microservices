@@ -15,6 +15,7 @@ import com.spectrace.platform.starter.messaging.EventEnvelope;
 import com.spectrace.platform.starter.messaging.IdempotentConsumer;
 import com.spectrace.platform.test.MySqlTestcontainers;
 import com.spectrace.platform.test.RabbitTestcontainers;
+import com.spectrace.platform.test.SpectraceMySqlContainer;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -43,7 +44,6 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.mysql.MySQLContainer;
 import tools.jackson.databind.node.ObjectNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -58,7 +58,7 @@ import tools.jackson.databind.json.JsonMapper;
                 "spring.datasource.hikari.data-source-properties.connectTimeout=2000"})
 class ComplianceApplicationTest {
     @Autowired
-    MySQLContainer mysql;
+    SpectraceMySqlContainer mysql;
 
     @LocalServerPort
     int port;

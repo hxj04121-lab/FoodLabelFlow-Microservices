@@ -86,6 +86,7 @@ jobs:
         env:
           SERVICE_PATH: ${{ inputs.service_path }}
           MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           if [[ -n "$MAVEN_REACTOR_PROJECT" ]]; then
             mvn -B -ntp verify -pl "$MAVEN_REACTOR_PROJECT" -am
@@ -112,6 +113,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Calculate Dependency-Check cache key
+        id: dependency-check-cache-key
+        shell: bash
+        run: echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+      - name: Restore Dependency-Check data cache
+        id: dependency-check-cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/dependency-check
+          key: ${{ runner.os }}-dependency-check-${{ steps.dependency-check-cache-key.outputs.date }}-${{ hashFiles('backend/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-dependency-check-
       - name: Trivy filesystem gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -129,14 +142,25 @@ jobs:
         env:
           SERVICE_PATH: ${{ inputs.service_path }}
           MAVEN_REACTOR_PROJECT: ${{ inputs.maven_reactor_project }}
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
+          nvd_args=()
+          if [[ -n "${NVD_API_KEY:-}" ]]; then
+            nvd_args+=("-DnvdApiKeyEnvironmentVariable=NVD_API_KEY")
+          fi
           if [[ -n "$MAVEN_REACTOR_PROJECT" ]]; then
             # The check-only goal does not build reactor siblings; install them first so the service POM can resolve.
             mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am -DskipTests install
-            mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DsuppressionFile="$GITHUB_WORKSPACE/security/owasp-suppressions.xml"
+            mvn -B -ntp -pl "$MAVEN_REACTOR_PROJECT" -am org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DdataDirectory="$HOME/.cache/dependency-check" -DsuppressionFile="$GITHUB_WORKSPACE/security/owasp-suppressions.xml" "${nvd_args[@]}"
           else
-            mvn -B -ntp -f "$SERVICE_PATH/pom.xml" org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DsuppressionFile="$GITHUB_WORKSPACE/security/owasp-suppressions.xml"
+            mvn -B -ntp -f "$SERVICE_PATH/pom.xml" org.owasp:dependency-check-maven:12.1.0:check -DfailBuildOnCVSS=7 -DossindexAnalyzerEnabled=false -DdataDirectory="$HOME/.cache/dependency-check" -DsuppressionFile="$GITHUB_WORKSPACE/security/owasp-suppressions.xml" "${nvd_args[@]}"
           fi
+      - name: Save Dependency-Check data cache
+        if: ${{ always() && steps.dependency-check-cache-restore.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/dependency-check
+          key: ${{ runner.os }}-dependency-check-${{ steps.dependency-check-cache-key.outputs.date }}-${{ hashFiles('backend/pom.xml') }}
 
   kind:
     if: ${{ github.event_name == 'pull_request' }}
