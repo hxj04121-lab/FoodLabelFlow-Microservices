@@ -194,10 +194,17 @@ jobs:
           python3 scripts/staging/validate_helm_release.py \
             "$RUNNER_TEMP/frontend-release.json" "$RUNNER_TEMP/frontend-inventory.json" \
             --namespace frontend --release frontend --deployment frontend-frontend
-          for resource in deployments services serviceaccounts networkpolicies targetgroupbindings.elbv2.k8s.aws; do
+          for resource in deployments services serviceaccounts networkpolicies; do
             for verb in get list watch create patch update; do
               test "$(kubectl auth can-i "$verb" "$resource" --namespace frontend)" = yes
             done
+          done
+          # list/create are namespace-wide; get/patch/watch are granted by resourceNames, so check them by name.
+          for verb in list create; do
+            test "$(kubectl auth can-i "$verb" targetgroupbindings.elbv2.k8s.aws --namespace frontend)" = yes
+          done
+          for verb in get patch watch; do
+            test "$(kubectl auth can-i "$verb" targetgroupbindings.elbv2.k8s.aws/frontend-frontend --namespace frontend)" = yes
           done
           for verb in get list create update patch; do
             test "$(kubectl auth can-i "$verb" secrets --namespace frontend)" = yes
