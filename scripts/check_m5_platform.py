@@ -154,6 +154,9 @@ assert "default     = false" in (ROOT / "infra/terraform/variables.tf").read_tex
 assert "-var=manage_vpc_cni=false" in (ROOT / ".github/workflows/terraform-validate.yml").read_text()
 
 compliance_caller = yaml.load((ROOT / ".github/workflows/compliance-kind-ci.yml").read_text(), Loader=yaml.BaseLoader)
+assert compliance_caller["jobs"]["compliance"]["permissions"] == {
+    "contents": "read", "packages": "write", "id-token": "write"
+}
 compliance_inputs = compliance_caller["jobs"]["compliance"]["with"]
 assert compliance_inputs["build_context"] == "."
 assert compliance_inputs["maven_reactor_project"] == "services/compliance"

@@ -2,6 +2,11 @@ name: Protected one-time Keycloak Operator bootstrap
 
 on:
   workflow_dispatch:
+    inputs:
+      staging_window_end_sgt:
+        description: Owner-confirmed shutdown time in Asia/Singapore (YYYY-MM-DD HH:MM)
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -24,7 +29,7 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION }}
       EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
       AWS_ROLE_ARN: ${{ vars.AWS_OPERATOR_INSTALL_ROLE_ARN }}
-      AVAILABLE_CREDIT_USD: ${{ vars.STAGING_AVAILABLE_CREDIT_USD }}
+      STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
       APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +46,8 @@ jobs:
           test -n "$AWS_ACCOUNT_ID" && test -n "$AWS_REGION" && test -n "$EKS_CLUSTER_NAME" && test -n "$AWS_ROLE_ARN"
           test "$AWS_ROLE_ARN" != "${{ vars.AWS_DEPLOY_ROLE_ARN }}"
           kubectl kustomize deploy/keycloak/operator/crds > "$RUNNER_TEMP/keycloak-operator-crds.yaml"
-          if ! python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/keycloak-operator-budget-gate.log" 2>&1; then
+          python3 platform/staging/validate_window.py 24 "$STAGING_WINDOW_END_SGT" > "$RUNNER_TEMP/staging-window.json"
+          if ! env -u AVAILABLE_CREDIT_USD python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/keycloak-operator-budget-gate.log" 2>&1; then
             echo '::error::The protected staging funding/pricing gate did not pass; no cluster write was attempted.'
             exit 1
           fi

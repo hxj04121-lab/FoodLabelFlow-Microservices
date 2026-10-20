@@ -83,6 +83,10 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
     error_message = "The staging deployer may only read node inventory through its existing Kubernetes group."
   }
   assert {
+    condition     = yamldecode(helm_release.cluster_autoscaler.values[0]).fullnameOverride == "cluster-autoscaler" && yamldecode(helm_release.cluster_autoscaler.values[0]).image.tag == "v1.36.0" && yamldecode(helm_release.load_balancer_controller[0].values[0]).replicaCount == 2
+    error_message = "The controllers must use stable names, matching Kubernetes minor version, and declared replicas."
+  }
+  assert {
     condition     = length(aws_iam_role.addons) == 2 && contains(keys(aws_iam_role.addons), "ebs_csi") && contains(keys(aws_iam_role.addons), "aws_load_balancer_controller") && length(aws_iam_policy.load_balancer_controller) == 1 && length(aws_iam_role_policy_attachment.load_balancer_controller) == 1 && length(helm_release.load_balancer_controller) == 1 && length(aws_eks_addon.vpc_cni) == 0
     error_message = "EBS CSI and the load balancer controller IRSA roles stay declared while the live self-managed VPC CNI remains untouched."
   }
