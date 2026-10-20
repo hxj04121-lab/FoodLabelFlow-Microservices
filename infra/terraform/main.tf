@@ -154,26 +154,6 @@ resource "aws_security_group_rule" "gateway_from_alb" {
   protocol                 = "tcp"
 }
 
-resource "aws_eks_access_entry" "rabbitmq_operator_install" {
-  count         = var.enable_eks && var.rabbitmq_operator_install_role_arn != "" ? 1 : 0
-  cluster_name  = module.eks[0].cluster_name
-  principal_arn = var.rabbitmq_operator_install_role_arn
-  type          = "STANDARD"
-}
-
-resource "aws_eks_access_policy_association" "rabbitmq_operator_install" {
-  count         = var.enable_eks && var.rabbitmq_operator_install_role_arn != "" ? 1 : 0
-  cluster_name  = module.eks[0].cluster_name
-  principal_arn = var.rabbitmq_operator_install_role_arn
-  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-
-  access_scope {
-    type = "cluster"
-  }
-
-  depends_on = [aws_eks_access_entry.rabbitmq_operator_install]
-}
-
 module "github_oidc" {
   count  = var.github_repository != "" ? 1 : 0
   source = "./modules/github-oidc"

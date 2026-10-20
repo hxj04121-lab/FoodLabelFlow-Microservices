@@ -229,7 +229,7 @@ run "addons_preserve_existing_edge_and_cni" {
     outputs = { vpc_cni_addon_version = null, ebs_csi_addon_version = "test-version" }
   }
   assert {
-    condition     = length(module.edge) == 1 && length(aws_iam_role_policy_attachment.node_vpc_cni_fallback) == 1 && length(aws_eks_access_entry.rabbitmq_operator_install) == 0 && aws_security_group_rule.gateway_from_alb[0].from_port == 8080
+    condition     = length(module.edge) == 1 && length(aws_iam_role_policy_attachment.node_vpc_cni_fallback) == 1 && aws_security_group_rule.gateway_from_alb[0].from_port == 8080
     error_message = "Enabling missing foundations must keep the existing ALB and self-managed CNI permissions."
   }
 }

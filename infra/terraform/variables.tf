@@ -98,16 +98,6 @@ variable "enable_eks_addons" {
   }
 }
 
-variable "rabbitmq_operator_install_role_arn" {
-  description = "Optional existing IAM role ARN granted cluster-admin access to install RabbitMQ CRDs/operators; requires separate M1 and staging review approval."
-  type        = string
-  default     = ""
-  validation {
-    condition     = var.rabbitmq_operator_install_role_arn == "" || can(regex("^arn:aws:iam::[0-9]{12}:role/.+$", var.rabbitmq_operator_install_role_arn))
-    error_message = "rabbitmq_operator_install_role_arn must be empty or an existing AWS IAM role ARN."
-  }
-}
-
 variable "manage_vpc_cni" {
   description = "Explicitly approve migration of healthy self-managed VPC CNI to the managed add-on; leave false to preserve the installed CNI; review a separate policy-enforcement patch if necessary."
   type        = bool

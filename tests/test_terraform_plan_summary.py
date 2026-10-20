@@ -126,7 +126,7 @@ class TerraformPlanSummaryTest(unittest.TestCase):
         result = summarize([
             {"address": "module.eks[0].aws_eks_node_group.general", "mode": "managed", "type": "aws_eks_node_group", "change": {"actions": ["update"]}},
             {"address": "module.eks[0].aws_eks_node_group.compliance[0]", "mode": "managed", "type": "aws_eks_node_group", "change": {"actions": ["create"]}},
-            {"address": "aws_eks_access_entry.rabbitmq_operator_install", "mode": "managed", "type": "aws_eks_access_entry", "change": {"actions": ["create"]}},
+            {"address": "aws_eks_access_entry.example", "mode": "managed", "type": "aws_eks_access_entry", "change": {"actions": ["create"]}},
             {"address": "module.eks_addons[0].aws_eks_addon.ebs_csi", "mode": "managed", "type": "aws_eks_addon", "change": {"actions": ["create"]}},
             {"address": "module.eks_addons[0].kubernetes_manifest.ebs_gp3_storage_class", "mode": "managed", "type": "kubernetes_manifest", "change": {"actions": ["create"]}},
             {"address": "module.eks_addons[0].kubernetes_manifest.workload_namespace[\"rabbitmq\"]", "mode": "managed", "type": "kubernetes_manifest", "change": {"actions": ["create"]}},
