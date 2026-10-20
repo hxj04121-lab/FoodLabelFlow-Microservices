@@ -12,17 +12,11 @@ data "aws_eks_addon_version" "ebs_csi" {
 }
 
 resource "aws_eks_addon" "vpc_cni" {
-  count                    = var.manage_vpc_cni ? 1 : 0
-  cluster_name             = var.cluster_name
-  addon_name               = "vpc-cni"
-  addon_version            = data.aws_eks_addon_version.vpc_cni[0].version
-  service_account_role_arn = aws_iam_role.addons["vpc_cni"].arn
-  configuration_values = jsonencode({
-    enableNetworkPolicy = "true"
-    env = {
-      NETWORK_POLICY_ENFORCING_MODE = "strict"
-    }
-  })
+  count                       = var.manage_vpc_cni ? 1 : 0
+  cluster_name                = var.cluster_name
+  addon_name                  = "vpc-cni"
+  addon_version               = data.aws_eks_addon_version.vpc_cni[0].version
+  service_account_role_arn    = aws_iam_role.addons["vpc_cni"].arn
   resolve_conflicts_on_update = "PRESERVE"
   resolve_conflicts_on_create = "OVERWRITE"
   tags = {
@@ -30,7 +24,7 @@ resource "aws_eks_addon" "vpc_cni" {
     Environment = "staging"
   }
 
-  depends_on = [aws_iam_role_policy_attachment.vpc_cni, helm_release.network_policies]
+  depends_on = [aws_iam_role_policy_attachment.vpc_cni]
 }
 
 resource "aws_eks_addon" "ebs_csi" {
