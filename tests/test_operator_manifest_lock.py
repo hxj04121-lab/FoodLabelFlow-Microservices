@@ -94,7 +94,12 @@ spec:
 
     def test_platform_ci_validates_the_exact_locked_permission_schema(self):
         workflow = Path(__file__).resolve().parents[1] / ".github/workflows/m5-platform-validation.yml"
-        self.assertIn("verify_mto_permission_schema.py", workflow.read_text())
+        text = workflow.read_text()
+        self.assertIn("verify_mto_permission_schema.py", text)
+        self.assertIn("actionlint_${version}_checksums.txt", text)
+        self.assertIn("actionlint_${version}_linux_amd64.tar.gz", text)
+        self.assertIn("433028cf0ba3c42163ea1a668dedce30fcdbe84fe912b1a5e288c006eab8a4f5", text)
+        self.assertIn("8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8", text)
 
 
 if __name__ == "__main__":

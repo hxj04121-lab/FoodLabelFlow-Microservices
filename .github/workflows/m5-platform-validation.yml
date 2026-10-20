@@ -67,7 +67,8 @@ jobs:
           archive="$RUNNER_TEMP/actionlint_${version}_linux_amd64.tar.gz"
           trap 'rm -f "$checksums" "$archive" "$RUNNER_TEMP/actionlint"' EXIT
           curl --fail --location --silent --show-error \
-            "https://github.com/rhysd/actionlint/releases/download/v${version}/checksums.txt" --output "$checksums"
+            "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_checksums.txt" \
+            --output "$checksums"
           printf '%s  %s\n' \
             433028cf0ba3c42163ea1a668dedce30fcdbe84fe912b1a5e288c006eab8a4f5 "$checksums" \
             | sha256sum --check --status
