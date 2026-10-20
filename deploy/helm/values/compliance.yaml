@@ -23,3 +23,9 @@ networkPolicy:
             matchLabels:
               app.kubernetes.io/name: rabbitmq
       ports: [{port: 5672, protocol: TCP}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: keycloak}
+          podSelector:
+            matchLabels: {app: keycloak}
+      ports: [{port: 8080, protocol: TCP}]

@@ -88,6 +88,16 @@ check('fixed three-replica placement requires c6i.large and compliance group',()
   assert(np.spec.egress.some(r=>r.to?.some(t=>t.podSelector?.matchLabels?.['app.kubernetes.io/name']==='rabbitmq')&&r.ports[0].port===5672));
   writeFileSync(resolve(evidence,'compliance-three-replicas.json'),JSON.stringify(docs,null,2)+'\n');
 });
+check('Compliance JWKS egress is limited to Keycloak pods on TCP 8080',()=>{
+  const docs=render('compliance',['-f',resolve(root,'values/staging-rds.yaml')]);
+  const np=docs.find(d=>d.kind==='NetworkPolicy');
+  const keycloakRules=np.spec.egress.filter(rule=>rule.to?.some(peer=>
+    peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='keycloak' &&
+    peer.podSelector?.matchLabels?.app==='keycloak'));
+  assert.equal(keycloakRules.length,1);
+  assert.deepEqual(keycloakRules[0].ports,[{port:8080,protocol:'TCP'}]);
+  assert(!np.spec.egress.some(rule=>rule.to?.some(peer=>peer.ipBlock?.cidr==='0.0.0.0/0')));
+});
 check('optional Should HPA preserves 1–4 range and fixed per-pod limits',()=>{
   const docs=render('compliance',['--set','autoscaling.enabled=true']);
   const hpa=docs.find(d=>d.kind==='HorizontalPodAutoscaler');
