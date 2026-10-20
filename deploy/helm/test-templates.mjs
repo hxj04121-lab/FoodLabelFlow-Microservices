@@ -71,6 +71,17 @@ for(const service of ['compliance','specification','formulation','label-workflow
     else assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='rabbitmq'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='rabbitmq')));
   });
 }
+check('Compliance uses the refreshed release while kind still selects its loaded local image',()=>{
+  const receipt=JSON.parse(readFileSync(resolve(repo,'docs/swe5001/evidence/M3-compliance-image-refresh-20261020.json'),'utf8'));
+  const workload=docs=>docs.find(d=>d.kind==='Deployment').spec.template.spec.containers[0].image;
+  assert.equal(workload(render('compliance')),receipt.digestReference);
+  const local=render('compliance',['-f',resolve(root,'values/compliance-kind.yaml'),
+    '--set-string','image.repository=local/compliance','--set-string','image.tag=fixture','--set-string','image.digest=']);
+  assert.equal(workload(local),'local/compliance:fixture');
+  const workflow=parse(readFileSync(resolve(repo,'.github/workflows/service-cicd-reusable.yml'),'utf8'));
+  const step=Object.values(workflow.jobs).flatMap(job=>job.steps||[]).find(step=>step.id==='deploy_kind');
+  assert.match(step.run,/--set-string image\.digest=""/,'Kind must clear the staging digest before using its loaded local tag');
+});
 check('fixed three-replica placement requires c6i.large and compliance group',()=>{
   const docs=render('compliance',['--set','replicaCount=3']);
   const dep=docs.find(d=>d.kind==='Deployment');
