@@ -40,7 +40,6 @@ jobs:
       AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       GATEWAY_ISSUER: ${{ vars.GATEWAY_ISSUER }}
       FRONTEND_TARGET_GROUP_ARN: ${{ vars.FRONTEND_TARGET_GROUP_ARN }}
-      AVAILABLE_CREDIT_USD: ${{ secrets.AVAILABLE_CREDIT_USD }}
       APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
       STAGING_WINDOW_HOURS: ${{ inputs.staging_window_hours }}
       STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
@@ -74,7 +73,7 @@ jobs:
           npm test --prefix deploy/helm
           python3 -m unittest discover -s tests -p 'test_frontend_*.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_window.py' -v
-          if ! python3 scripts/aws_staging_budget.py --require-gate --hours "$STAGING_WINDOW_HOURS" --experiment-hours 0 --k6-hours 0 > "$RUNNER_TEMP/frontend-budget-gate.log" 2>&1; then
+          if ! env -u AVAILABLE_CREDIT_USD python3 scripts/aws_staging_budget.py --require-gate --hours "$STAGING_WINDOW_HOURS" --experiment-hours 0 --k6-hours 0 > "$RUNNER_TEMP/frontend-budget-gate.log" 2>&1; then
             echo '::error::The existing fail-closed staging funding/pricing gate did not pass; no AWS or Kubernetes write was attempted.'
             exit 1
           fi
@@ -180,6 +179,7 @@ jobs:
       - name: Check namespace, capacity and authorization before deployment
         run: |
           set -euo pipefail
+          kubectl get serviceaccount default --namespace frontend >/dev/null
           kubectl get nodes -l eks.amazonaws.com/nodegroup=general -o json > "$RUNNER_TEMP/general-nodes.json"
           python3 - "$RUNNER_TEMP/general-nodes.json" <<'PY'
           import json, sys
@@ -188,42 +188,33 @@ jobs:
           if not ready:
               raise SystemExit('No Ready general node is available; node-group scale changes are not permitted by this workflow.')
           PY
-          if kubectl get namespace frontend -o name >/dev/null 2>&1; then
-            # Terraform pre-creates the namespace, so a first release finds it empty. Accept that, or
-            # exactly one deployed frontend release; refuse anything else rather than adopt it.
-            helm list --namespace frontend --all --output json > "$RUNNER_TEMP/frontend-release.json"
-            kubectl get deployments,statefulsets,services,targetgroupbindings.elbv2.k8s.aws --namespace frontend -o name \
-              > "$RUNNER_TEMP/frontend-existing-resources.txt"
-            python3 - "$RUNNER_TEMP/frontend-release.json" "$RUNNER_TEMP/frontend-existing-resources.txt" <<'PY'
-          import json, sys
-          releases=json.load(open(sys.argv[1]))
-          resources=[line for line in open(sys.argv[2]).read().split() if line]
-          if not releases:
-              if resources:
-                  raise SystemExit('Namespace frontend has workloads but no Helm release; refusing to adopt existing resources.')
-          elif len(releases)!=1 or releases[0].get('name')!='frontend' or releases[0].get('status')!='deployed':
-              raise SystemExit('Namespace frontend exists without exactly one deployed frontend Helm release; refusing to adopt existing resources.')
-          PY
-          else
-            test "$(kubectl auth can-i create namespaces)" = yes
-          fi
-          for resource in deployments services serviceaccounts networkpolicies targetgroupbindings.elbv2.k8s.aws; do
+          helm list --namespace frontend --all --output json > "$RUNNER_TEMP/frontend-release.json"
+          kubectl get deployments,statefulsets,daemonsets,replicasets,replicationcontrollers,jobs,cronjobs,pods,services,networkpolicies,serviceaccounts,horizontalpodautoscalers,endpointslices,targetgroupbindings.elbv2.k8s.aws \
+            --namespace frontend -o json > "$RUNNER_TEMP/frontend-inventory.json"
+          python3 scripts/staging/validate_helm_release.py \
+            "$RUNNER_TEMP/frontend-release.json" "$RUNNER_TEMP/frontend-inventory.json" \
+            --namespace frontend --release frontend --deployment frontend-frontend
+          for resource in deployments services serviceaccounts networkpolicies; do
             for verb in get list watch create patch update; do
               test "$(kubectl auth can-i "$verb" "$resource" --namespace frontend)" = yes
             done
+          done
+          # list/create are namespace-wide; get/patch/watch are granted by resourceNames, so check them by name.
+          for verb in list create; do
+            test "$(kubectl auth can-i "$verb" targetgroupbindings.elbv2.k8s.aws --namespace frontend)" = yes
+          done
+          for verb in get patch watch; do
+            test "$(kubectl auth can-i "$verb" targetgroupbindings.elbv2.k8s.aws/frontend-frontend --namespace frontend)" = yes
           done
           for verb in get list create update patch; do
             test "$(kubectl auth can-i "$verb" secrets --namespace frontend)" = yes
           done
           test "$(kubectl auth can-i get pods --namespace frontend)" = yes
           test "$(kubectl auth can-i list endpointslices --namespace frontend)" = yes
-          kubectl create namespace frontend --dry-run=client -o yaml | kubectl apply --dry-run=server -f - >/dev/null
-      - name: Create namespace and server-validate rendered resources
+      - name: Server-validate rendered resources in the Terraform namespace
         run: |
           set -euo pipefail
-          if ! kubectl get namespace frontend -o name >/dev/null 2>&1; then
-            kubectl create namespace frontend
-          fi
+          kubectl get serviceaccount default --namespace frontend >/dev/null
           kubectl apply --dry-run=server -f "$RUNNER_TEMP/frontend-rendered.yaml" >/dev/null
       - name: Install or upgrade Frontend and verify service endpoints
         run: |

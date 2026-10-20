@@ -1,10 +1,10 @@
 name: SWE5001 Helm template
 on:
   pull_request:
-    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'deploy/keycloak/operator/**', 'deploy/kubernetes/staging/keycloak-targetgroupbinding.yaml', 'infra/terraform/modules/eks-addons/manifests/**', 'infra/terraform/modules/github-oidc/main.tf', 'platform/gateway/**', 'platform/frontend/**', 'platform/staging/**', 'tests/test_gateway_deploy_*.py', 'tests/test_keycloak_operator_*.py', 'tests/test_frontend_*.py', 'tests/test_staging_window.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/deploy-frontend.yml', '.github/workflows/deploy-keycloak.yml', '.github/workflows/install-keycloak-operator.yml', '.github/workflows/swe5001-helm.yml']
+    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'deploy/keycloak/operator/**', 'deploy/kubernetes/staging/keycloak-targetgroupbinding.yaml', 'deploy/mysql/bootstrap-service-databases.sh', 'infra/terraform/modules/eks-addons/**', 'infra/terraform/modules/github-oidc/**', 'platform/gateway/**', 'platform/frontend/**', 'platform/staging/**', 'scripts/staging/**', 'tests/test_gateway_deploy_*.py', 'tests/test_keycloak_operator_*.py', 'tests/test_frontend_*.py', 'tests/test_staging_window.py', 'tests/test_helm_release_inventory.py', 'tests/test_staging_rds_values.py', 'tests/test_staging_service_digests.py', 'tests/test-runtime-secrets.sh', 'tests/test_mysql_bootstrap_workflow_guard.sh', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-business-services.yml', '.github/workflows/stcn-15-runtime-secrets.yml', '.github/workflows/deploy-gateway.yml', '.github/workflows/deploy-frontend.yml', '.github/workflows/deploy-keycloak.yml', '.github/workflows/install-keycloak-operator.yml', '.github/workflows/swe5001-helm.yml']
   push:
     branches: ['feature/stcn-48-*']
-    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'deploy/keycloak/operator/**', 'deploy/kubernetes/staging/keycloak-targetgroupbinding.yaml', 'infra/terraform/modules/eks-addons/manifests/**', 'infra/terraform/modules/github-oidc/main.tf', 'platform/gateway/**', 'platform/frontend/**', 'platform/staging/**', 'tests/test_gateway_deploy_*.py', 'tests/test_keycloak_operator_*.py', 'tests/test_frontend_*.py', 'tests/test_staging_window.py', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-gateway.yml', '.github/workflows/deploy-frontend.yml', '.github/workflows/deploy-keycloak.yml', '.github/workflows/install-keycloak-operator.yml', '.github/workflows/swe5001-helm.yml']
+    paths: ['deploy/helm/**', 'deploy/kubernetes/staging/rabbitmq/**', 'deploy/keycloak/operator/**', 'deploy/kubernetes/staging/keycloak-targetgroupbinding.yaml', 'deploy/mysql/bootstrap-service-databases.sh', 'infra/terraform/modules/eks-addons/**', 'infra/terraform/modules/github-oidc/**', 'platform/gateway/**', 'platform/frontend/**', 'platform/staging/**', 'scripts/staging/**', 'tests/test_gateway_deploy_*.py', 'tests/test_keycloak_operator_*.py', 'tests/test_frontend_*.py', 'tests/test_staging_window.py', 'tests/test_helm_release_inventory.py', 'tests/test_staging_rds_values.py', 'tests/test_staging_service_digests.py', 'tests/test-runtime-secrets.sh', 'tests/test_mysql_bootstrap_workflow_guard.sh', 'docs/swe5001/G1-M2-node-pool-interface.md', '.github/workflows/deploy-business-services.yml', '.github/workflows/stcn-15-runtime-secrets.yml', '.github/workflows/deploy-gateway.yml', '.github/workflows/deploy-frontend.yml', '.github/workflows/deploy-keycloak.yml', '.github/workflows/install-keycloak-operator.yml', '.github/workflows/swe5001-helm.yml']
 permissions:
   contents: read
 jobs:
@@ -30,6 +30,14 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_gateway_deploy_*.py' -v
       - name: Validate protected Keycloak manifest rendering
         run: python3 -m unittest discover -s tests -p 'test_keycloak_operator_*.py' -v
+      - name: Validate staging release safety and live metadata resolvers offline
+        run: |
+          python3 -m unittest discover -s tests -p 'test_helm_release_inventory.py' -v
+          python3 -m unittest discover -s tests -p 'test_staging_rds_values.py' -v
+          python3 -m unittest discover -s tests -p 'test_staging_service_digests.py' -v
+          python3 -m unittest discover -s tests -p 'test_staging_window.py' -v
+          bash tests/test-runtime-secrets.sh
+          bash tests/test_mysql_bootstrap_workflow_guard.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

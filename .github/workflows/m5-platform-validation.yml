@@ -8,7 +8,18 @@ on:
       - '.github/workflows/m5-platform-validation.yml'
       - '.github/workflows/service-cicd-reusable.yml'
       - '.github/workflows/compliance-kind-ci.yml'
+      - '.github/workflows/deploy-business-services.yml'
+      - '.github/workflows/deploy-frontend.yml'
+      - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
+      - 'scripts/staging/**'
+      - 'deploy/mysql/bootstrap-service-databases.sh'
+      - 'tests/test_helm_release_inventory.py'
+      - 'tests/test_staging_rds_values.py'
+      - 'tests/test_staging_service_digests.py'
+      - 'tests/test-runtime-secrets.sh'
+      - 'tests/test_mysql_bootstrap_workflow_guard.sh'
+      - 'tests/test_staging_window.py'
   push:
     branches: [main]
     paths:
@@ -17,7 +28,18 @@ on:
       - '.github/workflows/m5-platform-validation.yml'
       - '.github/workflows/service-cicd-reusable.yml'
       - '.github/workflows/compliance-kind-ci.yml'
+      - '.github/workflows/deploy-business-services.yml'
+      - '.github/workflows/deploy-frontend.yml'
+      - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
+      - 'scripts/staging/**'
+      - 'deploy/mysql/bootstrap-service-databases.sh'
+      - 'tests/test_helm_release_inventory.py'
+      - 'tests/test_staging_rds_values.py'
+      - 'tests/test_staging_service_digests.py'
+      - 'tests/test-runtime-secrets.sh'
+      - 'tests/test_mysql_bootstrap_workflow_guard.sh'
+      - 'tests/test_staging_window.py'
 
 permissions:
   contents: read
@@ -40,6 +62,14 @@ jobs:
         with: {version: v4.3.0}
       - run: helm lint deploy/helm/platform-network-policies deploy/helm/rabbitmq-topology
       - run: python scripts/check_m5_platform.py
+      - name: Verify protected staging release logic without AWS credentials
+        run: |
+          python3 -m unittest discover -s tests -p 'test_helm_release_inventory.py' -v
+          python3 -m unittest discover -s tests -p 'test_staging_rds_values.py' -v
+          python3 -m unittest discover -s tests -p 'test_staging_service_digests.py' -v
+          python3 -m unittest discover -s tests -p 'test_staging_window.py' -v
+          bash tests/test-runtime-secrets.sh
+          bash tests/test_mysql_bootstrap_workflow_guard.sh
       - name: Verify RabbitMQ per-queue DLQ scrape target
         run: python3 -m unittest discover -s tests -p 'test_alloy_dlq_scrape.py' -v
       - run: bash -n scripts/verify_eks_addons.sh

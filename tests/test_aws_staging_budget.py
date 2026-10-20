@@ -171,6 +171,9 @@ class AwsStagingBudgetTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertEqual(self.run_cli('--require-gate', spend_env=value).returncode, 2)
 
+    def test_gate_cli_approved_spend_above_stcn17_cap_blocks(self):
+        self.assertEqual(self.run_cli('--require-gate', spend_env='150.01').returncode, 2)
+
     def test_gate_cli_invalid_balance_blocks(self):
         for value in ('NaN', 'Infinity', '-Infinity', '-1'):
             with self.subTest(value=value):
