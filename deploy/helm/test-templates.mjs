@@ -68,10 +68,10 @@ for(const service of ['compliance','specification','formulation','label-workflow
     }
     if(['specification','formulation','compliance','label-workflow'].includes(service)) {
       const expectedDigest={
-        specification:'sha256:66237bdefe1b4b9753d506539772a9598122d08d9fe2a8e85d21257c7843b64c',
-        formulation:'sha256:bcc315aa8ded81cc8675bae95606c96ecd08101f276ea611e402ce22bb4352c2',
-        compliance:'sha256:94295979c70625b1f9dc20941351acc2c218f97f04b82c81f1d51b53b8ec7ce5',
-        'label-workflow':'sha256:3683bf92cfea0dbb852adefc34b68d7c8a479fb1a9bb21765691415a2654bc83'
+        specification:'sha256:83b705f05cb07806b039c6740e7421ddaddd512d2aad000b4369f0f5545964a8',
+        formulation:'sha256:658757b26ae8e3b0a43f494b1af5eda8016bc172c61d39f3e51c5c5567ef567c',
+        compliance:'sha256:73aac3f0c86c8b3381d3a58734379eeb771e9202ed4dc657b22c3f628f8f34c6',
+        'label-workflow':'sha256:768c1f7ee6659db7138d48d468eaa7b974d84ca1aa53dd074a8fb74b98695311'
       }[service];
       assert.equal(c.image,`ghcr.io/hxj04121-lab/foodlabelflow-microservices/${service}@${expectedDigest}`);
       const env=Object.fromEntries(c.env.map(row=>[row.name,row]));
@@ -98,6 +98,17 @@ check('business services and the shared Label Workflow overlay reach Operator-la
   };
   for(const service of ['specification','formulation','compliance','label-workflow']) assertKeycloakRule(render(service),service);
   assertKeycloakRule(render('label-workflow',['--values',resolve(root,'values/staging-shared-label-workflow.yaml')]),'shared Label Workflow overlay');
+});
+check('Compliance uses the refreshed release while kind still selects its loaded local image',()=>{
+  const receipt=JSON.parse(readFileSync(resolve(repo,'docs/swe5001/evidence/M3-compliance-image-refresh-20261020.json'),'utf8'));
+  const workload=docs=>docs.find(d=>d.kind==='Deployment').spec.template.spec.containers[0].image;
+  assert.equal(workload(render('compliance')),receipt.digestReference);
+  const local=render('compliance',['-f',resolve(root,'values/compliance-kind.yaml'),
+    '--set-string','image.repository=local/compliance','--set-string','image.tag=fixture','--set-string','image.digest=']);
+  assert.equal(workload(local),'local/compliance:fixture');
+  const workflow=parse(readFileSync(resolve(repo,'.github/workflows/service-cicd-reusable.yml'),'utf8'));
+  const step=Object.values(workflow.jobs).flatMap(job=>job.steps||[]).find(step=>step.id==='deploy_kind');
+  assert.match(step.run,/--set-string image\.digest=""/,'Kind must clear the staging digest before using its loaded local tag');
 });
 check('fixed three-replica placement requires c6i.large and compliance group',()=>{
   const docs=render('compliance',['--set','replicaCount=3']);

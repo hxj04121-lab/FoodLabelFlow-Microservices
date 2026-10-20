@@ -1,7 +1,7 @@
 serviceName: formulation
 image:
   repository: ghcr.io/hxj04121-lab/foodlabelflow-microservices/formulation
-  digest: sha256:bcc315aa8ded81cc8675bae95606c96ecd08101f276ea611e402ce22bb4352c2
+  digest: sha256:658757b26ae8e3b0a43f494b1af5eda8016bc172c61d39f3e51c5c5567ef567c
 env:
   - name: RABBITMQ_HOST
     value: spectrace.rabbitmq.svc.cluster.local

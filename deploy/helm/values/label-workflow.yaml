@@ -1,7 +1,7 @@
 serviceName: label-workflow
 image:
   repository: ghcr.io/hxj04121-lab/foodlabelflow-microservices/label-workflow
-  digest: sha256:3683bf92cfea0dbb852adefc34b68d7c8a479fb1a9bb21765691415a2654bc83
+  digest: sha256:768c1f7ee6659db7138d48d468eaa7b974d84ca1aa53dd074a8fb74b98695311
 env:
   - name: SPECTRACE_LABEL_WORKFLOW_VALIDATION_BASE_URL
     value: http://compliance-compliance.compliance.svc.cluster.local:8080

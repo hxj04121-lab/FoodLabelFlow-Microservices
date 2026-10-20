@@ -1,7 +1,8 @@
 serviceName: compliance
 image:
   repository: ghcr.io/hxj04121-lab/foodlabelflow-microservices/compliance
-  digest: sha256:94295979c70625b1f9dc20941351acc2c218f97f04b82c81f1d51b53b8ec7ce5
+  tag: 5f2e321c9afcc32f32face2913ec2cf9bd10f4fc
+  digest: sha256:73aac3f0c86c8b3381d3a58734379eeb771e9202ed4dc657b22c3f628f8f34c6
 env:
   - name: RABBITMQ_HOST
     value: spectrace.rabbitmq.svc.cluster.local
