@@ -10,8 +10,8 @@ from urllib.parse import urlsplit, urlunsplit
 def render(env=os.environ):
     mysql_host = env.get("MYSQL_HOST", "").strip()
     issuer = env.get("GATEWAY_ISSUER", "").strip()
-    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?", mysql_host) or ".." in mysql_host:
-        raise ValueError("MYSQL_HOST must be the private RDS DNS hostname")
+    if not re.fullmatch(r"[A-Za-z0-9.-]+\.ap-southeast-1\.rds\.amazonaws\.com", mysql_host):
+        raise ValueError("MYSQL_HOST must be the actual ap-southeast-1 RDS endpoint")
     parsed = urlsplit(issuer)
     if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
             or parsed.path != "/auth/realms/spectrace" or parsed.query or parsed.fragment):

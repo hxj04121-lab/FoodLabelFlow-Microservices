@@ -64,13 +64,41 @@ for(const service of ['compliance','specification','formulation','label-workflow
     assert(np.spec.ingress.every(r=>(r.from??[]).every(s=>s.namespaceSelector&&s.podSelector)),'Every pod ingress peer is restricted by namespace and pod labels');
     if(service==='label-workflow') {
       assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='compliance'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='compliance')&&r.ports?.some(p=>p.port===8080)),'Compliance validation is allowed only to the Compliance workload on 8080');
-      assert.equal(c.env.find(e=>e.name==='SPECTRACE_LABEL_WORKFLOW_VALIDATION_BASE_URL')?.value,'http://compliance.compliance.svc.cluster.local:8080');
+      assert.equal(c.env.find(e=>e.name==='SPECTRACE_LABEL_WORKFLOW_VALIDATION_BASE_URL')?.value,'http://compliance-compliance.compliance.svc.cluster.local:8080');
+    }
+    if(['specification','formulation','compliance','label-workflow'].includes(service)) {
+      const expectedDigest={
+        specification:'sha256:83b705f05cb07806b039c6740e7421ddaddd512d2aad000b4369f0f5545964a8',
+        formulation:'sha256:658757b26ae8e3b0a43f494b1af5eda8016bc172c61d39f3e51c5c5567ef567c',
+        compliance:'sha256:73aac3f0c86c8b3381d3a58734379eeb771e9202ed4dc657b22c3f628f8f34c6',
+        'label-workflow':'sha256:768c1f7ee6659db7138d48d468eaa7b974d84ca1aa53dd074a8fb74b98695311'
+      }[service];
+      assert.equal(c.image,`ghcr.io/hxj04121-lab/foodlabelflow-microservices/${service}@${expectedDigest}`);
+      const env=Object.fromEntries(c.env.map(row=>[row.name,row]));
+      assert.equal(env.RABBITMQ_HOST.value,'spectrace.rabbitmq.svc.cluster.local');
+      assert.equal(env.RABBITMQ_PORT.value,'5672');
+      assert.equal(env.RABBITMQ_USERNAME.valueFrom.secretKeyRef.name,`${service}-rabbitmq-user-credentials`);
+      assert.equal(env.RABBITMQ_PASSWORD.valueFrom.secretKeyRef.key,'password');
     }
     if(service==='gateway') assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='specification'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='specification')&&r.ports?.some(p=>p.port===8080)));
     else if(service==='frontend') assert.deepEqual(np.spec.egress,[]);
-    else assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='rabbitmq'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='rabbitmq')));
+    else assert(np.spec.egress.some(r=>r.to?.some(p=>p.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='rabbitmq'&&p.podSelector?.matchLabels?.['app.kubernetes.io/name']==='spectrace')));
   });
 }
+check('business services and the shared Label Workflow overlay reach Operator-labeled Keycloak on TCP/8080',()=>{
+  const assertKeycloakRule=(docs,source)=>{
+    const policy=docs.find(d=>d.kind==='NetworkPolicy');
+    assert.deepEqual(policy.spec.policyTypes,['Ingress','Egress']);
+    const rules=policy.spec.egress.filter(rule=>rule.to?.some(peer=>
+      peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='keycloak' &&
+      peer.podSelector?.matchLabels?.app==='keycloak'));
+    assert.equal(rules.length,1,`${source} must select the Keycloak Operator server Pod`);
+    assert.deepEqual(rules[0].ports,[{port:8080,protocol:'TCP'}]);
+    assert(!policy.spec.egress.some(rule=>rule.to?.some(peer=>peer.ipBlock?.cidr==='0.0.0.0/0')),'Default-deny egress remains intact');
+  };
+  for(const service of ['specification','formulation','compliance','label-workflow']) assertKeycloakRule(render(service),service);
+  assertKeycloakRule(render('label-workflow',['--values',resolve(root,'values/staging-shared-label-workflow.yaml')]),'shared Label Workflow overlay');
+});
 check('Compliance uses the refreshed release while kind still selects its loaded local image',()=>{
   const receipt=JSON.parse(readFileSync(resolve(repo,'docs/swe5001/evidence/M3-compliance-image-refresh-20261020.json'),'utf8'));
   const workload=docs=>docs.find(d=>d.kind==='Deployment').spec.template.spec.containers[0].image;
@@ -96,7 +124,7 @@ check('fixed three-replica placement requires c6i.large and compliance group',()
   assert.equal(host.whenUnsatisfiable,'DoNotSchedule');
   const np=docs.find(d=>d.kind==='NetworkPolicy');
   assert.deepEqual(np.spec.ingress.flatMap(r=>r.from??[]).filter(s=>s.namespaceSelector).map(s=>[s.namespaceSelector.matchLabels['kubernetes.io/metadata.name'],s.podSelector.matchLabels['app.kubernetes.io/name']]).sort((a,b)=>a.join('/').localeCompare(b.join('/'))),[['gateway','gateway'],['label-workflow','label-workflow'],['observability','grafana-alloy']].sort((a,b)=>a.join('/').localeCompare(b.join('/'))));
-  assert(np.spec.egress.some(r=>r.to?.some(t=>t.podSelector?.matchLabels?.['app.kubernetes.io/name']==='rabbitmq')&&r.ports[0].port===5672));
+  assert(np.spec.egress.some(r=>r.to?.some(t=>t.podSelector?.matchLabels?.['app.kubernetes.io/name']==='spectrace')&&r.ports[0].port===5672));
   writeFileSync(resolve(evidence,'compliance-three-replicas.json'),JSON.stringify(docs,null,2)+'\n');
 });
 check('optional Should HPA preserves 1–4 range and fixed per-pod limits',()=>{
@@ -240,7 +268,8 @@ check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-
   assert.equal(workflow.jobs.deploy.env.AWS_REGION,'${{ vars.AWS_REGION }}');
   assert.equal(workflow.jobs.deploy.env.EKS_CLUSTER_NAME,'${{ vars.EKS_CLUSTER_NAME }}');
   assert.equal(workflow.jobs.deploy.env.AWS_ROLE_ARN,'${{ vars.AWS_DEPLOY_ROLE_ARN }}');
-  assert.equal(workflow.jobs.deploy.env.AVAILABLE_CREDIT_USD,'${{ secrets.AVAILABLE_CREDIT_USD }}');
+  assert.equal(workflow.jobs.deploy.env.AVAILABLE_CREDIT_USD,undefined);
+  assert.equal(workflow.jobs.deploy.env.APPROVED_STAGING_SPEND_USD,'${{ secrets.APPROVED_STAGING_SPEND_USD }}');
   const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
   assert.match(script,/kubectl get namespace gateway/);
   assert.doesNotMatch(script,/create namespace|kubectl create ns|terraform apply/i);
@@ -251,9 +280,61 @@ check('Gateway deploy workflow is manual, staging-protected, VPC-only, and OIDC-
   assert.match(script,/check-gateway-upgrade\.mjs/);
   assert.match(script,/--dry-run=server/);
   assert.match(script,/platform\/staging\/validate_window\.py/);
+  assert.match(script,/env -u AVAILABLE_CREDIT_USD/);
   assert.doesNotMatch(script,/helm uninstall|helm install gateway|create namespace/i);
   assert.match(script,/anonymous GHCR pull/);
   assert.doesNotMatch(script,/kubectl get service "\$service"|for item in 'GATEWAY_KEYCLOAK/,'Gateway health checks must not probe application dependencies');
+});
+check('business service release is main-only, M1-gated, digest-pinned, budgeted, and namespace-safe',()=>{
+  const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/deploy-business-services.yml'),'utf8'));
+  assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+  assert.deepEqual(workflow.jobs.deploy['runs-on'],['self-hosted','linux','staging-vpc']);
+  assert.equal(workflow.jobs.deploy.if,"github.ref == 'refs/heads/main'");
+  assert.equal(workflow.jobs.deploy.environment,'staging');
+  assert.deepEqual(workflow.jobs.deploy.permissions,{contents:'read','id-token':'write'});
+  assert.equal(workflow.jobs.deploy.env.APPROVED_STAGING_SPEND_USD,'${{ secrets.APPROVED_STAGING_SPEND_USD }}');
+  const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
+  const validateStep=workflow.jobs.deploy.steps.find(step=>step.name==='Validate the approved window, budget cap, and release inputs');
+  const verifyStep=workflow.jobs.deploy.steps.find(step=>step.name==='Verify Pods, Service DNS, NetworkPolicies, Gateway CORS, and OIDC discovery');
+  assert(validateStep&&verifyStep);
+  assert.doesNotMatch(validateStep.run,/port=18101/,'the port is local to the verification shell');
+  assert.match(verifyStep.run,/set -euo pipefail\s+port=18101/,'the verification shell initializes its port before use');
+  assert.match(verifyStep.run,/\$port:8080/,'port-forward consumes the locally initialized port');
+  assert.match(script,/aws_staging_budget\.py[\s\S]*--require-gate/);
+  assert.match(script,/Decimal\('150'\)/);
+  assert.match(script,/verify_service_digests\.py/);
+  assert.match(script,/validate_helm_release\.py/);
+  assert.match(script,/resolve_rds_values\.py/);
+  assert.match(script,/describe-nodegroup[\s\S]*compliance/);
+  assert.match(script,/helm upgrade --install/);
+  assert.match(script,/gateway-cors/);
+  assert.match(script,/code_challenge_methods_supported/);
+  assert.doesNotMatch(script,/\bAVAILABLE_CREDIT_USD\s*=|terraform apply|create namespace|kubectl create ns/i);
+  assert.match(script,/env -u AVAILABLE_CREDIT_USD python3 scripts\/aws_staging_budget\.py[\s\S]*--approved-spend-usd "\$APPROVED_STAGING_SPEND_USD"[\s\S]*--require-gate/);
+});
+check('Frontend first install uses only the Terraform namespace and refuses unmanaged workloads',()=>{
+  const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/deploy-frontend.yml'),'utf8'));
+  const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
+  assert.match(script,/validate_helm_release\.py/);
+  assert.match(script,/daemonsets,replicasets,replicationcontrollers,jobs,cronjobs,pods/);
+  assert.match(script,/kubectl get serviceaccount default --namespace frontend/);
+  assert.doesNotMatch(script,/create namespace frontend|kubectl auth can-i create namespaces|kubectl create namespace frontend --dry-run/);
+});
+check('Runtime Secrets use the approved-spend window and dynamically resolve the private RDS endpoint',()=>{
+  const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/stcn-15-runtime-secrets.yml'),'utf8'));
+  assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+  assert.equal(workflow.jobs['runtime-secrets'].environment,'staging');
+  assert.equal(workflow.jobs['runtime-secrets'].env.MYSQL_HOST,undefined);
+  assert.equal(workflow.jobs['runtime-secrets'].env.STAGING_WINDOW_OPEN,undefined);
+  assert.equal(workflow.jobs['runtime-secrets'].env.GATEWAY_ISSUER,'${{ vars.GATEWAY_ISSUER }}');
+  const script=workflow.jobs['runtime-secrets'].steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
+  assert.match(script,/approved-spend-usd/);
+  assert.match(script,/Decimal\('150'\)/);
+  assert.match(script,/resolve_rds_values\.py/);
+  assert.match(script,/bootstrap-service-databases\.sh/);
+  assert.match(script,/env -u AVAILABLE_CREDIT_USD/);
+  assert.match(script,/if \[\[ "\$OPERATION" == apply \]\][\s\S]*KEYCLOAK_DB_PASSWORD/);
+  assert.doesNotMatch(script,/RABBITMQ_PASSWORD|RABBITMQ_USERNAME|STAGING_WINDOW_OPEN/);
 });
 check('Gateway manifest diff permits only the reviewed CORS origin change',()=>{
   const digest='ghcr.io/hxj04121-lab/foodlabelflow-microservices/gateway@sha256:d4190ea6ee31b84e7b67d36ad56e6391612c8bdc4916b8bb14d28b9a17f6ab47';
@@ -393,6 +474,12 @@ check('Keycloak platform policies select the Operator pods by their app label',(
   const docs=parseAllDocuments(output).map(d=>d.toJSON()).filter(Boolean);
   const keycloak=docs.find(d=>d.metadata.name==='stcn-keycloak-flows');
   assert.deepEqual(keycloak.spec.podSelector.matchLabels,{app:'keycloak'});
+  const observability=docs.find(d=>d.metadata.name==='stcn-observability-flows');
+  for(const direction of ['ingress','egress']) {
+    const peer=observability.spec[direction].flatMap(rule=>rule[direction==='ingress'?'from':'to']??[]).find(target=>
+      target.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='keycloak');
+    assert.deepEqual(peer?.podSelector?.matchLabels,{app:'keycloak'},`observability ${direction} must select Keycloak Operator pods`);
+  }
   for(const name of ['gateway','specification','formulation','compliance','label-workflow']) {
     const policy=docs.find(d=>d.metadata.name===`stcn-${name}-flows`);
     const peer=policy.spec.egress.flatMap(rule=>rule.to??[]).find(target=>
@@ -516,15 +603,21 @@ check('staging deploy custom-resource RBAC is namespace-scoped and limited to th
 check('Keycloak staging release stays behind main, budget, staging approval, and namespace checks',()=>{
   const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/deploy-keycloak.yml'),'utf8'));
   assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+  assert.deepEqual(Object.keys(workflow.on.workflow_dispatch.inputs),['staging_window_end_sgt']);
   assert.equal(workflow.jobs.deploy.if,"github.ref == 'refs/heads/main'");
   assert.deepEqual(workflow.jobs.deploy['runs-on'],['self-hosted','linux','staging-vpc']);
   assert.equal(workflow.jobs.deploy.environment,'staging');
   assert.deepEqual(workflow.jobs.deploy.permissions,{contents:'read','id-token':'write'});
   assert.equal(workflow.jobs.deploy.env.GATEWAY_ISSUER,'${{ vars.GATEWAY_ISSUER }}');
-  assert.equal(workflow.jobs.deploy.env.MYSQL_HOST,'${{ vars.MYSQL_HOST }}');
-  assert.equal(workflow.jobs.deploy.env.AVAILABLE_CREDIT_USD,'${{ vars.STAGING_AVAILABLE_CREDIT_USD }}');
+  assert.equal(workflow.jobs.deploy.env.MYSQL_HOST,undefined);
+  assert.equal(workflow.jobs.deploy.env.AVAILABLE_CREDIT_USD,undefined);
+  assert.equal(workflow.jobs.deploy.env.STAGING_WINDOW_END_SGT,'${{ inputs.staging_window_end_sgt }}');
   const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
   assert.match(script,/aws_staging_budget\.py --require-gate/);
+  assert.match(script,/validate_window\.py 24/);
+  assert.match(script,/resolve_rds_values\.py/);
+  assert.match(script,/render-server\.py/);
+  assert.match(script,/env -u AVAILABLE_CREDIT_USD/);
   assert.match(script,/kubectl auth can-i/);
   assert.match(script,/keycloaks\/spectrace-keycloak/);
   assert.match(script,/targetgroupbindings\/spectrace-keycloak/);
@@ -538,14 +631,18 @@ check('Keycloak staging release stays behind main, budget, staging approval, and
 check('Keycloak Operator bootstrap uses a separate, temporary cluster install role and pinned CRDs',()=>{
   const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/install-keycloak-operator.yml'),'utf8'));
   assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
+  assert.deepEqual(Object.keys(workflow.on.workflow_dispatch.inputs),['staging_window_end_sgt']);
   assert.equal(workflow.jobs.install.if,"github.ref == 'refs/heads/main'");
   assert.deepEqual(workflow.jobs.install['runs-on'],['self-hosted','linux','staging-vpc']);
   assert.equal(workflow.jobs.install.environment,'staging');
   assert.deepEqual(workflow.jobs.install.permissions,{contents:'read','id-token':'write'});
   assert.equal(workflow.jobs.install.env.AWS_ROLE_ARN,'${{ vars.AWS_OPERATOR_INSTALL_ROLE_ARN }}');
-  assert.equal(workflow.jobs.install.env.AVAILABLE_CREDIT_USD,'${{ vars.STAGING_AVAILABLE_CREDIT_USD }}');
+  assert.equal(workflow.jobs.install.env.AVAILABLE_CREDIT_USD,undefined);
+  assert.equal(workflow.jobs.install.env.STAGING_WINDOW_END_SGT,'${{ inputs.staging_window_end_sgt }}');
   const script=workflow.jobs.install.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
   assert.match(script,/aws_staging_budget\.py --require-gate/);
+  assert.match(script,/validate_window\.py 24/);
+  assert.match(script,/env -u AVAILABLE_CREDIT_USD/);
   assert.match(script,/AWS_ROLE_ARN.*AWS_DEPLOY_ROLE_ARN/);
   assert.match(script,/kubectl auth can-i "\$verb" customresourcedefinitions\.apiextensions\.k8s\.io/);
   assert.match(script,/keycloakrealmimports\.k8s\.keycloak\.org/);

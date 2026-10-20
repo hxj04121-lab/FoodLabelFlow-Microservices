@@ -3,8 +3,11 @@
 import json
 import math
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+
+
+AUTHORIZED_END = datetime(2026, 10, 23, 0, 0, tzinfo=timezone.utc)
 
 
 def build_window(hours, end_text, now=None):
@@ -16,6 +19,8 @@ def build_window(hours, end_text, now=None):
     if now.tzinfo is None:
         raise ValueError("The current time must include a time zone.")
     end = datetime.strptime(end_text, "%Y-%m-%d %H:%M").replace(tzinfo=zone)
+    if end.astimezone(timezone.utc) > AUTHORIZED_END:
+        raise ValueError("The STCN-17 staging authorization expires at 2026-10-23 00:00 UTC.")
     remaining = (end - now.astimezone(zone)).total_seconds() / 3600
     if remaining <= 0 or hours > remaining:
         raise ValueError("The confirmed staging shutdown time must be in the future and cover the requested window.")

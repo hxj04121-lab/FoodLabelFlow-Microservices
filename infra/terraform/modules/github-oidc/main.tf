@@ -48,11 +48,22 @@ locals {
       Action   = ["eks:DescribeCluster"]
       Resource = "arn:${data.aws_partition.current.partition}:eks:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:cluster/${var.cluster_name}"
     }],
+    var.cluster_name == "" ? [] : [{
+      Effect   = "Allow"
+      Action   = ["eks:DescribeNodegroup"]
+      Resource = "arn:${data.aws_partition.current.partition}:eks:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:nodegroup/${var.cluster_name}/compliance/*"
+    }],
+    [{
+      Effect   = "Allow"
+      Action   = ["rds:DescribeDBInstances", "ec2:DescribeSubnets"]
+      Resource = "*"
+    }],
     [{
       Effect   = "Allow"
       Action   = ["sts:GetCallerIdentity"]
       Resource = "*"
-    }]
+    }],
+    local.secret_read_statement
   )
   kms_describe_statement = var.state_bucket_name == "" ? [] : [{
     Effect   = "Allow"

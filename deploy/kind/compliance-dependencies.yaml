@@ -27,6 +27,16 @@ stringData:
   SPECTRACE_SECURITY_JWKSETURI: http://keycloak.invalid/realms/spectrace/protocol/openid-connect/certs
   SPECTRACE_SECURITY_AUDIENCE: kind-test
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: compliance-rabbitmq-user-credentials
+  namespace: compliance
+type: Opaque
+stringData:
+  username: kind-only
+  password: kind-only
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -13,13 +13,21 @@ grep -Fq '      STAGING_K6_HOURS: ${{ inputs.k6_hours }}' "$workflow"
 grep -Fq '      STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}' "$workflow"
 grep -Fq 'platform/staging/validate_window.py "$STAGING_WINDOW_HOURS" "$STAGING_WINDOW_END_SGT"' "$workflow"
 grep -Fqx '      AWS_REGION: ${{ vars.AWS_REGION }}' "$workflow"
-grep -Fq '          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}' "$workflow"
-grep -Fq '          EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}' "$workflow"
+grep -Fq '      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}' "$workflow"
+grep -Fq '      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}' "$workflow"
+grep -Fq 'role/spectrace-staging-github-deploy' "$workflow"
+! grep -q 'vars.AWS_PLAN_ROLE_ARN' "$workflow"
 grep -Fq '          APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}' "$workflow"
 grep -Fq -- '--approved-spend-usd "$APPROVED_STAGING_SPEND_USD"' "$workflow"
+grep -Fq "cap > Decimal('150')" "$workflow"
+grep -Fq 'scripts/staging/resolve_rds_values.py' "$workflow"
+grep -Fq 'spectrace-staging/mysql/master' "$workflow"
+grep -Fq 'bash deploy/mysql/bootstrap-service-databases.sh' "$workflow"
+grep -Fq "echo 'STAGING_WINDOW_VALIDATED=true'" "$workflow"
+! grep -q 'STAGING_WINDOW_OPEN\|vars.MYSQL_HOST\|vars.RABBITMQ_HOST\|STAGING_AVAILABLE_CREDIT_USD' "$workflow"
 ! grep -q 'STAGING_AVAILABLE_CREDIT_USD\|--available-credit-usd' "$workflow"
 ! grep -Eq 'STAGING_AWS_ACCOUNT_ID|STAGING_EKS_CLUSTER_NAME' "$workflow"
-for secret in SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD RABBITMQ_USERNAME RABBITMQ_PASSWORD; do
+for secret in SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD KEYCLOAK_DB_PASSWORD; do
   grep -Fq "\${{ secrets.$secret }}" "$workflow"
 done
 tmp_dir="$(mktemp -d)"
@@ -84,14 +92,11 @@ export AWS_REGION=ap-southeast-1
 export GITHUB_ACTIONS=true
 export GITHUB_REF=refs/heads/main
 export GITHUB_WORKFLOW='STCN-15 staging runtime Secrets'
-export STAGING_WINDOW_OPEN=true
+export STAGING_WINDOW_VALIDATED=true
 export AWS_ACCOUNT_ID=000000000000
 export FAKE_ACCOUNT_ID=000000000000
 export EKS_CLUSTER_NAME=staging-cluster
-export MYSQL_HOST=staging-mysql.example.invalid
-export RABBITMQ_HOST=rabbitmq.rabbitmq.svc.cluster.local
-export RABBITMQ_USERNAME=spectrace-staging
-export RABBITMQ_PASSWORD=rabbitmq-password-012345678901234567890
+export MYSQL_HOST=spectrace.abc.ap-southeast-1.rds.amazonaws.com
 export GATEWAY_ISSUER=https://gateway.example.invalid/auth/realms/spectrace
 export SPECTRACE_SECURITY_JWKSETURI=http://keycloak.keycloak.svc.cluster.local:8080/auth/realms/spectrace/protocol/openid-connect/certs
 export FAKE_CONTEXT="arn:aws:eks:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster/${EKS_CLUSTER_NAME}"
@@ -112,14 +117,12 @@ for spec in \
   grep -Fqx "SPRING_DATASOURCE_URL=jdbc:mysql://${MYSQL_HOST}:3306/${schema}?sslMode=REQUIRED&serverTimezone=UTC" "$tmp_dir/captures/${namespace}.env"
   grep -Fqx "SPRING_DATASOURCE_USERNAME=${schema}" "$tmp_dir/captures/${namespace}.env"
   grep -Fqx "SPRING_DATASOURCE_PASSWORD=${password}" "$tmp_dir/captures/${namespace}.env"
-  grep -Fqx "RABBITMQ_HOST=${RABBITMQ_HOST}" "$tmp_dir/captures/${namespace}.env"
-  grep -Fqx "RABBITMQ_USERNAME=${RABBITMQ_USERNAME}" "$tmp_dir/captures/${namespace}.env"
-  grep -Fqx "RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}" "$tmp_dir/captures/${namespace}.env"
+  ! grep -q '^RABBITMQ_' "$tmp_dir/captures/${namespace}.env"
   grep -Fqx "SPECTRACE_SECURITY_ISSUERURI=${GATEWAY_ISSUER}" "$tmp_dir/captures/${namespace}.env"
   grep -Fqx "SPECTRACE_SECURITY_JWKSETURI=${SPECTRACE_SECURITY_JWKSETURI}" "$tmp_dir/captures/${namespace}.env"
   grep -Fqx 'SPECTRACE_SECURITY_AUDIENCE=spectrace-api' "$tmp_dir/captures/${namespace}.env"
   grep -Fq "apply runtime Secret ${namespace}/${namespace}-runtime" "$tmp_dir/output"
-  for secret in "$password" "$RABBITMQ_PASSWORD" "$RABBITMQ_USERNAME" "$KEYCLOAK_DB_PASSWORD"; do
+  for secret in "$password" "$KEYCLOAK_DB_PASSWORD"; do
     if grep -Fq "$secret" "$tmp_dir/output"; then
       echo "FAIL runtime credential appeared in command output" >&2
       exit 1
@@ -129,7 +132,7 @@ done
 grep -Fqx 'username=keycloak' "$tmp_dir/captures/keycloak.env"
 grep -Fqx "password=${KEYCLOAK_DB_PASSWORD}" "$tmp_dir/captures/keycloak.env"
 grep -Fq "apply runtime Secret keycloak/keycloak-db" "$tmp_dir/output"
-for variable in SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD KEYCLOAK_DB_PASSWORD RABBITMQ_USERNAME RABBITMQ_PASSWORD; do
+for variable in SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD KEYCLOAK_DB_PASSWORD; do
   if grep -Fq "${!variable}" "$tmp_dir/captures/args"; then
     echo "FAIL database password appeared in kubectl arguments" >&2
     exit 1
@@ -147,7 +150,7 @@ if env -u GITHUB_ACTIONS bash "$repo_root/scripts/staging/apply-runtime-secrets.
   exit 1
 fi
 
-if STAGING_WINDOW_OPEN=false bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/closed-window" 2>&1; then
+if STAGING_WINDOW_VALIDATED=false bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/closed-window" 2>&1; then
   echo "FAIL Secret apply was accepted outside an approved window" >&2
   exit 1
 fi
@@ -180,27 +183,14 @@ if SPECTRACE_SECURITY_JWKSETURI=http://keycloak.example.invalid/jwks bash "$repo
 fi
 ! grep -q 'create secret' "$tmp_dir/invalid-jwks"
 
-if RABBITMQ_HOST=bad..host bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/invalid-rabbitmq-host" 2>&1; then
-  echo "FAIL invalid RabbitMQ hostname was accepted" >&2
+if MYSQL_HOST=staging-mysql.example.invalid bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/invalid-mysql-host" 2>&1; then
+  echo "FAIL non-RDS MySQL hostname was accepted" >&2
   exit 1
 fi
-! grep -q 'create secret' "$tmp_dir/invalid-rabbitmq-host"
+! grep -q 'create secret' "$tmp_dir/invalid-mysql-host"
 
-if RABBITMQ_USERNAME='not valid' bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/invalid-rabbitmq-username" 2>&1; then
-  echo "FAIL invalid RabbitMQ username was accepted" >&2
-  exit 1
-fi
-! grep -q 'create secret' "$tmp_dir/invalid-rabbitmq-username"
-
-if RABBITMQ_PASSWORD=too-short bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" > "$tmp_dir/invalid-rabbitmq-password" 2>&1; then
-  echo "FAIL invalid RabbitMQ password was accepted" >&2
-  exit 1
-fi
-! grep -Fq too-short "$tmp_dir/invalid-rabbitmq-password"
-! grep -q 'create secret' "$tmp_dir/invalid-rabbitmq-password"
-
-unset MYSQL_HOST RABBITMQ_HOST RABBITMQ_USERNAME RABBITMQ_PASSWORD GATEWAY_ISSUER SPECTRACE_SECURITY_JWKSETURI SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD KEYCLOAK_DB_PASSWORD
-export STAGING_WINDOW_OPEN=false
+unset MYSQL_HOST GATEWAY_ISSUER SPECTRACE_SECURITY_JWKSETURI SPECIFICATION_DB_PASSWORD FORMULATION_DB_PASSWORD COMPLIANCE_DB_PASSWORD LABEL_WORKFLOW_DB_PASSWORD KEYCLOAK_DB_PASSWORD
+unset STAGING_WINDOW_VALIDATED
 bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" delete > "$tmp_dir/deleted-output"
 [[ $(wc -l < "$tmp_dir/captures/deleted") -eq 5 ]]
-echo "PASS runtime Secret injection and cleanup: isolated DBs, broker/OIDC configuration, exact staging context and redaction"
+echo "PASS runtime Secret injection and cleanup: isolated DBs, OIDC configuration, protected window, exact staging context and redaction"

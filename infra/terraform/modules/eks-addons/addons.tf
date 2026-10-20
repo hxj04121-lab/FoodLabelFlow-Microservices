@@ -188,6 +188,37 @@ resource "kubernetes_manifest" "deployer_custom_resource_rolebinding" {
   depends_on = [kubernetes_manifest.deployer_custom_resource_role]
 }
 
+resource "kubernetes_manifest" "staging_deployer_node_reader" {
+  manifest = {
+    apiVersion = "rbac.authorization.k8s.io/v1"
+    kind       = "ClusterRole"
+    metadata   = { name = "spectrace-staging-node-reader" }
+    rules = [{
+      apiGroups = [""]
+      resources = ["nodes"]
+      verbs     = ["get", "list", "watch"]
+    }]
+  }
+}
+
+resource "kubernetes_manifest" "staging_deployer_node_reader_binding" {
+  manifest = {
+    apiVersion = "rbac.authorization.k8s.io/v1"
+    kind       = "ClusterRoleBinding"
+    metadata   = { name = "spectrace-staging-node-reader" }
+    roleRef = {
+      apiGroup = "rbac.authorization.k8s.io"
+      kind     = "ClusterRole"
+      name     = kubernetes_manifest.staging_deployer_node_reader.manifest.metadata.name
+    }
+    subjects = [{
+      kind     = "Group"
+      name     = var.deployer_kubernetes_group
+      apiGroup = "rbac.authorization.k8s.io"
+    }]
+  }
+}
+
 resource "kubernetes_manifest" "ebs_gp3_storage_class" {
   manifest = yamldecode(templatefile("${path.module}/../../../../deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl", {
     cluster_name = var.cluster_name
