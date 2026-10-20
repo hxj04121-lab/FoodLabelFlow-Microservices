@@ -13,7 +13,8 @@ RUN mvn -B -ntp -q -f services/label-workflow/pom.xml -DskipTests package
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-RUN adduser -S -D -H -u 10001 spectrace
+RUN apk add --no-cache --upgrade libexpat \
+    && adduser -S -D -H -u 10001 spectrace
 COPY --from=build /workspace/services/label-workflow/target/app.jar app.jar
 USER 10001
 EXPOSE 8080
