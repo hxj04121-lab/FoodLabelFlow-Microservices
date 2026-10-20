@@ -81,6 +81,17 @@ spec:
       ports:
         - {protocol: TCP, port: 8080}
     - from:
+        {{- range $service := list "specification" "formulation" "compliance" "label-workflow" }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ index $.Values.namespaces $service | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ $service | quote }}
+        {{- end }}
+      ports:
+        - {protocol: TCP, port: 8080}
+    - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $monitoringNS | quote }}
