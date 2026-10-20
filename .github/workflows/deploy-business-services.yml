@@ -112,34 +112,8 @@ jobs:
           aws eks describe-nodegroup --cluster-name "$EKS_CLUSTER_NAME" --nodegroup-name compliance \
             --region "$AWS_REGION" > "$RUNNER_TEMP/compliance-nodegroup.json"
           kubectl get nodes -l eks.amazonaws.com/nodegroup=compliance -o json > "$RUNNER_TEMP/compliance-nodes.json"
-          python3 - "$RUNNER_TEMP/compliance-nodegroup.json" "$RUNNER_TEMP/compliance-nodes.json" <<'PY'
-          import json, re, sys
-          group=json.load(open(sys.argv[1]))['nodegroup']
-          scaling=group.get('scalingConfig', {})
-          if group.get('status')!='ACTIVE' or group.get('instanceTypes')!=['c6i.large'] or scaling.get('minSize',0)<1 or scaling.get('desiredSize',0)<1 or group.get('health',{}).get('issues'):
-              raise SystemExit('Compliance node group must be healthy, c6i.large, and have at least one desired node.')
-          nodes=json.load(open(sys.argv[2]))['items']
-          ready=[node for node in nodes if any(c.get('type')=='Ready' and c.get('status')=='True' for c in node['status'].get('conditions',[]))]
-          if not ready:
-              raise SystemExit('Compliance node group has no Ready Kubernetes node.')
-          cpu=0
-          memory=0
-          for node in ready:
-              alloc=node['status']['allocatable']
-              value=alloc['cpu']
-              cpu += int(value[:-1])/1000 if value.endswith('m') else float(value)
-              value=alloc['memory']
-              match=re.fullmatch(r'([0-9.]+)(Ki|Mi|Gi|Ti)?',value)
-              if not match: raise SystemExit('Unknown Kubernetes memory quantity.')
-              factor={None:1,'Ki':1024,'Mi':1024**2,'Gi':1024**3,'Ti':1024**4}[match.group(2)]
-              memory += float(match.group(1))*factor
-              taints=node.get('spec',{}).get('taints',[])
-              if not any(t.get('key')=='dedicated' and t.get('value')=='compliance' and t.get('effect')=='NoSchedule' for t in taints):
-                  raise SystemExit('Ready compliance node is missing its dedicated taint.')
-          if cpu < 1 or memory < 2*1024**3:
-              raise SystemExit('Compliance nodes do not have the allocatable CPU and memory requested by the service.')
-          print(f'Compliance group ready: {len(ready)} node(s), {cpu:g} allocatable CPU, {memory/1024**3:.2f} GiB allocatable memory.')
-          PY
+          python3 scripts/staging/verify_compliance_node_group.py \
+            "$RUNNER_TEMP/compliance-nodegroup.json" "$RUNNER_TEMP/compliance-nodes.json"
       - name: Resolve the actual private RDS endpoint and subnet CIDRs
         run: |
           set -euo pipefail

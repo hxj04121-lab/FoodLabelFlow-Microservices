@@ -20,6 +20,7 @@ on:
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
+      - 'tests/test_compliance_node_group.py'
   push:
     branches: [main]
     paths:
@@ -40,6 +41,7 @@ on:
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
+      - 'tests/test_compliance_node_group.py'
 
 permissions:
   contents: read
@@ -68,6 +70,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_staging_rds_values.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_service_digests.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_window.py' -v
+          python3 -m unittest discover -s tests -p 'test_compliance_node_group.py' -v
           bash tests/test-runtime-secrets.sh
           bash tests/test_mysql_bootstrap_workflow_guard.sh
       - name: Verify RabbitMQ per-queue DLQ scrape target
