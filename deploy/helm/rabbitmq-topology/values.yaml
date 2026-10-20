@@ -27,3 +27,8 @@ consumers:
         routingKey: formula.published.v1
       - name: impact-finding
         routingKey: impact.finding.v1
+  - service: staging-smoke
+    namespace: rabbitmq
+    queues:
+      - name: smoke
+        routingKey: staging.smoke

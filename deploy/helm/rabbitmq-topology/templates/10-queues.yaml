@@ -1,0 +1,29 @@
+{{- range $consumer := .Values.consumers }}
+{{- $service := $consumer.service }}
+{{- $namespace := $consumer.namespace }}
+{{- range $queue := $consumer.queues }}
+{{- $queueName := printf "%s.%s" $service $queue.name }}
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Queue
+metadata:
+  name: {{ printf "%s-%s" $service $queue.name }}
+  namespace: {{ $namespace }}
+spec:
+  name: {{ $queueName | quote }}
+  durable: true
+  autoDelete: false
+  rabbitmqClusterReference: {name: {{ $.Values.rabbitmq.name }}, namespace: {{ $.Values.rabbitmq.namespace }}}
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Queue
+metadata:
+  name: {{ printf "%s-%s-dlq" $service $queue.name }}
+  namespace: {{ $namespace }}
+spec:
+  name: {{ printf "%s.dlq" $queueName | quote }}
+  durable: true
+  autoDelete: false
+  rabbitmqClusterReference: {name: {{ $.Values.rabbitmq.name }}, namespace: {{ $.Values.rabbitmq.namespace }}}
+{{- end }}
+{{- end }}

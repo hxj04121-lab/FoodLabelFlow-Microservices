@@ -9,6 +9,7 @@ on:
       - '.github/workflows/service-cicd-reusable.yml'
       - '.github/workflows/compliance-kind-ci.yml'
       - '.github/workflows/deploy-business-services.yml'
+      - '.github/workflows/deploy-rabbitmq.yml'
       - '.github/workflows/deploy-frontend.yml'
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
@@ -20,6 +21,8 @@ on:
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
+      - 'tests/test_rabbitmq_*.py'
+      - 'docs/aws/runbooks/install-rabbitmq-operators-cloudshell.md'
   push:
     branches: [main]
     paths:
@@ -29,6 +32,7 @@ on:
       - '.github/workflows/service-cicd-reusable.yml'
       - '.github/workflows/compliance-kind-ci.yml'
       - '.github/workflows/deploy-business-services.yml'
+      - '.github/workflows/deploy-rabbitmq.yml'
       - '.github/workflows/deploy-frontend.yml'
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
@@ -40,6 +44,8 @@ on:
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
+      - 'tests/test_rabbitmq_*.py'
+      - 'docs/aws/runbooks/install-rabbitmq-operators-cloudshell.md'
 
 permissions:
   contents: read
@@ -75,7 +81,30 @@ jobs:
       - run: bash -n scripts/verify_eks_addons.sh
       - uses: azure/setup-kubectl@v4
       - run: kubectl kustomize deploy/operators >/dev/null
-      - run: kubectl kustomize deploy/operators/rabbitmq >/dev/null
+      - run: kubectl kustomize deploy/operators/rabbitmq --load-restrictor LoadRestrictionsNone >/dev/null
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm ci
+        working-directory: deploy/helm
+      - run: npm test
+        working-directory: deploy/helm
+      - name: Verify RabbitMQ deploy boundary and immutable operator locks
+        run: |
+          python3 -m unittest discover -s tests -p 'test_rabbitmq_*.py' -v
+          set -euo pipefail
+          manifest_dir="$RUNNER_TEMP/rabbitmq-operator-manifests"
+          mkdir -m 700 "$manifest_dir"
+          lock_rows="$RUNNER_TEMP/rabbitmq-manifest-lock.tsv"
+          python3 - <<'PY' > "$lock_rows"
+          import json
+          for row in json.load(open('deploy/operators/rabbitmq/operator-manifests.lock'))['manifests']:
+              print(f"{row['file']}\t{row['url']}")
+          PY
+          trap 'rm -f "$manifest_dir"/*.yaml "$lock_rows"; rmdir "$manifest_dir"' EXIT
+          while IFS=$'\t' read -r filename url; do
+            curl --fail --location --silent --show-error "$url" --output "$manifest_dir/$filename"
+          done < "$lock_rows"
+          python3 scripts/staging/verify_operator_manifest_lock.py --manifest-dir "$manifest_dir"
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
@@ -133,6 +133,20 @@ check('fixed three-replica placement requires c6i.large and compliance group',()
   assert.deepEqual(np.spec.ingress.flatMap(r=>r.from??[]).filter(s=>s.namespaceSelector).map(s=>[s.namespaceSelector.matchLabels['kubernetes.io/metadata.name'],s.podSelector.matchLabels['app.kubernetes.io/name']]).sort((a,b)=>a.join('/').localeCompare(b.join('/'))),[['gateway','gateway'],['label-workflow','label-workflow'],['observability','grafana-alloy']].sort((a,b)=>a.join('/').localeCompare(b.join('/'))));
   assert(np.spec.egress.some(r=>r.to?.some(t=>t.podSelector?.matchLabels?.['app.kubernetes.io/name']==='spectrace')&&r.ports[0].port===5672));
   writeFileSync(resolve(evidence,'compliance-three-replicas.json'),JSON.stringify(docs,null,2)+'\n');
+});
+check('service runtime Secret leaves RabbitMQ credentials to the per-service Operator Secret',()=>{
+  const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/service-cicd-reusable.yml'),'utf8'));
+  const step=workflow.jobs.deploy.steps.find(row=>row.name==='Create the service runtime Secret without logging values');
+  assert(step);
+  assert(!Object.keys(step.env).some(key=>key.startsWith('RABBITMQ_')));
+  assert.doesNotMatch(step.run,/RABBITMQ_/);
+  for(const service of ['specification','formulation','compliance','label-workflow']) {
+    const values=parse(readFileSync(resolve(root,`values/${service}.yaml`),'utf8'));
+    const user=values.env.find(row=>row.name==='RABBITMQ_USERNAME');
+    const password=values.env.find(row=>row.name==='RABBITMQ_PASSWORD');
+    assert.equal(user.valueFrom.secretKeyRef.name,`${service}-rabbitmq-user-credentials`);
+    assert.equal(password.valueFrom.secretKeyRef.name,`${service}-rabbitmq-user-credentials`);
+  }
 });
 check('optional Should HPA preserves 1–4 range and fixed per-pod limits',()=>{
   const docs=render('compliance',['--set','autoscaling.enabled=true']);
@@ -503,7 +517,7 @@ check('Keycloak platform policies select the Operator pods by their app label',(
   }
 });
 check('staged RabbitMQ bundle renders placement patch and quorum PDB',()=>{
-  const r=spawnSync(process.env.KUBECTL_BIN || 'kubectl',['kustomize',resolve(root,'../kubernetes/staging/rabbitmq')],{encoding:'utf8',timeout:60000});
+  const r=spawnSync(process.env.KUBECTL_BIN || 'kubectl',['kustomize',resolve(root,'../kubernetes/staging/rabbitmq'),'--load-restrictor','LoadRestrictionsNone'],{encoding:'utf8',timeout:60000});
   if(r.error) throw r.error;
   assert.equal(r.status,0,r.stderr+'\n'+r.stdout);
   const docs=parseAllDocuments(r.stdout).map(d=>d.toJSON()).filter(Boolean);
@@ -519,6 +533,24 @@ check('staged RabbitMQ bundle renders placement patch and quorum PDB',()=>{
   assert(pdb,'quorum PDB must be in the rendered bundle');
   assert.equal(pdb.spec.maxUnavailable,1);
   assert.deepEqual(pdb.spec.selector,term.labelSelector);
+});
+
+check('RabbitMQ topology has one ordered authority with no duplicate resources',()=>{
+  const chart=resolve(root,'rabbitmq-topology');
+  const output=run(['template','rabbitmq-topology',chart,'--namespace','rabbitmq']).stdout;
+  const docs=parseAllDocuments(output).map(d=>d.toJSON()).filter(Boolean);
+  const identity=d=>`${d.apiVersion}/${d.kind}:${d.metadata.namespace}/${d.metadata.name}`;
+  const ids=docs.map(identity);
+  assert.equal(new Set(ids).size,ids.length,'split topology templates must not render duplicate resource identities');
+  assert.deepEqual(
+    readdirSync(resolve(chart,'templates')).sort(),
+    ['00-exchanges.yaml','10-queues.yaml','20-bindings.yaml','30-policies.yaml'],
+    'ordered split templates are the only topology resource definitions'
+  );
+  assert.equal(docs.filter(d=>d.kind==='Exchange').length,2);
+  assert.equal(docs.filter(d=>d.kind==='Queue').length,14);
+  assert.equal(docs.filter(d=>d.kind==='Binding').length,15);
+  assert.equal(docs.filter(d=>d.kind==='Policy').length,7);
 });
 
 check('PR frontend builds are read-only and publishing consumes only the tested same-run artifact',()=>{

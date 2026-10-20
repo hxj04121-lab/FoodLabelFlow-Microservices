@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "manifests": [
+    {
+      "name": "cert-manager",
+      "version": "v1.21.2",
+      "url": "https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml",
+      "file": "cert-manager.yaml",
+      "sha256": "e03b668ec8675214af6b0a671699d088f2601fa3878e0dbe1b41d3feafd1879f",
+      "bytes": 1034400
+    },
+    {
+      "name": "rabbitmq-cluster-operator",
+      "version": "v2.22.3",
+      "url": "https://github.com/rabbitmq/cluster-operator/releases/download/v2.22.3/cluster-operator.yml",
+      "file": "rabbitmq-cluster-operator.yaml",
+      "sha256": "8e2c20fe9fe8fb06a8e4a99574951d7933ba7cbc4d83c854bc5e7acc7dc0624e",
+      "bytes": 351140
+    },
+    {
+      "name": "messaging-topology-operator",
+      "version": "v1.20.2",
+      "url": "https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.2/messaging-topology-operator-with-certmanager.yaml",
+      "file": "messaging-topology-operator.yaml",
+      "sha256": "8bcf2037d6dcb0403c0599de880b62167423b1634da80a61936a6fd6c65ec999",
+      "bytes": 108361
+    }
+  ]
+}
