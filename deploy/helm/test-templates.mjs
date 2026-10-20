@@ -485,14 +485,23 @@ check('staging TGB RBAC is namespace-scoped with allowed verbs and denied broade
   for(const [namespace,name,groups] of cases) {
     const role=parse(readFileSync(resolve(directory,`${namespace}-deployer-role.yaml.tmpl`),'utf8').replaceAll('${namespace}',namespace));
     const binding=parse(readFileSync(resolve(directory,`${namespace}-deployer-rolebinding.yaml.tmpl`),'utf8').replaceAll('${namespace}',namespace).replaceAll('${group}','spectrace-staging-deploy'));
+    assert.equal(role.kind,'Role');
     assert.equal(role.metadata.namespace,namespace);
     assert.deepEqual([...new Set(role.rules.map(rule=>rule.apiGroups[0]))].sort(),groups.sort());
     assert(role.rules.every(rule=>rule.resources.length===1 && rule.resources[0]!=='*'));
     assert(role.rules.every(rule=>rule.resources[0]==='targetgroupbindings'));
-    assert.deepEqual([...new Set(role.rules.flatMap(rule=>rule.verbs))].sort(),['create','get','patch','watch']);
+    assert.deepEqual([...new Set(role.rules.flatMap(rule=>rule.verbs))].sort(),namespace==='frontend'?['create','get','list','patch','update','watch']:['create','get','patch','watch']);
     assert(role.rules.some(rule=>rule.verbs.length===1 && rule.verbs[0]==='create' && !rule.resourceNames));
+    const listRules=role.rules.filter(rule=>rule.verbs.includes('list'));
+    if(namespace==='frontend') {
+      assert.deepEqual(listRules,[{apiGroups:['elbv2.k8s.aws'],resources:['targetgroupbindings'],verbs:['list']}]);
+      assert.deepEqual(role.rules.filter(rule=>rule.verbs.includes('update')),[{apiGroups:['elbv2.k8s.aws'],resources:['targetgroupbindings'],verbs:['update']}]);
+    } else {
+      assert.deepEqual(listRules,[],'gateway and keycloak must not gain namespace-wide list access');
+      assert.equal(role.rules.some(rule=>rule.verbs.includes('update')),false,'gateway and keycloak must not gain update access');
+    }
     assert(role.rules.filter(rule=>rule.verbs.some(verb=>['get','patch','watch'].includes(verb))).every(rule=>rule.resourceNames?.length===1 && rule.resourceNames[0]===name));
-    assert(role.rules.every(rule=>rule.verbs.every(verb=>['create','get','patch','watch'].includes(verb))),'list/update/delete and unrelated verbs are denied');
+    assert(role.rules.every(rule=>rule.verbs.every(verb=>['create','get','list','patch','update','watch'].includes(verb))),'delete and unrelated verbs are denied');
     assert.equal(binding.kind,'RoleBinding');
     assert.equal(binding.metadata.namespace,namespace);
     assert.deepEqual(binding.subjects,[{kind:'Group',name:'spectrace-staging-deploy',apiGroup:'rbac.authorization.k8s.io'}]);

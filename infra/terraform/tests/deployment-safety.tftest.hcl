@@ -136,15 +136,20 @@ run "staging_preserves_out_of_band_lbc_and_existing_namespaces" {
   }
   assert {
     condition = alltrue([for namespace, role in kubernetes_manifest.deployer_custom_resource_role : (
-      length(role.manifest.rules) == 2 &&
+      length(role.manifest.rules) == (namespace == "frontend" ? 4 : 2) &&
       role.manifest.metadata.namespace == var.workload_namespaces[namespace] &&
-      toset(flatten([for rule in role.manifest.rules : rule.verbs])) == toset(["create", "get", "patch", "watch"]) &&
+      toset(flatten([for rule in role.manifest.rules : rule.verbs])) == (namespace == "frontend" ? toset(["create", "get", "list", "patch", "update", "watch"]) : toset(["create", "get", "patch", "watch"])) &&
       alltrue([for rule in role.manifest.rules : rule.apiGroups == ["elbv2.k8s.aws"] && rule.resources == ["targetgroupbindings"]]) &&
-      role.manifest.rules[1].resourceNames == [namespace == "gateway" ? "gateway-gateway" : namespace == "keycloak" ? "spectrace-keycloak" : "frontend-frontend"]
+      alltrue([for rule in role.manifest.rules : (
+        (rule.verbs == ["create"] && !contains(keys(rule), "resourceNames")) ||
+        (namespace == "frontend" && rule.verbs == ["list"] && !contains(keys(rule), "resourceNames")) ||
+        (namespace == "frontend" && rule.verbs == ["update"] && !contains(keys(rule), "resourceNames")) ||
+        (rule.verbs == ["get", "patch", "watch"] && rule.resourceNames == [namespace == "gateway" ? "gateway-gateway" : namespace == "keycloak" ? "spectrace-keycloak" : "frontend-frontend"])
+      )])
       )]) && alltrue([for binding in values(kubernetes_manifest.deployer_custom_resource_rolebinding) : binding.manifest.subjects == [{
         kind = "Group", name = "spectrace-staging-deploy", apiGroup = "rbac.authorization.k8s.io"
     }]])
-    error_message = "TGB Roles stay namespace-scoped, limited to necessary actions and resource names, and bind only to the existing deploy group."
+    error_message = "TGB Roles stay namespace-scoped, grant frontend list and update checks only in frontend, constrain named reads, and bind only to the existing deploy group."
   }
   assert {
     condition = kubernetes_manifest.keycloak_resource_role.manifest.rules == [
