@@ -20,6 +20,7 @@
 
     <properties>
         <java.version>21</java.version>
+        <jackson-bom.version>3.1.7</jackson-bom.version>
         <tomcat.version>11.0.25</tomcat.version>
         <testcontainers.version>1.21.3</testcontainers.version>
         <archunit.version>1.4.1</archunit.version>
