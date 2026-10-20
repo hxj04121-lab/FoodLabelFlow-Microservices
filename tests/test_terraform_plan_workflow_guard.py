@@ -14,6 +14,20 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
         self.assertIn("runs-on: [self-hosted, linux, staging-vpc]", workflow)
         self.assertIn("id-token: write", workflow)
         self.assertIn("terraform plan -input=false", workflow)
+        self.assertIn("guard_staging_ownership.py", workflow)
+        self.assertIn("get deployments -n kube-system --server-print=true --no-headers", workflow)
+        self.assertIn("get networkpolicies --all-namespaces -o name", workflow)
+        self.assertIn("get namespaces --server-print=true --no-headers", workflow)
+        self.assertIn('get "$kind" spectrace-staging-deployer-custom-resources -n "$namespace"', workflow)
+        self.assertIn("--rbac-resources \"$rbac_inventory\"", workflow)
+        self.assertLess(
+            workflow.index('python3 "$GITHUB_WORKSPACE/scripts/staging/guard_staging_ownership.py"'),
+            workflow.index("terraform plan -input=false"),
+        )
+        self.assertNotIn("kubectl get secrets", workflow)
+        self.assertIn("aws iam get-role --role-name", workflow)
+        self.assertIn("aws iam get-policy --policy-arn", workflow)
+        self.assertNotIn("AssumeRolePolicyDocument", workflow)
         self.assertNotIn("terraform apply", workflow)
         self.assertNotIn("terraform workspace new", workflow)
         self.assertNotIn("terraform import", workflow)
@@ -42,7 +56,13 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
             'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_rolebinding["frontend"]',
             'module.eks_addons[0].kubernetes_manifest.workload_namespace["gateway"]',
             'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak"]',
+            'module.eks_addons[0].kubernetes_manifest.workload_namespace["rabbitmq"]',
             'module.eks_addons[0].kubernetes_manifest.workload_namespace["observability"]',
+            'module.eks_addons[0].kubernetes_manifest.workload_namespace["specification"]',
+            'module.eks_addons[0].kubernetes_manifest.workload_namespace["formulation"]',
+            'module.eks_addons[0].kubernetes_manifest.workload_namespace["compliance"]',
+            'module.eks_addons[0].kubernetes_manifest.workload_namespace["label-workflow"]',
+            'module.eks_addons[0].kubernetes_manifest.workload_namespace["frontend"]',
             'module.eks_addons[0].kubernetes_manifest.workload_namespace["rabbitmq-system"]',
             'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak-system"]',
         ):

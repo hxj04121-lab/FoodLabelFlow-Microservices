@@ -30,11 +30,29 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
   command = plan
   module { source = "./modules/eks-addons" }
   variables {
-    cluster_name              = "deployment-test"
-    cluster_version           = "1.36"
-    cluster_oidc_provider_arn = "arn:aws:iam::000000000000:oidc-provider/oidc.eks.example.test/id/test"
-    workload_namespaces       = { rabbitmq = "rabbitmq", specification = "specification", formulation = "formulation", compliance = "compliance", label-workflow = "label-workflow", frontend = "frontend" }
+    cluster_name                = "deployment-test"
+    cluster_version             = "1.36"
+    cluster_oidc_provider_arn   = "arn:aws:iam::000000000000:oidc-provider/oidc.eks.example.test/id/test"
+    cluster_autoscaler_role_arn = "arn:aws:iam::000000000000:role/test-autoscaler"
+    vpc_id                      = "vpc-test"
+    vpc_cidr                    = "10.0.0.0/16"
+    public_subnet_cidrs         = ["10.0.0.0/20", "10.0.16.0/20"]
+    private_subnet_cidrs        = ["10.0.64.0/20", "10.0.80.0/20"]
+    database_subnet_cidrs       = ["10.0.64.0/20", "10.0.80.0/20"]
+    node_groups                 = { general = { asg_name = "test-asg", min_size = 1, max_size = 3 } }
+    workload_namespaces = {
+      gateway        = "gateway"
+      keycloak       = "keycloak"
+      rabbitmq       = "rabbitmq"
+      observability  = "observability"
+      specification  = "specification"
+      formulation    = "formulation"
+      compliance     = "compliance"
+      label-workflow = "label-workflow"
+      frontend       = "frontend"
+    }
     deployer_kubernetes_group = "spectrace-staging-deploy"
+    operator_namespaces       = { rabbitmq = "rabbitmq-system", keycloak = "keycloak-system" }
   }
   assert {
     condition     = length(aws_eks_addon.vpc_cni) == 0 && !contains(keys(aws_iam_role.addons), "vpc_cni") && aws_eks_addon.ebs_csi.addon_name == "aws-ebs-csi-driver"
@@ -49,8 +67,8 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
     error_message = "RabbitMQ data volumes must survive PVC deletion until reviewed cleanup."
   }
   assert {
-    condition     = toset([for namespace in kubernetes_manifest.workload_namespace : namespace.manifest.metadata.name]) == toset(["rabbitmq", "specification", "formulation", "compliance", "label-workflow", "frontend"])
-    error_message = "Only the six confirmed missing workload namespaces may be created."
+    condition     = toset([for namespace in kubernetes_manifest.workload_namespace : namespace.manifest.metadata.name]) == toset(["gateway", "keycloak", "rabbitmq", "observability", "specification", "formulation", "compliance", "label-workflow", "frontend", "rabbitmq-system", "keycloak-system"])
+    error_message = "The complete workload and operator namespace ownership set must remain declared."
   }
   assert {
     condition = kubernetes_manifest.staging_deployer_node_reader.manifest.rules == [{
@@ -65,8 +83,8 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
     error_message = "The staging deployer may only read node inventory through its existing Kubernetes group."
   }
   assert {
-    condition     = length(aws_iam_role.addons) == 1 && contains(keys(aws_iam_role.addons), "ebs_csi") && length(aws_eks_addon.vpc_cni) == 0
-    error_message = "EBS CSI is the only enabled add-on; the live VPC CNI and load balancer controller remain externally owned."
+    condition     = length(aws_iam_role.addons) == 2 && contains(keys(aws_iam_role.addons), "ebs_csi") && contains(keys(aws_iam_role.addons), "aws_load_balancer_controller") && length(aws_eks_addon.vpc_cni) == 0
+    error_message = "EBS CSI and the load balancer controller IRSA roles stay declared while the live self-managed VPC CNI remains untouched."
   }
 }
 

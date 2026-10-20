@@ -11,12 +11,14 @@ on:
       - "scripts/aws_staging_budget.py"
       - "scripts/verify_staging_target_network.py"
       - "scripts/terraform_plan_summary.py"
+      - "scripts/staging/guard_staging_ownership.py"
       - "tests/test_aws_staging_budget.py"
       - "tests/test_staging_window.py"
       - "tests/test_verify_eks_addons.py"
       - "tests/test_staging_target_network.py"
       - "tests/test_terraform_plan_summary.py"
       - "tests/test_terraform_plan_workflow_guard.py"
+      - "tests/test_staging_ownership_guard.py"
       - "deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl"
   pull_request:
     paths:
@@ -28,12 +30,14 @@ on:
       - "scripts/aws_staging_budget.py"
       - "scripts/verify_staging_target_network.py"
       - "scripts/terraform_plan_summary.py"
+      - "scripts/staging/guard_staging_ownership.py"
       - "tests/test_aws_staging_budget.py"
       - "tests/test_staging_window.py"
       - "tests/test_verify_eks_addons.py"
       - "tests/test_staging_target_network.py"
       - "tests/test_terraform_plan_summary.py"
       - "tests/test_terraform_plan_workflow_guard.py"
+      - "tests/test_staging_ownership_guard.py"
       - "deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl"
   workflow_dispatch:
     inputs:
@@ -91,6 +95,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p test_terraform_plan_summary.py -v
           python3 -m unittest discover -s tests -p test_terraform_plan_workflow_guard.py -v
+          python3 -m unittest discover -s tests -p test_staging_ownership_guard.py -v
       - name: Verify deployment safety without AWS writes
         run: terraform test -filter=tests/deployment-safety.tftest.hcl
         working-directory: infra/terraform
@@ -132,6 +137,9 @@ jobs:
       M5_TF_TEMP_SUFFIX: foodlabelflow-m5-plan-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.4
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
@@ -198,6 +206,71 @@ jobs:
           terraform workspace select "$STAGING_TF_WORKSPACE" > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-workspace.log" 2>&1
           test "$(terraform workspace show)" = "$STAGING_TF_WORKSPACE"
           terraform state list > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"
+          aws eks update-kubeconfig --name spectrace-staging --region "$AWS_REGION" \
+            --kubeconfig "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/kubeconfig" --alias spectrace-staging
+          kubectl --kubeconfig "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/kubeconfig" \
+            get deployments -n kube-system --server-print=true --no-headers \
+            > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/kube-system-deployments.txt"
+          kubectl --kubeconfig "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/kubeconfig" \
+            get networkpolicies --all-namespaces -o name \
+            > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/network-policy-names.txt"
+          kubectl --kubeconfig "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/kubeconfig" \
+            get namespaces --server-print=true --no-headers \
+            > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/namespace-names.txt"
+          rbac_inventory="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/tgb-rbac-resources.txt"
+          : > "$rbac_inventory"
+          while IFS= read -r namespace; do
+            case "$namespace" in gateway|keycloak|frontend) ;; *) continue ;; esac
+            for kind in Role RoleBinding; do
+              resource="$(kubectl --kubeconfig "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/kubeconfig" \
+                get "$kind" spectrace-staging-deployer-custom-resources -n "$namespace" \
+                --ignore-not-found -o name)"
+              if test -n "$resource"; then
+                printf '%s\t%s\n' "$kind" "$namespace" >> "$rbac_inventory"
+              fi
+            done
+          done < "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/namespace-names.txt"
+          lbc_role_name=spectrace-staging-aws_load_balancer_controller
+          lbc_policy_name=spectrace-staging-aws-load-balancer-controller
+          iam_inventory="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/iam-resources.txt"
+          iam_error="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/iam-read-error.txt"
+          iam_role_name="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/iam-role-name.txt"
+          iam_policy_name="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/iam-policy-name.txt"
+          iam_attachment_name="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/iam-attachment-name.txt"
+          : > "$iam_inventory"
+          if aws iam get-role --role-name "$lbc_role_name" --query Role.RoleName --output text > "$iam_role_name" 2> "$iam_error"; then
+            printf 'role\t%s\n' "$lbc_role_name" >> "$iam_inventory"
+          elif ! grep -Fq 'NoSuchEntity' "$iam_error"; then
+            echo '::error::Unable to inspect the existing controller IAM role; stopped before Terraform Plan.'
+            exit 1
+          fi
+          if aws iam get-policy --policy-arn "arn:aws:iam::$AWS_ACCOUNT_ID:policy/$lbc_policy_name" \
+            --query Policy.PolicyName --output text > "$iam_policy_name" 2> "$iam_error"; then
+            printf 'policy\t%s\n' "$lbc_policy_name" >> "$iam_inventory"
+          elif ! grep -Fq 'NoSuchEntity' "$iam_error"; then
+            echo '::error::Unable to inspect the existing controller IAM policy; stopped before Terraform Plan.'
+            exit 1
+          fi
+          if grep -Fxq "$lbc_role_name" "$iam_role_name"; then
+            if aws iam list-attached-role-policies --role-name "$lbc_role_name" \
+              --query "AttachedPolicies[?PolicyName=='$lbc_policy_name'].PolicyName" --output text \
+              > "$iam_attachment_name" 2> "$iam_error"; then
+              if grep -Fxq "$lbc_policy_name" "$iam_attachment_name"; then
+                printf 'attachment\t%s\n' "$lbc_policy_name" >> "$iam_inventory"
+              fi
+            else
+              echo '::error::Unable to inspect the existing controller IAM policy attachment; stopped before Terraform Plan.'
+              exit 1
+            fi
+          fi
+          python3 "$GITHUB_WORKSPACE/scripts/staging/guard_staging_ownership.py" \
+            --state-addresses "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt" \
+            --deployments "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/kube-system-deployments.txt" \
+            --network-policies "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/network-policy-names.txt" \
+            --namespaces "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/namespace-names.txt" \
+            --iam-resources "$iam_inventory" \
+            --rbac-resources "$rbac_inventory" \
+            >> "$GITHUB_STEP_SUMMARY"
           grep -Fxq 'module.eks[0].aws_eks_cluster.this' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"
           grep -Fxq 'module.network.aws_vpc.this' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"
           grep -Fxq 'module.eks[0].aws_eks_node_group.general' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"
@@ -223,7 +296,13 @@ jobs:
               'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_rolebinding["frontend"]' \
               'module.eks_addons[0].kubernetes_manifest.workload_namespace["gateway"]' \
               'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak"]' \
+              'module.eks_addons[0].kubernetes_manifest.workload_namespace["rabbitmq"]' \
               'module.eks_addons[0].kubernetes_manifest.workload_namespace["observability"]' \
+              'module.eks_addons[0].kubernetes_manifest.workload_namespace["specification"]' \
+              'module.eks_addons[0].kubernetes_manifest.workload_namespace["formulation"]' \
+              'module.eks_addons[0].kubernetes_manifest.workload_namespace["compliance"]' \
+              'module.eks_addons[0].kubernetes_manifest.workload_namespace["label-workflow"]' \
+              'module.eks_addons[0].kubernetes_manifest.workload_namespace["frontend"]' \
               'module.eks_addons[0].kubernetes_manifest.workload_namespace["rabbitmq-system"]' \
               'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak-system"]'; do
               if grep -Fxq "$address" "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-state-addresses.txt"; then

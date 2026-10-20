@@ -141,11 +141,18 @@ else:
     def test_nonretained_storage_is_rejected(self):
         self.assertNotEqual(self.run_check(reclaim_policy="Delete").returncode, 0)
 
-    def test_addons_module_does_not_own_existing_controllers_or_network_policies(self):
+    def test_addons_module_retains_platform_owners_and_scoped_custom_resource_rbac(self):
         module = ROOT / "infra/terraform/modules/eks-addons"
         source = "\n".join(path.read_text() for path in module.glob("*.tf"))
-        self.assertNotRegex(source, r'resource\s+"helm_release"')
-        self.assertNotRegex(source, r'resource\s+"kubernetes_manifest"\s+"(?:keycloak|network_policy)')
+        for release in ("load_balancer_controller", "cluster_autoscaler", "metrics_server", "network_policies"):
+            self.assertRegex(source, rf'resource\s+"helm_release"\s+"{release}"')
+        self.assertRegex(source, r'resource\s+"kubernetes_manifest"\s+"deployer_custom_resource_role"')
+        self.assertRegex(source, r'resource\s+"kubernetes_manifest"\s+"deployer_custom_resource_rolebinding"')
+        root_module = (ROOT / "infra/terraform/main.tf").read_text()
+        self.assertRegex(root_module, r'gateway\s*=\s*"gateway"')
+        self.assertRegex(root_module, r'keycloak\s*=\s*"keycloak"')
+        self.assertIn("frontend = var.workload_namespaces.frontend", source)
+        self.assertGreaterEqual(source.count("prevent_destroy = true"), 4)
 
     def test_https_path_routes_and_both_bindings(self):
         result = self.run_check("deploy")
