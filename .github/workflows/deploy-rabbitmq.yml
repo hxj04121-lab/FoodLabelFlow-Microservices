@@ -288,7 +288,7 @@ jobs:
           port_forward_pid=$!
           trap 'kill "$port_forward_pid" 2>/dev/null || true' EXIT
           ready=false
-          for attempt in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl --max-time 2 --silent --output /dev/null http://127.0.0.1:15672/; then ready=true; break; fi
             sleep 1
           done
