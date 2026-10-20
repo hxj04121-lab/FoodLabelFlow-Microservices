@@ -85,7 +85,6 @@ jobs:
             --approved-spend-usd "$APPROVED_STAGING_SPEND_USD" --require-gate \
             > "$RUNNER_TEMP/business-services-budget-gate.log"
           python3 scripts/staging/verify_service_digests.py > "$RUNNER_TEMP/service-images.json"
-          port=18101
           for service in specification formulation compliance label-workflow; do
             helm lint deploy/helm/spectrace-service --strict --values "deploy/helm/values/${service}.yaml"
           done
@@ -229,6 +228,7 @@ jobs:
           GATEWAY_ISSUER: ${{ vars.GATEWAY_ISSUER }}
         run: |
           set -euo pipefail
+          port=18101
           for service in specification formulation compliance label-workflow; do
             kubectl rollout status "deployment/${service}-${service}" --namespace "$service" --timeout=5m
             kubectl get deployment "${service}-${service}" --namespace "$service" -o json > "$RUNNER_TEMP/${service}-deployment.json"

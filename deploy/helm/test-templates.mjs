@@ -283,6 +283,12 @@ check('business service release is main-only, M1-gated, digest-pinned, budgeted,
   assert.deepEqual(workflow.jobs.deploy.permissions,{contents:'read','id-token':'write'});
   assert.equal(workflow.jobs.deploy.env.APPROVED_STAGING_SPEND_USD,'${{ secrets.APPROVED_STAGING_SPEND_USD }}');
   const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
+  const validateStep=workflow.jobs.deploy.steps.find(step=>step.name==='Validate the approved window, budget cap, and release inputs');
+  const verifyStep=workflow.jobs.deploy.steps.find(step=>step.name==='Verify Pods, Service DNS, NetworkPolicies, Gateway CORS, and OIDC discovery');
+  assert(validateStep&&verifyStep);
+  assert.doesNotMatch(validateStep.run,/port=18101/,'the port is local to the verification shell');
+  assert.match(verifyStep.run,/set -euo pipefail\s+port=18101/,'the verification shell initializes its port before use');
+  assert.match(verifyStep.run,/\$port:8080/,'port-forward consumes the locally initialized port');
   assert.match(script,/aws_staging_budget\.py[\s\S]*--require-gate/);
   assert.match(script,/Decimal\('150'\)/);
   assert.match(script,/verify_service_digests\.py/);
