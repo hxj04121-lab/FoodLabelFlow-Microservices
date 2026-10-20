@@ -277,19 +277,38 @@ jobs:
           trap 'kill "$port_forward_pid" 2>/dev/null || true' EXIT
           ready=false
           for attempt in $(seq 1 30); do
-            if curl --silent --output /dev/null http://127.0.0.1:15672/; then ready=true; break; fi
+            if curl --max-time 2 --silent --output /dev/null http://127.0.0.1:15672/; then ready=true; break; fi
             sleep 1
           done
           test "$ready" = true || { echo '::error::RabbitMQ Management API did not become reachable through the local port-forward.'; exit 1; }
           payload="m5-rabbitmq-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          publish=$(curl --fail --silent --show-error -u "$rabbit_user:$rabbit_password" -H 'content-type: application/json' \
-            --data "{\"properties\":{\"delivery_mode\":2},\"routing_key\":\"staging.smoke\",\"payload\":\"$payload\",\"payload_encoding\":\"string\"}" \
-            http://127.0.0.1:15672/api/exchanges/%2F/spectrace.events/publish)
-          python3 -c 'import json,sys; assert json.load(sys.stdin).get("routed") is True, "Smoke message was not routed"' <<< "$publish"
-          messages=$(curl --fail --silent --show-error -u "$rabbit_user:$rabbit_password" -H 'content-type: application/json' \
-            --data '{"count":1,"ackmode":"ack_requeue_false","encoding":"auto","truncate":50000}' \
-            http://127.0.0.1:15672/api/queues/%2F/staging-smoke.smoke/get)
-          python3 -c 'import json,sys; expected=sys.argv[1]; rows=json.load(sys.stdin); assert any(row.get("payload") == expected for row in rows), "Smoke message was not consumed from the isolated queue"' "$payload" <<< "$messages"
+          export RABBITMQ_SMOKE_USER="$rabbit_user" RABBITMQ_SMOKE_PASSWORD="$rabbit_password" RABBITMQ_SMOKE_PAYLOAD="$payload"
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          from urllib.request import Request, urlopen
+
+          base = "http://127.0.0.1:15672/api"
+          basic = base64.b64encode(f"{os.environ['RABBITMQ_SMOKE_USER']}:{os.environ['RABBITMQ_SMOKE_PASSWORD']}".encode()).decode()
+          headers = {"Authorization": f"Basic {basic}", "Content-Type": "application/json"}
+          publish_body = json.dumps({
+              "properties": {"delivery_mode": 2}, "routing_key": "staging.smoke",
+              "payload": os.environ["RABBITMQ_SMOKE_PAYLOAD"], "payload_encoding": "string",
+          }).encode()
+          request = Request(f"{base}/exchanges/%2F/spectrace.events/publish", data=publish_body, headers=headers)
+          with urlopen(request, timeout=15) as response:
+              if json.load(response).get("routed") is not True:
+                  raise SystemExit("Smoke message was not routed.")
+          consume_body = json.dumps({
+              "count": 1, "ackmode": "ack_requeue_false", "encoding": "auto", "truncate": 50000,
+          }).encode()
+          request = Request(f"{base}/queues/%2F/staging-smoke.smoke/get", data=consume_body, headers=headers)
+          with urlopen(request, timeout=15) as response:
+              messages = json.load(response)
+          if not any(message.get("payload") == os.environ["RABBITMQ_SMOKE_PAYLOAD"] for message in messages):
+              raise SystemExit("Smoke message was not consumed from the isolated queue.")
+          PY
       - name: Remove temporary kubeconfig and staging diagnostics
         if: always()
         shell: bash

@@ -108,7 +108,7 @@ for target in \
   'mutatingwebhookconfigurations.admissionregistration.k8s.io messaging-topology-mutating-webhook-configuration' \
   'validatingwebhookconfigurations.admissionregistration.k8s.io messaging-topology-validating-webhook-configuration'; do
   read -r resource name <<< "$target"
-  capture_named_state "webhook-${name}" "$resource" "$name" ""
+  capture_named_state "webhook-${resource//./-}-${name}" "$resource" "$name" ""
 done
 
 if grep -l '"exists": true' "$operator_state_dir"/*.json > "$operator_state_dir/preexisting-components.txt"; then
@@ -127,6 +127,7 @@ Review every JSON file. `exists: false` means the named object was successfully 
 Run from a clean checkout of the reviewed main commit containing `deploy/operators/rabbitmq/operator-manifests.lock` and `scripts/staging/verify_operator_manifest_lock.py`:
 
 ```bash
+set -euo pipefail
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
 curl --fail --location --silent --show-error 'https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml' --output "$tmp_dir/cert-manager.yaml"
@@ -144,6 +145,7 @@ Before `kubectl create`, M1 records the approved window, expected account/cluste
 Use `kubectl create -f` so an unexpected pre-existing object causes a failure. Do not use `apply`, `replace`, `patch`, `delete`, or force. If a partial create fails, stop and record exactly which objects exist; do not clean up or retry over them without M1's review.
 
 ```bash
+set -euo pipefail
 kubectl create -f "$tmp_dir/cert-manager.yaml"
 for deployment in cert-manager cert-manager-webhook cert-manager-cainjector; do
   kubectl rollout status "deployment/$deployment" --namespace cert-manager --timeout=5m
@@ -161,6 +163,7 @@ The release manifests contain cluster-scoped CRDs, roles, and webhook configurat
 ## 5. Verify availability and capture after-state
 
 ```bash
+set -euo pipefail
 for crd in certificates.cert-manager.io certificaterequests.cert-manager.io issuers.cert-manager.io clusterissuers.cert-manager.io orders.acme.cert-manager.io challenges.acme.cert-manager.io rabbitmqclusters.rabbitmq.com users.rabbitmq.com permissions.rabbitmq.com exchanges.rabbitmq.com queues.rabbitmq.com bindings.rabbitmq.com policies.rabbitmq.com; do
   kubectl wait --for=condition=Established "crd/$crd" --timeout=2m
 done
@@ -169,8 +172,39 @@ kubectl rollout status deployment/rabbitmq-cluster-operator --namespace rabbitmq
 kubectl rollout status deployment/messaging-topology-operator --namespace rabbitmq-system --timeout=5m
 kubectl get deployments -n cert-manager -o wide > "$EVIDENCE_DIR/cert-manager-deployments-after.txt"
 kubectl get deployments -n rabbitmq-system -o wide > "$EVIDENCE_DIR/rabbitmq-operator-deployments-after.txt"
-kubectl get crd certificates.cert-manager.io rabbitmqclusters.rabbitmq.com users.rabbitmq.com permissions.rabbitmq.com exchanges.rabbitmq.com queues.rabbitmq.com bindings.rabbitmq.com policies.rabbitmq.com -o wide > "$EVIDENCE_DIR/operator-crds-after.txt"
+kubectl get crd certificates.cert-manager.io certificaterequests.cert-manager.io issuers.cert-manager.io clusterissuers.cert-manager.io orders.acme.cert-manager.io challenges.acme.cert-manager.io rabbitmqclusters.rabbitmq.com users.rabbitmq.com permissions.rabbitmq.com exchanges.rabbitmq.com queues.rabbitmq.com bindings.rabbitmq.com policies.rabbitmq.com -o wide > "$EVIDENCE_DIR/operator-crds-after.txt"
 aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" > "$EVIDENCE_DIR/cluster-after.json"
+
+for target in \
+  'mutatingwebhookconfigurations.admissionregistration.k8s.io cert-manager-webhook' \
+  'validatingwebhookconfigurations.admissionregistration.k8s.io cert-manager-webhook' \
+  'mutatingwebhookconfigurations.admissionregistration.k8s.io cluster-operator-mutating-webhook-configuration' \
+  'validatingwebhookconfigurations.admissionregistration.k8s.io cluster-operator-validating-webhook-configuration' \
+  'mutatingwebhookconfigurations.admissionregistration.k8s.io messaging-topology-mutating-webhook-configuration' \
+  'validatingwebhookconfigurations.admissionregistration.k8s.io messaging-topology-validating-webhook-configuration'; do
+  read -r resource name <<< "$target"
+  kubectl get "$resource" "$name" -o json | python3 -c '
+import json,sys
+obj=json.load(sys.stdin)
+rows=obj.get("webhooks",[])
+assert rows and all(w.get("clientConfig",{}).get("caBundle") and w.get("clientConfig",{}).get("service",{}).get("name") and w.get("clientConfig",{}).get("service",{}).get("namespace") for w in rows), "Webhook CA injection or Service reference is not ready"
+print(json.dumps({"name":obj["metadata"]["name"],"webhooks":[{"name":w.get("name"),"caBundlePresent":True,"service":w["clientConfig"]["service"]} for w in rows]},indent=2,sort_keys=True))
+' > "$EVIDENCE_DIR/webhook-${resource//./-}-${name}.json"
+done
+
+for target in \
+  'cert-manager cert-manager-webhook' \
+  'rabbitmq-system cluster-operator-webhook-service' \
+  'rabbitmq-system messaging-topology-webhook-service'; do
+  read -r namespace service <<< "$target"
+  kubectl get endpoints "$service" --namespace "$namespace" -o json | python3 -c '
+import json,sys
+obj=json.load(sys.stdin)
+count=sum(len(subset.get("addresses",[])) for subset in obj.get("subsets",[]))
+assert count > 0, "Webhook Service has no ready Endpoint addresses"
+print(json.dumps({"namespace":obj["metadata"]["namespace"],"service":obj["metadata"]["name"],"readyAddressCount":count},indent=2,sort_keys=True))
+' > "$EVIDENCE_DIR/webhook-endpoints-${namespace}-${service}.json"
+done
 ```
 
 Record the lock file, its checksum, the manifest digests verified by the script, the AWS identity ARN/account, cluster ARN/status, context, CRD Established conditions, Deployment Available status, timestamps, approval reference, and any deviation. Never include Secret values or bearer tokens. Keep the evidence for the protected RabbitMQ deployment review.

@@ -88,7 +88,9 @@ class RabbitMQProtectedWorkflowTests(unittest.TestCase):
         self.assertEqual(cleanup["if"], "always()")
         for path in (
             '"$KUBECONFIG"', "rabbitmq-window.json", "rabbitmq-budget-gate.log", "cluster.json",
-            "general-nodes.json", "rabbitmq-pods.json", "rabbitmq-pvcs.json", "all-nodes.json",
+            "ebs-gp3.json", "ebs-csi-node.json", "ebs-csi-controller.json", "crd.json",
+            "operator-deployment.json", "general-nodes.json", "general-nodegroup.json",
+            "rabbitmq-pods.json", "rabbitmq-pvcs.json", "all-nodes.json",
             "00-exchanges*.yaml", "10-queues*.yaml", "20-bindings*.yaml", "30-policies*.yaml",
             "rabbitmq-port-forward.log",
         ):
@@ -96,6 +98,7 @@ class RabbitMQProtectedWorkflowTests(unittest.TestCase):
         self.assertFalse(any(step.get("uses", "").startswith("actions/upload-artifact@") for step in self.steps))
         self.assertNotIn("kubectl get secrets -A", self.workflow_text)
         self.assertNotIn("kubectl get secrets --all-namespaces", self.workflow_text)
+        self.assertNotIn('curl --user "$rabbit_user:$rabbit_password"', self.workflow_text)
 
     def test_cloudshell_runbook_fails_closed_and_records_all_operator_target_states(self):
         runbook = RUNBOOK_PATH.read_text()
@@ -112,6 +115,19 @@ class RabbitMQProtectedWorkflowTests(unittest.TestCase):
             "bindings.rabbitmq.com", "policies.rabbitmq.com",
         ):
             self.assertIn(name, before_state)
+        for webhook in (
+            "cluster-operator-mutating-webhook-configuration", "cluster-operator-validating-webhook-configuration",
+            "messaging-topology-mutating-webhook-configuration", "messaging-topology-validating-webhook-configuration",
+            "cert-manager-webhook",
+        ):
+            self.assertIn(webhook, before_state)
+        self.assertIn("mutatingwebhookconfigurations.admissionregistration.k8s.io", before_state)
+        self.assertIn("validatingwebhookconfigurations.admissionregistration.k8s.io", before_state)
+        after_state = runbook.split("## 5. Verify availability", 1)[1]
+        for service in ("cert-manager-webhook", "cluster-operator-webhook-service", "messaging-topology-webhook-service"):
+            self.assertIn(service, after_state)
+        self.assertIn("caBundlePresent", after_state)
+        self.assertIn("readyAddressCount", after_state)
 
 
 if __name__ == "__main__":
