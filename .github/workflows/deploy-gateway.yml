@@ -134,10 +134,14 @@ jobs:
           if not targets or any(row.get('TargetHealth',{}).get('State')!='healthy' for row in targets):
               raise SystemExit('Existing Gateway Target Group must have at least one Healthy target before upgrade.')
           PY
-          for resource in deployments services serviceaccounts networkpolicies targetgroupbindings.elbv2.k8s.aws; do
+          for resource in deployments services serviceaccounts networkpolicies; do
             for verb in get list watch patch update; do
               test "$(kubectl auth can-i "$verb" "$resource" --namespace gateway)" = yes
             done
+          done
+          # The TGB Role grants these verbs by resourceNames, which a name-less can-i never matches.
+          for verb in get patch watch; do
+            test "$(kubectl auth can-i "$verb" targetgroupbindings.elbv2.k8s.aws/gateway-gateway --namespace gateway)" = yes
           done
           for resource in pods endpointslices; do
             for verb in get list watch; do

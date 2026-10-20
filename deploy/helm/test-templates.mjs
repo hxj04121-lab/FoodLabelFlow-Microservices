@@ -320,6 +320,14 @@ check('Frontend first install uses only the Terraform namespace and refuses unma
   assert.match(script,/kubectl get serviceaccount default --namespace frontend/);
   assert.doesNotMatch(script,/create namespace frontend|kubectl auth can-i create namespaces|kubectl create namespace frontend --dry-run/);
 });
+check('TGB preflights check resourceNames-scoped verbs by name',()=>{
+  for(const [file,name] of [['deploy-gateway.yml','gateway-gateway'],['deploy-frontend.yml','frontend-frontend']]){
+    const workflow=parse(readFileSync(resolve(root,'../../.github/workflows',file),'utf8'));
+    const script=workflow.jobs.deploy.steps.map(step=>step.run||'').join('\n');
+    assert.match(script,new RegExp(`targetgroupbindings\\.elbv2\\.k8s\\.aws/${name}`),file);
+    assert.doesNotMatch(script,/networkpolicies targetgroupbindings/,`${file} must not check TGB verbs without a resource name`);
+  }
+});
 check('Runtime Secrets use the approved-spend window and dynamically resolve the private RDS endpoint',()=>{
   const workflow=parse(readFileSync(resolve(root,'../../.github/workflows/stcn-15-runtime-secrets.yml'),'utf8'));
   assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
