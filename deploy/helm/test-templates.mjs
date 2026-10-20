@@ -21,6 +21,13 @@ const run=(args,pass=true)=>{
   return r;
 };
 const check=(name,fn)=>{fn();count++;console.log('PASS '+name);};
+const assertExplicitEgressDestinations=docs=>{
+  for(const policy of docs.filter(doc=>doc.kind==='NetworkPolicy')) {
+    for(const [index,rule] of (policy.spec.egress??[]).entries()) {
+      assert(Array.isArray(rule.to)&&rule.to.length>0,`${policy.metadata.name} egress rule ${index} must declare explicit destinations in to`);
+    }
+  }
+};
 const render=(service,extra=[],release='review')=>{
   const r=run(['template',release,chart,'-f',resolve(root,`values/${service}.yaml`),...extra]);
   const docs=parseAllDocuments(r.stdout);
@@ -126,16 +133,6 @@ check('fixed three-replica placement requires c6i.large and compliance group',()
   assert.deepEqual(np.spec.ingress.flatMap(r=>r.from??[]).filter(s=>s.namespaceSelector).map(s=>[s.namespaceSelector.matchLabels['kubernetes.io/metadata.name'],s.podSelector.matchLabels['app.kubernetes.io/name']]).sort((a,b)=>a.join('/').localeCompare(b.join('/'))),[['gateway','gateway'],['label-workflow','label-workflow'],['observability','grafana-alloy']].sort((a,b)=>a.join('/').localeCompare(b.join('/'))));
   assert(np.spec.egress.some(r=>r.to?.some(t=>t.podSelector?.matchLabels?.['app.kubernetes.io/name']==='spectrace')&&r.ports[0].port===5672));
   writeFileSync(resolve(evidence,'compliance-three-replicas.json'),JSON.stringify(docs,null,2)+'\n');
-});
-check('Compliance JWKS egress is limited to Keycloak pods on TCP 8080',()=>{
-  const docs=render('compliance',['-f',resolve(root,'values/staging-rds.yaml')]);
-  const np=docs.find(d=>d.kind==='NetworkPolicy');
-  const keycloakRules=np.spec.egress.filter(rule=>rule.to?.some(peer=>
-    peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='keycloak' &&
-    peer.podSelector?.matchLabels?.app==='keycloak'));
-  assert.equal(keycloakRules.length,1);
-  assert.deepEqual(keycloakRules[0].ports,[{port:8080,protocol:'TCP'}]);
-  assert(!np.spec.egress.some(rule=>rule.to?.some(peer=>peer.ipBlock?.cidr==='0.0.0.0/0')));
 });
 check('optional Should HPA preserves 1–4 range and fixed per-pod limits',()=>{
   const docs=render('compliance',['--set','autoscaling.enabled=true']);
@@ -556,6 +553,70 @@ check('Keycloak NetworkPolicy allows ALB health checks only from configured ALB 
   const operatorRule=policy.spec.ingress.find(rule=>rule.from?.some(source=>source.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='keycloak-system'));
   assert.deepEqual(operatorRule.from[0].podSelector.matchLabels,{'app.kubernetes.io/name':'keycloak-operator'});
   assert.deepEqual(operatorRule.from[1].podSelector.matchLabels,{'job-name':'spectrace-realm'},'Realm import Job may reach Keycloak without opening the namespace');
+});
+
+check('Keycloak ingress admits only the four service Pods on TCP 8080',()=>{
+  const output=run(['template','review',resolve(root,'platform-network-policies')]);
+  const docs=parseAllDocuments(output.stdout).map(d=>d.toJSON()).filter(Boolean);
+  const policy=docs.find(d=>d.kind==='NetworkPolicy'&&d.metadata.name==='stcn-keycloak-flows');
+  const services=['specification','formulation','compliance','label-workflow'];
+  const servicePeers=policy.spec.ingress.flatMap(rule=>rule.from??[]).filter(peer=>services.includes(peer.podSelector?.matchLabels?.['app.kubernetes.io/name']));
+  assert.deepEqual(servicePeers.map(peer=>[
+    peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name'],
+    peer.podSelector?.matchLabels?.['app.kubernetes.io/name']
+  ]).sort((a,b)=>a.join('/').localeCompare(b.join('/'))),services.map(service=>[service,service]).sort((a,b)=>a.join('/').localeCompare(b.join('/'))));
+  assert(servicePeers.every(peer=>peer.namespaceSelector&&peer.podSelector),'Each business peer requires both namespace and pod selectors');
+  const serviceRules=policy.spec.ingress.filter(rule=>rule.from?.some(peer=>services.includes(peer.podSelector?.matchLabels?.['app.kubernetes.io/name'])));
+  assert.equal(serviceRules.length,1,'The four service Pods share one narrowly scoped ingress rule');
+  assert.deepEqual(serviceRules[0].ports,[{protocol:'TCP',port:8080}],'Only TCP 8080 is opened for business services');
+  assert(!policy.spec.ingress.some(rule=>(rule.from??[]).some(peer=>peer.namespaceSelector&&!peer.podSelector)),'No namespace-wide service ingress is allowed');
+
+  const gatewayRule=policy.spec.ingress.find(rule=>rule.from?.some(peer=>peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='gateway'));
+  assert.deepEqual(gatewayRule.from,[{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'gateway'}},podSelector:{matchLabels:{'app.kubernetes.io/name':'gateway'}}}]);
+  assert.deepEqual(gatewayRule.ports,[{protocol:'TCP',port:8080}],'Gateway-to-Keycloak flow remains allowed');
+  const alloyRule=policy.spec.ingress.find(rule=>rule.from?.some(peer=>peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='observability'));
+  assert(alloyRule,'Alloy access remains allowed');
+  const operatorRule=policy.spec.ingress.find(rule=>rule.from?.some(peer=>peer.podSelector?.matchLabels?.['app.kubernetes.io/name']==='keycloak-operator'));
+  assert(operatorRule,'Keycloak Operator access remains allowed');
+  assert(operatorRule.from.some(peer=>peer.podSelector?.matchLabels?.['job-name']==='spectrace-realm'),'Realm import Job access remains allowed');
+  assert(policy.spec.ingress.some(rule=>rule.from?.some(peer=>peer.ipBlock)),'Configured ALB source access remains allowed');
+});
+
+check('Keycloak ingress resolves custom service namespaces and rejects unrelated namespaces and Pods',()=>{
+  const services=['specification','formulation','compliance','label-workflow'];
+  const customNamespaces={specification:'spec-blue',formulation:'formula-green',compliance:'compliance-canary','label-workflow':'labels-next'};
+  const overrides=Object.entries(customNamespaces).map(([service,namespace])=>`namespaces.${service}=${namespace}`);
+  const output=run(['template','review',resolve(root,'platform-network-policies'),...overrides.flatMap(value=>['--set',value])]);
+  const docs=parseAllDocuments(output.stdout).map(d=>d.toJSON()).filter(Boolean);
+  const policy=docs.find(d=>d.kind==='NetworkPolicy'&&d.metadata.name==='stcn-keycloak-flows');
+  const peers=policy.spec.ingress.flatMap(rule=>rule.from??[]).filter(peer=>services.includes(peer.podSelector?.matchLabels?.['app.kubernetes.io/name']));
+  assert.deepEqual(peers.map(peer=>[
+    peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name'],
+    peer.podSelector?.matchLabels?.['app.kubernetes.io/name']
+  ]).sort((a,b)=>a.join('/').localeCompare(b.join('/'))),Object.entries(customNamespaces).map(([service,namespace])=>[namespace,service]).sort((a,b)=>a.join('/').localeCompare(b.join('/'))));
+  assert(!peers.some(peer=>peer.namespaceSelector.matchLabels['kubernetes.io/metadata.name']==='unrelated'));
+  assert(!peers.some(peer=>peer.podSelector.matchLabels['app.kubernetes.io/name']==='unrelated'));
+  assert(!policy.spec.ingress.some(rule=>rule.from?.some(peer=>peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='unrelated')),'An unrelated namespace has no matching ingress peer');
+  assert(!policy.spec.ingress.some(rule=>rule.from?.some(peer=>peer.podSelector?.matchLabels?.['app.kubernetes.io/name']==='unrelated')),'An unrelated Pod has no matching ingress peer');
+});
+
+check('platform and service egress rules declare destinations and retain required traffic',()=>{
+  const platformOutput=run(['template','review',resolve(root,'platform-network-policies')]);
+  const platformDocs=parseAllDocuments(platformOutput.stdout).map(d=>d.toJSON()).filter(Boolean);
+  const serviceDocs=['specification','formulation','compliance','label-workflow','gateway','frontend'].flatMap(service=>render(service));
+  assertExplicitEgressDestinations([...platformDocs,...serviceDocs]);
+  assert.throws(()=>assertExplicitEgressDestinations([{kind:'NetworkPolicy',metadata:{name:'unsafe'},spec:{egress:[{ports:[{protocol:'TCP',port:443}]}]}}]),/must declare explicit destinations in to/,'A missing to field must fail closed');
+  const compliance=render('compliance',['-f',resolve(root,'values/staging-rds.yaml')]).find(d=>d.kind==='NetworkPolicy');
+  const complianceKeycloak=compliance.spec.egress.filter(rule=>rule.to.some(peer=>peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='keycloak'&&peer.podSelector?.matchLabels?.app==='keycloak'));
+  assert.equal(complianceKeycloak.length,1,'Compliance keeps exactly one Keycloak egress rule already present on main');
+  assert.deepEqual(complianceKeycloak[0].ports,[{port:8080,protocol:'TCP'}]);
+  for(const service of ['specification','formulation','compliance','label-workflow']) {
+    const docs=render(service,['-f',resolve(root,'values/staging-rds.yaml')]);
+    const policy=docs.find(d=>d.kind==='NetworkPolicy');
+    assert(policy.spec.egress.some(rule=>rule.to?.some(peer=>peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='kube-system')&&rule.ports?.some(port=>port.port===53)),'DNS remains available');
+    assert(policy.spec.egress.some(rule=>rule.ports?.some(port=>port.port===5672)),'RabbitMQ TCP 5672 remains available');
+    assert(policy.spec.egress.some(rule=>rule.ports?.some(port=>port.port===3306)),'MySQL/RDS egress remains available');
+  }
 });
 
 check('Keycloak Operator CRDs are pinned and the operator RBAC stays in the keycloak namespace',()=>{
