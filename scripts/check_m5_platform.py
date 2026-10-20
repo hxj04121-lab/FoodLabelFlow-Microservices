@@ -73,17 +73,22 @@ assert all(item["spec"]["tags"] == [] for item in users if item is not smoke_use
     "Business service users must keep the default least-privilege tags."
 assert all("importCredentialsSecret" not in item["spec"] for item in users)
 for service in ("specification", "formulation", "compliance", "label-workflow"):
-    user = next(item for item in permissions if item["spec"]["user"] == f"{service}-rabbitmq")
-    assert user["metadata"]["namespace"] == service
-    assert user["spec"]["permissions"]["write"] == "^spectrace\\.events$"
-    read = user["spec"]["permissions"]["read"]
+    permission = next(item for item in permissions if item["metadata"]["name"] == f"{service}-rabbitmq")
+    assert permission["metadata"]["namespace"] == service
+    assert permission["spec"]["userReference"] == {"name": f"{service}-rabbitmq"}
+    matching_user = next(item for item in users if item["metadata"]["namespace"] == service
+                         and item["metadata"]["name"] == f"{service}-rabbitmq")
+    assert "importCredentialsSecret" not in matching_user["spec"]
+    assert permission["spec"]["permissions"]["write"] == "^spectrace\\.events$"
+    read = permission["spec"]["permissions"]["read"]
     if service == "specification":
         assert read == "^$"
     else:
         assert read.startswith(f"^{service}\\.") and read.count("|") + 1 == len(expected[service])
-assert next(item for item in permissions if item["spec"]["user"] == "specification-rabbitmq")["spec"]["permissions"]["read"] == "^$"
-smoke_permission = next(item for item in permissions if item["spec"]["user"] == "staging-smoke")
+assert next(item for item in permissions if item["metadata"]["name"] == "specification-rabbitmq")["spec"]["permissions"]["read"] == "^$"
+smoke_permission = next(item for item in permissions if item["metadata"]["name"] == "staging-smoke")
 assert smoke_permission["metadata"]["namespace"] == "rabbitmq"
+assert smoke_permission["spec"]["userReference"] == {"name": "staging-smoke"}
 assert smoke_permission["spec"]["permissions"] == {
     "configure": "^$", "write": "^spectrace\\.events$", "read": "^staging-smoke\\.smoke$"
 }

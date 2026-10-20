@@ -5,7 +5,7 @@ metadata:
   namespace: specification
 spec:
   vhost: /
-  user: specification-rabbitmq
+  userReference: {name: specification-rabbitmq}
   permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^$"}
   rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
 ---
@@ -16,7 +16,7 @@ metadata:
   namespace: formulation
 spec:
   vhost: /
-  user: formulation-rabbitmq
+  userReference: {name: formulation-rabbitmq}
   permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^formulation\\.specification-published$"}
   rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
 ---
@@ -27,7 +27,7 @@ metadata:
   namespace: compliance
 spec:
   vhost: /
-  user: compliance-rabbitmq
+  userReference: {name: compliance-rabbitmq}
   permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^compliance\\.(specification-published|formula-published|label-published)$"}
   rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
 ---
@@ -38,7 +38,7 @@ metadata:
   namespace: label-workflow
 spec:
   vhost: /
-  user: label-workflow-rabbitmq
+  userReference: {name: label-workflow-rabbitmq}
   permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^label-workflow\\.(formula-published|impact-finding)$"}
   rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
 ---
@@ -49,6 +49,6 @@ metadata:
   namespace: rabbitmq
 spec:
   vhost: /
-  user: staging-smoke
+  userReference: {name: staging-smoke}
   permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^staging-smoke\\.smoke$"}
   rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}

@@ -36,9 +36,14 @@ jobs:
       APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
       STAGING_WINDOW_HOURS: ${{ inputs.staging_window_hours }}
       STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
-      KUBECONFIG: ${{ runner.temp }}/m5-rabbitmq-kubeconfig
     steps:
       - uses: actions/checkout@v4
+      - name: Initialize per-run temporary Kubernetes config path
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RUNNER_TEMP"
+          echo "KUBECONFIG=$RUNNER_TEMP/m5-rabbitmq-kubeconfig-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -93,11 +98,11 @@ jobs:
 
           require_read() {
             local verb="$1" resource="$2" resource_name="$3" namespace="$4"
+            if [[ -n "$resource_name" ]]; then resource="${resource}/${resource_name}"; fi
             local args=(auth can-i "$verb" "$resource")
-            if [[ -n "$resource_name" ]]; then args+=(--resource-name="$resource_name"); fi
             if [[ -n "$namespace" ]]; then args+=(--namespace "$namespace"); fi
             if ! kubectl "${args[@]}" >/dev/null; then
-              echo "::error::Missing read-only Kubernetes permission: $verb $resource${resource_name:+/$resource_name}${namespace:+ in namespace $namespace}. M1 must review this exact permission; no cluster-admin grant is requested."
+              echo "::error::Missing read-only Kubernetes permission: $verb $resource${namespace:+ in namespace $namespace}. M1 must review this exact permission; no cluster-admin grant is requested."
               exit 1
             fi
           }
@@ -176,13 +181,13 @@ jobs:
               for verb in get list watch create patch; do test "$(kubectl auth can-i "$verb" "$resource" --namespace "$namespace")" = yes; done
             done
             secret="${namespace}-rabbitmq-user-credentials"
-            test "$(kubectl auth can-i get secrets --resource-name="$secret" --namespace "$namespace")" = yes
+            test "$(kubectl auth can-i get "secrets/$secret" --namespace "$namespace")" = yes
           done
           for resource in exchanges.rabbitmq.com queues.rabbitmq.com bindings.rabbitmq.com policies.rabbitmq.com users.rabbitmq.com permissions.rabbitmq.com; do
             for verb in get list watch create patch; do test "$(kubectl auth can-i "$verb" "$resource" --namespace rabbitmq)" = yes; done
           done
-          test "$(kubectl auth can-i create pods/portforward --namespace rabbitmq)" = yes
-          test "$(kubectl auth can-i get secrets --resource-name=staging-smoke-user-credentials --namespace rabbitmq)" = yes
+          test "$(kubectl auth can-i create pods --subresource=portforward --namespace rabbitmq)" = yes
+          test "$(kubectl auth can-i get secrets/staging-smoke-user-credentials --namespace rabbitmq)" = yes
       - name: Create or verify the owned RabbitMQ Cluster and retained storage
         shell: bash
         run: |
@@ -229,34 +234,41 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          namespaces=(rabbitmq specification formulation compliance label-workflow)
           for kind in 00-exchanges 10-queues 20-bindings 30-policies; do
             helm template rabbitmq-topology deploy/helm/rabbitmq-topology --namespace rabbitmq \
               --show-only "templates/${kind}.yaml" > "$RUNNER_TEMP/${kind}.yaml"
             python3 scripts/staging/apply_rabbitmq_owned.py "$RUNNER_TEMP/${kind}.yaml"
             case "$kind" in
-              00-exchanges) resource=exchanges.rabbitmq.com; expected=2 ;;
-              10-queues) resource=queues.rabbitmq.com; expected=14 ;;
-              20-bindings) resource=bindings.rabbitmq.com; expected=15 ;;
-              30-policies) resource=policies.rabbitmq.com; expected=7 ;;
+              00-exchanges) resource=exchanges.rabbitmq.com; object_kind=Exchange; expected=2 ;;
+              10-queues) resource=queues.rabbitmq.com; object_kind=Queue; expected=14 ;;
+              20-bindings) resource=bindings.rabbitmq.com; object_kind=Binding; expected=15 ;;
+              30-policies) resource=policies.rabbitmq.com; object_kind=Policy; expected=7 ;;
             esac
+            targets_file="$RUNNER_TEMP/${kind}-targets.json"
+            python3 scripts/staging/rabbitmq_topology_targets.py build \
+              --manifest "$RUNNER_TEMP/${kind}.yaml" --kind "$object_kind" --output "$targets_file"
+            rendered_count=$(python3 scripts/staging/rabbitmq_topology_targets.py count --targets "$targets_file")
+            test "$rendered_count" -eq "$expected" || {
+              echo "::error::Rendered $object_kind count $rendered_count did not match the reviewed count $expected."
+              exit 1
+            }
+            mapfile -t namespaces < <(python3 scripts/staging/rabbitmq_topology_targets.py namespaces --targets "$targets_file")
+            test "${#namespaces[@]}" -gt 0 || { echo "::error::No $object_kind targets were rendered."; exit 1; }
             deadline=$((SECONDS + 300))
             while true; do
               topology_ready=true
-              topology_files=()
               for namespace in "${namespaces[@]}"; do
                 file="$RUNNER_TEMP/${kind}-${namespace}.json"
-                topology_files+=("$file")
-                if ! kubectl get "$resource" --namespace "$namespace" -o json > "$file"; then topology_ready=false; fi
+                kubectl get "$resource" --namespace "$namespace" -o json > "$file"
+                if ! python3 scripts/staging/rabbitmq_topology_targets.py check \
+                  --targets "$targets_file" --namespace "$namespace" --actual "$file" >/dev/null; then
+                  topology_ready=false
+                fi
               done
-              if [[ "$topology_ready" == true ]] && python3 - "$expected" "${topology_files[@]}" <<'PY'
-          import json,sys
-          expected=int(sys.argv[1])
-          rows=[item for path in sys.argv[2:] for item in json.load(open(path))['items']]
-          ready=lambda row:any(c.get('type')=='Ready' and c.get('status')=='True' for c in row.get('status',{}).get('conditions',[]))
-          if len(rows)!=expected or not all(map(ready,rows)): raise SystemExit(1)
-          PY
-              then break; fi
+              if [[ "$topology_ready" == true ]]; then
+                echo "$object_kind targets Ready: $rendered_count across ${#namespaces[@]} populated namespace(s)."
+                break
+              fi
               test "$SECONDS" -lt "$deadline" || { echo "::error::Timed out waiting for $resource to become Ready."; exit 1; }
               sleep 5
             done
@@ -321,7 +333,7 @@ jobs:
             "$RUNNER_TEMP/rabbitmq-pvcs.json" "$RUNNER_TEMP/all-nodes.json" "$RUNNER_TEMP"/00-exchanges*.yaml \
             "$RUNNER_TEMP"/10-queues*.yaml "$RUNNER_TEMP"/20-bindings*.yaml "$RUNNER_TEMP"/30-policies*.yaml \
             "$RUNNER_TEMP"/00-exchanges*.json "$RUNNER_TEMP"/10-queues*.json "$RUNNER_TEMP"/20-bindings*.json \
-            "$RUNNER_TEMP"/30-policies*.json "$RUNNER_TEMP/rabbitmq-port-forward.log"
+            "$RUNNER_TEMP"/30-policies*.json "$RUNNER_TEMP"/*-targets.json "$RUNNER_TEMP/rabbitmq-port-forward.log"
       - name: Summarize RabbitMQ deployment evidence
         if: always()
         env:

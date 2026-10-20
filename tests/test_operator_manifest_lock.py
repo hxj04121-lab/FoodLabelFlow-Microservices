@@ -9,6 +9,10 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts/staging/verify_operator_
 spec = importlib.util.spec_from_file_location("verify_operator_manifest_lock", SCRIPT)
 lock_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(lock_module)
+SCHEMA_SCRIPT = Path(__file__).resolve().parents[1] / "scripts/staging/verify_mto_permission_schema.py"
+schema_spec = importlib.util.spec_from_file_location("verify_mto_permission_schema", SCHEMA_SCRIPT)
+schema_module = importlib.util.module_from_spec(schema_spec)
+schema_spec.loader.exec_module(schema_module)
 LOCK = Path(__file__).resolve().parents[1] / "deploy/operators/rabbitmq/operator-manifests.lock"
 
 
@@ -61,6 +65,36 @@ class OperatorManifestLockTests(unittest.TestCase):
             lock_path.write_text(json.dumps(document))
             with self.assertRaisesRegex(ValueError, "exact reviewed HTTPS"):
                 lock_module.load_and_validate(lock_path)
+
+    def test_topology_operator_permission_crd_supports_user_reference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "messaging-topology-operator.yaml"
+            path.write_text("""
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata: {name: permissions.rabbitmq.com}
+spec:
+  names: {kind: Permission}
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              userReference:
+                type: object
+                properties:
+                  name: {type: string}
+""")
+            schema_module.validate_permission_schema(path)
+            path.write_text(path.read_text().replace("name: {type: string}", "name: {type: integer}"))
+            with self.assertRaisesRegex(ValueError, "string name"):
+                schema_module.validate_permission_schema(path)
+
+    def test_platform_ci_validates_the_exact_locked_permission_schema(self):
+        workflow = Path(__file__).resolve().parents[1] / ".github/workflows/m5-platform-validation.yml"
+        self.assertIn("verify_mto_permission_schema.py", workflow.read_text())
 
 
 if __name__ == "__main__":

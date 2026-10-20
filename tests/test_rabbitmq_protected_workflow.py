@@ -31,6 +31,17 @@ class RabbitMQProtectedWorkflowTests(unittest.TestCase):
         self.assertNotIn("--clusterrole=cluster-admin", self.workflow_text)
         self.assertNotIn("role: cluster-admin", self.workflow_text)
 
+    def test_kubeconfig_path_is_initialized_in_a_step_and_cleaned_always(self):
+        self.assertNotIn("runner.temp", self.workflow_text)
+        self.assertNotIn("KUBECONFIG", self.job.get("env", {}))
+        initialize = next(step for step in self.steps
+                          if step.get("name") == "Initialize per-run temporary Kubernetes config path")
+        self.assertIn("$RUNNER_TEMP/m5-rabbitmq-kubeconfig-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT", initialize["run"])
+        self.assertIn('>> "$GITHUB_ENV"', initialize["run"])
+        cleanup = next(step for step in self.steps if step.get("name", "").startswith("Remove temporary kubeconfig"))
+        self.assertEqual(cleanup["if"], "always()")
+        self.assertIn('rm -f "$KUBECONFIG"', cleanup["run"])
+
     def test_workflow_shell_blocks_parse_as_bash(self):
         for index, step in enumerate(self.steps):
             if step.get("run"):
@@ -61,6 +72,28 @@ class RabbitMQProtectedWorkflowTests(unittest.TestCase):
         ):
             self.assertNotIn(release_url, self.workflow_text)
 
+    def test_kubectl_authorization_preflight_uses_v136_compatible_resource_forms(self):
+        preflight = next(step for step in self.steps if step.get("name", "").startswith("Read-only account, operator"))
+        self.assertIn('resource="${resource}/${resource_name}"', preflight["run"])
+        self.assertNotIn("--resource-name", preflight["run"])
+        self.assertIn('"secrets/$secret"', preflight["run"])
+        self.assertIn("create pods --subresource=portforward", preflight["run"])
+        self.assertNotIn("create pods/portforward", preflight["run"])
+        self.assertIn("secrets/staging-smoke-user-credentials", preflight["run"])
+
+    def test_topology_readiness_only_queries_populated_namespaces_and_keeps_dependency_order(self):
+        step = next(step for step in self.steps
+                    if step.get("name") == "Apply topology in dependency order and wait for reconciliation")
+        run = step["run"]
+        self.assertIn("for kind in 00-exchanges 10-queues 20-bindings 30-policies", run)
+        self.assertIn("rabbitmq_topology_targets.py build", run)
+        self.assertIn("rabbitmq_topology_targets.py namespaces", run)
+        self.assertIn("rabbitmq_topology_targets.py check", run)
+        self.assertNotIn("namespaces=(rabbitmq specification formulation compliance label-workflow)", run)
+        self.assertIn('kubectl get "$resource" --namespace "$namespace" -o json', run)
+        self.assertIn("deadline=$((SECONDS + 300))", run)
+        self.assertIn('test "$SECONDS" -lt "$deadline"', run)
+
     def test_workflow_mutations_are_guarded_by_exact_namespace_and_name_allowlist(self):
         apply_helper = self.workflow_text.count("scripts/staging/apply_rabbitmq_owned.py")
         self.assertGreaterEqual(apply_helper, 5)
@@ -83,6 +116,33 @@ class RabbitMQProtectedWorkflowTests(unittest.TestCase):
             self.assertEqual(tags[(namespace, name)], [])
         self.assertEqual(tags[("rabbitmq", "staging-smoke")], ["management"])
 
+    def test_each_permission_references_its_same_namespace_user_cr(self):
+        rendered = subprocess.run(
+            ["kubectl", "kustomize", str(ROOT / "deploy/operators/rabbitmq"),
+             "--load-restrictor", "LoadRestrictionsNone"],
+            text=True, capture_output=True, check=True, timeout=30,
+        ).stdout
+        resources = [row for row in yaml.safe_load_all(rendered) if row]
+        users = [row for row in resources if row["kind"] == "User"]
+        permissions = [row for row in resources if row["kind"] == "Permission"]
+        users_by_key = {(row["metadata"]["namespace"], row["metadata"]["name"]): row for row in users}
+        self.assertEqual(len(permissions), 5)
+        for permission in permissions:
+            key = (permission["metadata"]["namespace"], permission["metadata"]["name"])
+            self.assertEqual(permission["spec"].get("userReference"), {"name": key[1]})
+            self.assertNotIn("user", permission["spec"])
+            self.assertIn(key, users_by_key)
+            self.assertNotIn("importCredentialsSecret", users_by_key[key]["spec"])
+        self.assertEqual(
+            {row["metadata"]["namespace"]: row["spec"]["permissions"] for row in permissions},
+            {
+                "specification": {"configure": "^$", "write": "^spectrace\\.events$", "read": "^$"},
+                "formulation": {"configure": "^$", "write": "^spectrace\\.events$", "read": "^formulation\\.specification-published$"},
+                "compliance": {"configure": "^$", "write": "^spectrace\\.events$", "read": "^compliance\\.(specification-published|formula-published|label-published)$"},
+                "label-workflow": {"configure": "^$", "write": "^spectrace\\.events$", "read": "^label-workflow\\.(formula-published|impact-finding)$"},
+                "rabbitmq": {"configure": "^$", "write": "^spectrace\\.events$", "read": "^staging-smoke\\.smoke$"},
+            },
+        )
     def test_cleanup_always_removes_sensitive_and_temporary_diagnostics(self):
         cleanup = next(step for step in self.steps if step.get("name", "").startswith("Remove temporary kubeconfig"))
         self.assertEqual(cleanup["if"], "always()")
@@ -93,6 +153,7 @@ class RabbitMQProtectedWorkflowTests(unittest.TestCase):
             "rabbitmq-pods.json", "rabbitmq-pvcs.json", "all-nodes.json",
             "00-exchanges*.yaml", "10-queues*.yaml", "20-bindings*.yaml", "30-policies*.yaml",
             "rabbitmq-port-forward.log",
+            "*-targets.json",
         ):
             self.assertIn(path, cleanup["run"])
         self.assertFalse(any(step.get("uses", "").startswith("actions/upload-artifact@") for step in self.steps))
