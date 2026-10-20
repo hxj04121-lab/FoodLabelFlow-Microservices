@@ -149,3 +149,22 @@ variable "manage_vpc_cni" {
   type        = bool
   default     = false
 }
+
+variable "manage_load_balancer_controller" {
+  description = "Manage the AWS Load Balancer Controller with Terraform; false preserves a separately owned live release and IAM resources."
+  type        = bool
+  default     = true
+}
+
+variable "existing_namespaces" {
+  description = "Existing namespaces excluded from namespace creation while remaining available to namespaced RBAC and policies."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = length(setsubtract(var.existing_namespaces, setunion(
+      toset(values(var.workload_namespaces)), toset(values(var.operator_namespaces))
+    ))) == 0
+    error_message = "existing_namespaces must be a subset of the declared workload and operator namespaces."
+  }
+}

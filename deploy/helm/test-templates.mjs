@@ -475,12 +475,12 @@ check('Keycloak Operator CRDs are pinned and the operator RBAC stays in the keyc
   assert.deepEqual(crds.map(d=>d.metadata.name).sort(),['keycloakrealmimports.k8s.keycloak.org','keycloaks.k8s.keycloak.org']);
 });
 
-check('staging deploy custom-resource RBAC is namespace-scoped and limited to the existing CRs',()=>{
+check('staging TGB RBAC is namespace-scoped with allowed verbs and denied broader actions',()=>{
   const directory=resolve(repo,'infra/terraform/modules/eks-addons/manifests');
   const cases=[
     ['gateway','gateway-gateway',['elbv2.k8s.aws']],
     ['frontend','frontend-frontend',['elbv2.k8s.aws']],
-    ['keycloak','spectrace-keycloak',['k8s.keycloak.org','elbv2.k8s.aws']]
+    ['keycloak','spectrace-keycloak',['elbv2.k8s.aws']]
   ];
   for(const [namespace,name,groups] of cases) {
     const role=parse(readFileSync(resolve(directory,`${namespace}-deployer-role.yaml.tmpl`),'utf8').replaceAll('${namespace}',namespace));
@@ -488,17 +488,23 @@ check('staging deploy custom-resource RBAC is namespace-scoped and limited to th
     assert.equal(role.metadata.namespace,namespace);
     assert.deepEqual([...new Set(role.rules.map(rule=>rule.apiGroups[0]))].sort(),groups.sort());
     assert(role.rules.every(rule=>rule.resources.length===1 && rule.resources[0]!=='*'));
-    assert(role.rules.some(rule=>rule.verbs.includes('create')));
-    assert(role.rules.filter(rule=>rule.verbs.some(verb=>['get','patch','watch'].includes(verb))).every(rule=>rule.resourceNames?.includes(name)));
-    if(namespace==='frontend') {
-      assert(role.rules.some(rule=>rule.verbs.includes('list') && !rule.resourceNames));
-      assert(role.rules.some(rule=>rule.resourceNames?.includes(name) && rule.verbs.includes('update')));
-    }
+    assert(role.rules.every(rule=>rule.resources[0]==='targetgroupbindings'));
+    assert.deepEqual([...new Set(role.rules.flatMap(rule=>rule.verbs))].sort(),['create','get','patch','watch']);
+    assert(role.rules.some(rule=>rule.verbs.length===1 && rule.verbs[0]==='create' && !rule.resourceNames));
+    assert(role.rules.filter(rule=>rule.verbs.some(verb=>['get','patch','watch'].includes(verb))).every(rule=>rule.resourceNames?.length===1 && rule.resourceNames[0]===name));
+    assert(role.rules.every(rule=>rule.verbs.every(verb=>['create','get','patch','watch'].includes(verb))),'list/update/delete and unrelated verbs are denied');
     assert.equal(binding.kind,'RoleBinding');
     assert.equal(binding.metadata.namespace,namespace);
     assert.deepEqual(binding.subjects,[{kind:'Group',name:'spectrace-staging-deploy',apiGroup:'rbac.authorization.k8s.io'}]);
     assert.equal(binding.roleRef.kind,'Role');
   }
+  const keycloakRole=parse(readFileSync(resolve(directory,'keycloak-resource-role.yaml.tmpl'),'utf8').replaceAll('${namespace}','keycloak'));
+  const keycloakBinding=parse(readFileSync(resolve(directory,'keycloak-resource-rolebinding.yaml.tmpl'),'utf8').replaceAll('${namespace}','keycloak').replaceAll('${group}','spectrace-staging-deploy'));
+  assert.equal(keycloakRole.metadata.namespace,'keycloak');
+  assert(keycloakRole.rules.every(rule=>rule.apiGroups[0]==='k8s.keycloak.org' && rule.resources[0]==='keycloaks'));
+  assert.deepEqual([...new Set(keycloakRole.rules.flatMap(rule=>rule.verbs))].sort(),['create','get','patch','watch']);
+  assert(keycloakRole.rules.filter(rule=>rule.verbs.some(verb=>['get','patch','watch'].includes(verb))).every(rule=>rule.resourceNames?.[0]==='spectrace-keycloak'));
+  assert.deepEqual(keycloakBinding.subjects,[{kind:'Group',name:'spectrace-staging-deploy',apiGroup:'rbac.authorization.k8s.io'}]);
   assert.match(readFileSync(resolve(repo,'infra/terraform/modules/github-oidc/main.tf'),'utf8'),/kubernetes_groups\s*=\s*\[var\.deployer_kubernetes_group\]/);
 });
 

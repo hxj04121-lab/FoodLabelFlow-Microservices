@@ -4,13 +4,6 @@ metadata:
   name: spectrace-staging-deployer-custom-resources
   namespace: ${namespace}
 rules:
-  - apiGroups: [k8s.keycloak.org]
-    resources: [keycloaks]
-    verbs: [create]
-  - apiGroups: [k8s.keycloak.org]
-    resources: [keycloaks]
-    resourceNames: [spectrace-keycloak]
-    verbs: [get, patch, watch]
   - apiGroups: [elbv2.k8s.aws]
     resources: [targetgroupbindings]
     verbs: [create]

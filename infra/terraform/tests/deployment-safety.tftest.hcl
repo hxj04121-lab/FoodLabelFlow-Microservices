@@ -83,8 +83,77 @@ run "foundations_plan_without_recreating_cni_or_an_alb" {
     error_message = "The staging deployer may only read node inventory through its existing Kubernetes group."
   }
   assert {
-    condition     = length(aws_iam_role.addons) == 2 && contains(keys(aws_iam_role.addons), "ebs_csi") && contains(keys(aws_iam_role.addons), "aws_load_balancer_controller") && length(aws_eks_addon.vpc_cni) == 0
+    condition     = length(aws_iam_role.addons) == 2 && contains(keys(aws_iam_role.addons), "ebs_csi") && contains(keys(aws_iam_role.addons), "aws_load_balancer_controller") && length(aws_iam_policy.load_balancer_controller) == 1 && length(aws_iam_role_policy_attachment.load_balancer_controller) == 1 && length(helm_release.load_balancer_controller) == 1 && length(aws_eks_addon.vpc_cni) == 0
     error_message = "EBS CSI and the load balancer controller IRSA roles stay declared while the live self-managed VPC CNI remains untouched."
+  }
+  assert {
+    condition     = var.manage_load_balancer_controller
+    error_message = "A fresh cluster manages the Load Balancer Controller by default."
+  }
+}
+
+run "staging_preserves_out_of_band_lbc_and_existing_namespaces" {
+  command = plan
+  module { source = "./modules/eks-addons" }
+  variables {
+    cluster_name                    = "spectrace-staging"
+    cluster_version                 = "1.36"
+    cluster_oidc_provider_arn       = "arn:aws:iam::000000000000:oidc-provider/oidc.eks.example.test/id/test"
+    cluster_autoscaler_role_arn     = "arn:aws:iam::000000000000:role/test-autoscaler"
+    vpc_id                          = "vpc-test"
+    vpc_cidr                        = "10.0.0.0/16"
+    public_subnet_cidrs             = ["10.0.0.0/20", "10.0.16.0/20"]
+    private_subnet_cidrs            = ["10.0.64.0/20", "10.0.80.0/20"]
+    database_subnet_cidrs           = ["10.0.64.0/20", "10.0.80.0/20"]
+    node_groups                     = { general = { asg_name = "test-asg", min_size = 1, max_size = 3 } }
+    manage_load_balancer_controller = false
+    existing_namespaces             = ["gateway", "keycloak", "keycloak-system"]
+    workload_namespaces = {
+      gateway        = "gateway"
+      keycloak       = "keycloak"
+      rabbitmq       = "rabbitmq"
+      observability  = "observability"
+      specification  = "specification"
+      formulation    = "formulation"
+      compliance     = "compliance"
+      label-workflow = "label-workflow"
+      frontend       = "frontend"
+    }
+    deployer_kubernetes_group = "spectrace-staging-deploy"
+    operator_namespaces       = { rabbitmq = "rabbitmq-system", keycloak = "keycloak-system" }
+  }
+  assert {
+    condition     = length(helm_release.load_balancer_controller) == 0 && length(aws_iam_policy.load_balancer_controller) == 0 && length(aws_iam_role_policy_attachment.load_balancer_controller) == 0 && !contains(keys(aws_iam_role.addons), "aws_load_balancer_controller")
+    error_message = "Staging preserves the live LBC release, IRSA role, policy, and attachment outside Terraform management."
+  }
+  assert {
+    condition     = toset([for namespace in kubernetes_manifest.workload_namespace : namespace.manifest.metadata.name]) == toset(["rabbitmq", "observability", "specification", "formulation", "compliance", "label-workflow", "frontend", "rabbitmq-system"])
+    error_message = "Only genuinely missing workload and operator namespaces may be created in staging."
+  }
+  assert {
+    condition     = helm_release.cluster_autoscaler.name == "cluster-autoscaler" && helm_release.metrics_server.name == "metrics-server" && helm_release.network_policies.name == "spectrace-network-policies" && aws_eks_addon.ebs_csi.addon_name == "aws-ebs-csi-driver" && contains(keys(aws_iam_role.addons), "ebs_csi")
+    error_message = "Disabling LBC must preserve the missing add-ons, NetworkPolicies, and EBS CSI management declarations."
+  }
+  assert {
+    condition = alltrue([for namespace, role in kubernetes_manifest.deployer_custom_resource_role : (
+      length(role.manifest.rules) == 2 &&
+      role.manifest.metadata.namespace == var.workload_namespaces[namespace] &&
+      toset(flatten([for rule in role.manifest.rules : rule.verbs])) == toset(["create", "get", "patch", "watch"]) &&
+      alltrue([for rule in role.manifest.rules : rule.apiGroups == ["elbv2.k8s.aws"] && rule.resources == ["targetgroupbindings"]]) &&
+      role.manifest.rules[1].resourceNames == [namespace == "gateway" ? "gateway-gateway" : namespace == "keycloak" ? "spectrace-keycloak" : "frontend-frontend"]
+      )]) && alltrue([for binding in values(kubernetes_manifest.deployer_custom_resource_rolebinding) : binding.manifest.subjects == [{
+        kind = "Group", name = "spectrace-staging-deploy", apiGroup = "rbac.authorization.k8s.io"
+    }]])
+    error_message = "TGB Roles stay namespace-scoped, limited to necessary actions and resource names, and bind only to the existing deploy group."
+  }
+  assert {
+    condition = kubernetes_manifest.keycloak_resource_role.manifest.rules == [
+      { apiGroups = ["k8s.keycloak.org"], resources = ["keycloaks"], verbs = ["create"] },
+      { apiGroups = ["k8s.keycloak.org"], resources = ["keycloaks"], resourceNames = ["spectrace-keycloak"], verbs = ["get", "patch", "watch"] }
+      ] && kubernetes_manifest.keycloak_resource_rolebinding.manifest.subjects == [{
+        kind = "Group", name = "spectrace-staging-deploy", apiGroup = "rbac.authorization.k8s.io"
+    }]
+    error_message = "Keycloak custom-resource permissions remain separately scoped to the exact Keycloak object."
   }
 }
 

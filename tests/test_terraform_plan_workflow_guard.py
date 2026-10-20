@@ -3,9 +3,21 @@ from pathlib import Path
 
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/terraform-validate.yml"
+ROOT_VARIABLES = Path(__file__).resolve().parents[1] / "infra/terraform/variables.tf"
+ROOT_MAIN = Path(__file__).resolve().parents[1] / "infra/terraform/main.tf"
+ADDON_VARIABLES = Path(__file__).resolve().parents[1] / "infra/terraform/modules/eks-addons/variables.tf"
 
 
 class TerraformPlanWorkflowGuardTest(unittest.TestCase):
+    def test_new_environment_manages_lbc_by_default_and_root_passes_parameters(self):
+        root_variables = ROOT_VARIABLES.read_text()
+        addon_variables = ADDON_VARIABLES.read_text()
+        root_main = ROOT_MAIN.read_text()
+        self.assertRegex(root_variables, r'variable "manage_load_balancer_controller" \{[^}]*default\s*=\s*true')
+        self.assertRegex(addon_variables, r'variable "manage_load_balancer_controller" \{[^}]*default\s*=\s*true')
+        self.assertIn("manage_load_balancer_controller = var.manage_load_balancer_controller", root_main)
+        self.assertRegex(root_main, r"existing_namespaces\s*=\s*var\.existing_namespaces")
+
     def test_plan_is_main_only_protected_and_read_only(self):
         workflow = WORKFLOW.read_text()
 
@@ -18,13 +30,20 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
         self.assertIn("get deployments -n kube-system --server-print=true --no-headers", workflow)
         self.assertIn("get networkpolicies --all-namespaces -o name", workflow)
         self.assertIn("get namespaces --server-print=true --no-headers", workflow)
-        self.assertIn('get "$kind" spectrace-staging-deployer-custom-resources -n "$namespace"', workflow)
+        self.assertIn('get "$kind" "$name" -n "$namespace"', workflow)
+        self.assertIn('platform-resources.txt', workflow)
+        self.assertIn('managed-rbac-resources.txt', workflow)
+        self.assertIn('describe-addon --cluster-name "$STAGING_CLUSTER_NAME" --addon-name aws-ebs-csi-driver', workflow)
+        self.assertIn('get storageclass ebs-gp3 --ignore-not-found -o name', workflow)
         self.assertIn("--rbac-resources \"$rbac_inventory\"", workflow)
         self.assertLess(
             workflow.index('python3 "$GITHUB_WORKSPACE/scripts/staging/guard_staging_ownership.py"'),
             workflow.index("terraform plan -input=false"),
         )
-        self.assertNotIn("kubectl get secrets", workflow)
+        self.assertIn("get secrets -n kube-system -l owner=helm,name=aws-load-balancer-controller", workflow)
+        self.assertIn("--server-print=true --no-headers", workflow)
+        self.assertNotRegex(workflow, r"get secrets[^\n]*(?:-o\s*(?:json|yaml)|-ojson|-oyaml)")
+        self.assertNotIn(".data", workflow)
         self.assertIn("aws iam get-role --role-name", workflow)
         self.assertIn("aws iam get-policy --policy-arn", workflow)
         self.assertNotIn("AssumeRolePolicyDocument", workflow)
@@ -41,6 +60,15 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
         self.assertIn("workspace_key_prefix=spectrace", workflow)
         self.assertIn('terraform workspace select "$STAGING_TF_WORKSPACE"', workflow)
         self.assertIn('test "$(terraform workspace show)" = "$STAGING_TF_WORKSPACE"', workflow)
+        self.assertIn("manage_load_balancer_controller=false", workflow)
+        self.assertIn('existing_namespaces=["gateway","keycloak","keycloak-system"]', workflow)
+        self.assertIn("staging-ownership-allowlist.json", workflow)
+        self.assertIn("guard_staging_plan_actions.py", workflow)
+        self.assertNotIn("tIRsj1wl1CWHRWeAa2C1G.1QujMl.0dk", workflow)
+        self.assertGreater(
+            workflow.index('python3 "$GITHUB_WORKSPACE/scripts/staging/guard_staging_plan_actions.py"'),
+            workflow.index("terraform plan -input=false"),
+        )
         for address in (
             "module.eks[0].aws_eks_cluster.this",
             "module.network.aws_vpc.this",
@@ -54,6 +82,11 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
             'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_rolebinding["gateway"]',
             'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_rolebinding["keycloak"]',
             'module.eks_addons[0].kubernetes_manifest.deployer_custom_resource_rolebinding["frontend"]',
+            "module.eks_addons[0].kubernetes_manifest.keycloak_resource_role",
+            "module.eks_addons[0].kubernetes_manifest.keycloak_resource_rolebinding",
+            "module.eks_addons[0].helm_release.load_balancer_controller[0]",
+            "module.eks_addons[0].aws_iam_policy.load_balancer_controller[0]",
+            "module.eks_addons[0].aws_iam_role_policy_attachment.load_balancer_controller[0]",
             'module.eks_addons[0].kubernetes_manifest.workload_namespace["gateway"]',
             'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak"]',
             'module.eks_addons[0].kubernetes_manifest.workload_namespace["rabbitmq"]',
@@ -90,6 +123,20 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
             "terraform-plan.log",
             "staging-state-head.json",
             "staging-state-head-after.json",
+            "kubeconfig",
+            "kube-system-deployments.txt",
+            "network-policy-names.txt",
+            "namespace-names.txt",
+            "managed-rbac-resources.txt",
+            "iam-resources.txt",
+            "iam-read-error.txt",
+            "iam-role-name.txt",
+            "iam-policy-name.txt",
+            "iam-attachment-name.txt",
+            "platform-resources.txt",
+            "platform-read-error.txt",
+            "lbc-helm-metadata-names.txt",
+            "ebs-addon-name.txt",
         ):
             self.assertIn(f'$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/{filename}', workflow)
         self.assertNotIn('$RUNNER_TEMP/staging.tfvars.json', workflow)

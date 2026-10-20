@@ -118,6 +118,26 @@ variable "manage_vpc_cni" {
   }
 }
 
+variable "manage_load_balancer_controller" {
+  description = "Manage the AWS Load Balancer Controller with Terraform. Keep true for new clusters; false only for the reviewed staging out-of-band owner."
+  type        = bool
+  default     = true
+}
+
+variable "existing_namespaces" {
+  description = "Namespaces already present and explicitly excluded from Terraform namespace creation for the reviewed staging plan."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = length(setsubtract(var.existing_namespaces, toset([
+      "gateway", "keycloak", "rabbitmq", "observability", "specification",
+      "formulation", "compliance", "label-workflow", "frontend", "rabbitmq-system", "keycloak-system"
+    ]))) == 0
+    error_message = "existing_namespaces may contain only declared workload and operator namespaces."
+  }
+}
+
 variable "alb_internal" {
   description = "Keep the existing ALB internal even when enabling HTTPS. Public exposure requires a separately reviewed replacement plan."
   type        = bool

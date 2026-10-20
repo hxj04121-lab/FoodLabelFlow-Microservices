@@ -47,6 +47,7 @@ resource "aws_eks_addon" "ebs_csi" {
 }
 
 resource "helm_release" "load_balancer_controller" {
+  count      = var.manage_load_balancer_controller ? 1 : 0
   name       = "aws-load-balancer-controller"
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-load-balancer-controller"
@@ -63,7 +64,7 @@ resource "helm_release" "load_balancer_controller" {
       create = true
       name   = "aws-load-balancer-controller"
       annotations = {
-        "eks.amazonaws.com/role-arn" = aws_iam_role.addons["aws_load_balancer_controller"].arn
+        "eks.amazonaws.com/role-arn" = var.manage_load_balancer_controller ? aws_iam_role.addons["aws_load_balancer_controller"].arn : ""
       }
     }
   })]
@@ -158,7 +159,10 @@ resource "helm_release" "network_policies" {
 }
 
 resource "kubernetes_manifest" "workload_namespace" {
-  for_each = toset(concat(values(var.workload_namespaces), values(var.operator_namespaces)))
+  for_each = toset([
+    for namespace in concat(values(var.workload_namespaces), values(var.operator_namespaces)) : namespace
+    if !contains(var.existing_namespaces, namespace)
+  ])
 
   manifest = {
     apiVersion = "v1"
@@ -248,6 +252,23 @@ resource "kubernetes_manifest" "deployer_custom_resource_rolebinding" {
   }))
 
   depends_on = [kubernetes_manifest.deployer_custom_resource_role]
+}
+
+resource "kubernetes_manifest" "keycloak_resource_role" {
+  manifest = yamldecode(templatefile("${path.module}/manifests/keycloak-resource-role.yaml.tmpl", {
+    namespace = var.workload_namespaces.keycloak
+  }))
+
+  depends_on = [kubernetes_manifest.workload_namespace]
+}
+
+resource "kubernetes_manifest" "keycloak_resource_rolebinding" {
+  manifest = yamldecode(templatefile("${path.module}/manifests/keycloak-resource-rolebinding.yaml.tmpl", {
+    namespace = var.workload_namespaces.keycloak
+    group     = var.deployer_kubernetes_group
+  }))
+
+  depends_on = [kubernetes_manifest.keycloak_resource_role]
 }
 
 resource "kubernetes_manifest" "staging_deployer_node_reader" {

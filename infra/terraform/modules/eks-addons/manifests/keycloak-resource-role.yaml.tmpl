@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spectrace-staging-deployer-keycloak-resource
+  namespace: ${namespace}
+rules:
+  - apiGroups: [k8s.keycloak.org]
+    resources: [keycloaks]
+    verbs: [create]
+  - apiGroups: [k8s.keycloak.org]
+    resources: [keycloaks]
+    resourceNames: [spectrace-keycloak]
+    verbs: [get, patch, watch]
