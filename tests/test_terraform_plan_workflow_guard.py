@@ -89,7 +89,7 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
         self.assertIn('terraform workspace select "$STAGING_TF_WORKSPACE"', workflow)
         self.assertIn('test "$(terraform workspace show)" = "$STAGING_TF_WORKSPACE"', workflow)
         self.assertIn("manage_load_balancer_controller=false", workflow)
-        self.assertIn('existing_namespaces=["gateway","keycloak","keycloak-system"]', workflow)
+        self.assertIn('existing_namespaces=["gateway","keycloak","keycloak-system","rabbitmq-system"]', workflow)
         self.assertIn("staging-ownership-allowlist.json", workflow)
         self.assertIn("guard_staging_plan_actions.py", workflow)
         self.assertNotIn("tIRsj1wl1CWHRWeAa2C1G.1QujMl.0dk", workflow)
