@@ -6,6 +6,8 @@ on:
       - 'deploy/**'
       - 'infra/terraform/**'
       - '.github/workflows/m5-platform-validation.yml'
+      - '.github/workflows/terraform-validate.yml'
+      - '.github/workflows/staging-terraform-apply.yml'
       - '.github/workflows/service-cicd-reusable.yml'
       - '.github/workflows/compliance-kind-ci.yml'
       - '.github/workflows/deploy-business-services.yml'
@@ -14,6 +16,8 @@ on:
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
       - 'scripts/staging/**'
+      - 'tests/test_staging_apply_workflow.py'
+      - 'tests/test_secure_tfplan.mjs'
       - 'deploy/mysql/bootstrap-service-databases.sh'
       - 'tests/test_helm_release_inventory.py'
       - 'tests/test_staging_rds_values.py'
@@ -29,6 +33,8 @@ on:
       - 'deploy/**'
       - 'infra/terraform/**'
       - '.github/workflows/m5-platform-validation.yml'
+      - '.github/workflows/terraform-validate.yml'
+      - '.github/workflows/staging-terraform-apply.yml'
       - '.github/workflows/service-cicd-reusable.yml'
       - '.github/workflows/compliance-kind-ci.yml'
       - '.github/workflows/deploy-business-services.yml'
@@ -37,6 +43,8 @@ on:
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
       - 'scripts/staging/**'
+      - 'tests/test_staging_apply_workflow.py'
+      - 'tests/test_secure_tfplan.mjs'
       - 'deploy/mysql/bootstrap-service-databases.sh'
       - 'tests/test_helm_release_inventory.py'
       - 'tests/test_staging_rds_values.py'
@@ -57,6 +65,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
       - run: python -m pip install PyYAML==6.0.3
       - name: Validate protected RabbitMQ workflows with pinned actionlint
         shell: bash
@@ -80,7 +90,18 @@ jobs:
             --output "$archive"
           printf '%s  %s\n' "$asset_sha" "$archive" | sha256sum --check --status
           tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
-          "$RUNNER_TEMP/actionlint" .github/workflows/deploy-rabbitmq.yml .github/workflows/m5-platform-validation.yml
+          workflows=(
+            .github/workflows/deploy-rabbitmq.yml
+            .github/workflows/install-rabbitmq-operators.yml
+            .github/workflows/terraform-validate.yml
+            .github/workflows/staging-terraform-apply.yml
+            .github/workflows/m5-platform-validation.yml
+          )
+          present=()
+          for workflow in "${workflows[@]}"; do
+            if [[ -f "$workflow" ]]; then present+=("$workflow"); fi
+          done
+          "$RUNNER_TEMP/actionlint" "${present[@]}"
       - uses: hashicorp/setup-terraform@v3
         with: {terraform_version: 1.15.8}
       - run: terraform fmt -check -recursive
@@ -96,6 +117,8 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_helm_release_inventory.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_rds_values.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_service_digests.py' -v
+          python3 -m unittest discover -s tests -p 'test_staging_apply_workflow.py' -v
+          node --test tests/test_secure_tfplan.mjs
           python3 -m unittest discover -s tests -p 'test_staging_window.py' -v
           bash tests/test-runtime-secrets.sh
           bash tests/test_mysql_bootstrap_workflow_guard.sh
