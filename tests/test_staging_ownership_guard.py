@@ -20,7 +20,7 @@ class StagingOwnershipGuardTest(unittest.TestCase):
         state="",
         deployments="aws-load-balancer-controller 1/1 1 1 1d\n",
         policies="",
-        namespaces="gateway Active 1d\nkeycloak Active 1d\nkeycloak-system Active 1d\n",
+        namespaces="gateway Active 1d\nkeycloak Active 1d\nkeycloak-system Active 1d\nrabbitmq-system Active 1d\n",
         iam=None,
         rbac="",
         platform="",
@@ -83,10 +83,13 @@ class StagingOwnershipGuardTest(unittest.TestCase):
         self.assertTrue(any("not at the reviewed healthy replica count" in issue for issue in issues))
 
     def test_exact_existing_namespaces_are_allowed_but_missing_or_extra_objects_block(self):
-        self.assertEqual(self.run_guard(namespaces="gateway Active 1d\nkeycloak Active 1d\n"), [
+        self.assertEqual(self.run_guard(namespaces="gateway Active 1d\nkeycloak Active 1d\nrabbitmq-system Active 1d\n"), [
             "namespace keycloak-system: reviewed out-of-band namespace is missing from the live cluster."
         ])
-        issues = self.run_guard(namespaces="gateway Active 1d\nkeycloak Active 1d\nkeycloak-system Active 1d\nrabbitmq Active 1d\n")
+        self.assertEqual(self.run_guard(namespaces="gateway Active 1d\nkeycloak Active 1d\nkeycloak-system Active 1d\n"), [
+            "namespace rabbitmq-system: reviewed out-of-band namespace is missing from the live cluster."
+        ])
+        issues = self.run_guard(namespaces="gateway Active 1d\nkeycloak Active 1d\nkeycloak-system Active 1d\nrabbitmq-system Active 1d\nrabbitmq Active 1d\n")
         self.assertTrue(any('workload_namespace["rabbitmq"]' in issue for issue in issues))
 
     def test_state_ownership_of_independently_managed_objects_is_a_conflict(self):

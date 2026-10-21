@@ -17,7 +17,7 @@ PROTECTED_ADDRESSES = {
     "module.eks_addons[0].aws_iam_role_policy_attachment.load_balancer_controller[0]",
     *{
         f'module.eks_addons[0].kubernetes_manifest.workload_namespace["{namespace}"]'
-        for namespace in ("gateway", "keycloak", "keycloak-system")
+        for namespace in ("gateway", "keycloak", "keycloak-system", "rabbitmq-system")
     },
 }
 PROTECTED_ALB_RESOURCE_TYPES = {
@@ -35,6 +35,25 @@ VALID_ACTION_LISTS = [[action] for action in VALID_ACTIONS] + [["delete", "creat
 
 def is_protected_alb_type(resource_type: str) -> bool:
     return resource_type in PROTECTED_ALB_RESOURCE_TYPES or resource_type.startswith("aws_acm_")
+
+
+def changed_attribute_names(change: dict) -> list[str]:
+    """Top-level attribute names whose planned value differs; values are never returned."""
+    before = change.get("before") if isinstance(change.get("before"), dict) else {}
+    after = change.get("after") if isinstance(change.get("after"), dict) else {}
+    unknown = change.get("after_unknown") if isinstance(change.get("after_unknown"), dict) else {}
+    names = {key for key in set(before) | set(after) if before.get(key) != after.get(key)}
+    names |= {key for key, value in unknown.items() if value}
+    return sorted(names)
+
+
+TAG_ONLY_ATTRIBUTES = {"tags", "tags_all"}
+
+
+def is_tag_only_update(actions: list, change: dict) -> bool:
+    """M1 decision (21 Oct): an in-place update of only tags on a protected ALB/ACM resource is allowed."""
+    names = changed_attribute_names(change)
+    return actions == ["update"] and bool(names) and set(names) <= TAG_ONLY_ATTRIBUTES
 
 
 def check_plan(plan: dict) -> list[str]:
@@ -78,8 +97,11 @@ def check_plan(plan: dict) -> list[str]:
         if is_protected_alb_type(resource_type) and (
             PROTECTED_MUTATING_ACTIONS.intersection(actions)
             or set(actions) == {"create", "delete"}
-        ):
-            violations.append(f"{address} ({resource_type}): planned actions {actions} are forbidden for protected ALB/ACM resources")
+        ) and not is_tag_only_update(actions, change):
+            violations.append(
+                f"{address} ({resource_type}): planned actions {actions} are forbidden for protected ALB/ACM resources; "
+                f"changed attributes (names only): {', '.join(changed_attribute_names(change)) or 'none reported'}"
+            )
     return violations
 
 

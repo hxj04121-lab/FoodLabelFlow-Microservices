@@ -144,3 +144,20 @@ class TerraformPlanSummaryTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewedCreateBeforeDestroyTest(unittest.TestCase):
+    RULE = "module.eks[0].aws_security_group_rule.nodes_from_cluster"
+
+    def change(self, address, actions):
+        return [{"address": address, "mode": "managed", "type": "aws_security_group_rule", "change": {"actions": actions}}]
+
+    def test_reviewed_rule_replaced_create_first_passes(self):
+        result = summarize(self.change(self.RULE, ["create", "delete"]))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("Protected foundation destroy/replacement check: **PASS**", result.stdout)
+
+    def test_destroy_first_or_other_rules_still_fail(self):
+        self.assertEqual(summarize(self.change(self.RULE, ["delete", "create"])).returncode, 1)
+        self.assertEqual(summarize(self.change(self.RULE, ["delete"])).returncode, 1)
+        self.assertEqual(summarize(self.change("module.eks[0].aws_security_group_rule.nodes_self_dns_udp", ["create", "delete"])).returncode, 1)
