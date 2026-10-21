@@ -194,3 +194,4 @@ unset STAGING_WINDOW_VALIDATED
 bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" delete > "$tmp_dir/deleted-output"
 [[ $(wc -l < "$tmp_dir/captures/deleted") -eq 5 ]]
 echo "PASS runtime Secret injection and cleanup: isolated DBs, OIDC configuration, protected window, exact staging context and redaction"
+grep -Fq 'BOOTSTRAP_KUBECTL_NAMESPACE=specification' "$workflow"

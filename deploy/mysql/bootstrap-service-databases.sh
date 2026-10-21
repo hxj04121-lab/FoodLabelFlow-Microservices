@@ -44,7 +44,16 @@ for i in "${!services[@]}"; do
 done
 printf 'FLUSH PRIVILEGES;\n' >> "$sql_file"
 
-if command -v mysql >/dev/null 2>&1; then
+if [[ -n "${BOOTSTRAP_KUBECTL_NAMESPACE:-}" ]]; then
+  # RDS accepts MySQL only from the EKS node security group, so run the client in a short-lived cluster Pod.
+  # The admin password is the first stdin line, never part of the Pod spec; the SQL follows it.
+  [[ "$BOOTSTRAP_KUBECTL_NAMESPACE" =~ ^[a-z0-9-]{1,63}$ ]] || { echo "Invalid BOOTSTRAP_KUBECTL_NAMESPACE" >&2; exit 2; }
+  { printf '%s\n' "$MYSQL_ADMIN_PASSWORD"; cat "$sql_file"; } | kubectl run "mysql-bootstrap-$RANDOM" \
+    --namespace "$BOOTSTRAP_KUBECTL_NAMESPACE" --image=mysql:8.4.3 --restart=Never --rm -i --quiet \
+    --pod-running-timeout=5m --labels=app.kubernetes.io/name=mysql-bootstrap --command -- \
+    sh -c 'IFS= read -r pw; MYSQL_PWD="$pw" exec mysql --host="$1" --user="$2" --protocol=TCP --ssl-mode=REQUIRED' \
+    sh "$MYSQL_HOST" "$MYSQL_ADMIN_USER"
+elif command -v mysql >/dev/null 2>&1; then
   MYSQL_PWD="$MYSQL_ADMIN_PASSWORD" mysql \
     --host="$MYSQL_HOST" --user="$MYSQL_ADMIN_USER" --protocol=TCP \
     --ssl-mode=REQUIRED < "$sql_file"
