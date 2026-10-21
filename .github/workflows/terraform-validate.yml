@@ -11,6 +11,7 @@ on:
       - "scripts/aws_staging_budget.py"
       - "scripts/verify_staging_target_network.py"
       - "scripts/terraform_plan_summary.py"
+      - "scripts/staging/summarize_terraform_failure.py"
       - "scripts/staging/guard_staging_ownership.py"
       - "scripts/staging/guard_staging_plan_actions.py"
       - "scripts/staging/secure_tfplan.mjs"
@@ -23,6 +24,7 @@ on:
       - "tests/test_staging_target_network.py"
       - "tests/test_terraform_plan_summary.py"
       - "tests/test_terraform_plan_workflow_guard.py"
+      - "tests/test_safe_terraform_failure_summary.py"
       - "tests/test_staging_ownership_guard.py"
       - "tests/test_staging_plan_action_guard.py"
       - "deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl"
@@ -36,6 +38,7 @@ on:
       - "scripts/aws_staging_budget.py"
       - "scripts/verify_staging_target_network.py"
       - "scripts/terraform_plan_summary.py"
+      - "scripts/staging/summarize_terraform_failure.py"
       - "scripts/staging/guard_staging_ownership.py"
       - "scripts/staging/guard_staging_plan_actions.py"
       - "scripts/staging/secure_tfplan.mjs"
@@ -48,6 +51,7 @@ on:
       - "tests/test_staging_target_network.py"
       - "tests/test_terraform_plan_summary.py"
       - "tests/test_terraform_plan_workflow_guard.py"
+      - "tests/test_safe_terraform_failure_summary.py"
       - "tests/test_staging_ownership_guard.py"
       - "tests/test_staging_plan_action_guard.py"
       - "deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl"
@@ -111,6 +115,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p test_terraform_plan_summary.py -v
           python3 -m unittest discover -s tests -p test_terraform_plan_workflow_guard.py -v
+          python3 -m unittest discover -s tests -p test_safe_terraform_failure_summary.py -v
           python3 -m unittest discover -s tests -p test_staging_ownership_guard.py -v
           python3 -m unittest discover -s tests -p test_staging_plan_action_guard.py -v
           python3 -m unittest discover -s tests -p test_staging_apply_workflow.py -v
@@ -406,15 +411,24 @@ jobs:
         working-directory: infra/terraform
         run: |
           umask 077
-          if ! terraform plan -input=false -no-color -var-file="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfvars.json" \
+          if terraform plan -input=false -no-color -var-file="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfvars.json" \
             -var=enable_eks=true -var=enable_eks_addons=true -var=manage_vpc_cni=false \
             -var=manage_load_balancer_controller=false \
             -var='existing_namespaces=["gateway","keycloak","keycloak-system"]' \
             -var=general_desired_size=3 -var=enable_compliance_node_group=true -var=compliance_desired_size=1 \
             -out="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-plan.log" 2>&1; then
-            echo '::error::Read-only plan failed. No Apply was executed. Terraform error blocks follow (diagnostics only, no plan output).'
-            awk '/^Error: /{n=12} n>0{print; n--}' "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-plan.log" | head -n 80
-            exit 1
+            :
+          else
+            plan_exit_code=$?
+            if ! (
+              cd "$GITHUB_WORKSPACE"
+              python3 -m scripts.staging.summarize_terraform_failure \
+                --step terraform_plan --exit-code "$plan_exit_code" \
+                --log-file "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-plan.log"
+            ); then
+              echo '::warning::Terraform failure summary could not be generated.'
+            fi
+            exit "$plan_exit_code"
           fi
       - name: Verify State version remained unchanged during Plan
         run: |
