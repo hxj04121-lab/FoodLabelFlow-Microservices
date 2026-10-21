@@ -99,3 +99,10 @@ class ProviderLockOrderTest(unittest.TestCase):
         plan = PLAN_WORKFLOW.read_text()
         self.assertGreater(plan.index('provider_lock_sha256="$(sha256sum .terraform.lock.hcl'),
                            plan.index("name: Initialize the existing protected state"))
+
+
+class ApplyToolingTest(unittest.TestCase):
+    def test_apply_installs_kubectl_before_using_it(self):
+        apply = APPLY_WORKFLOW.read_text()
+        self.assertIn("uses: azure/setup-kubectl@v4", apply)
+        self.assertLess(apply.index("uses: azure/setup-kubectl@v4"), apply.index("kubectl config current-context"))
