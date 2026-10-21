@@ -66,11 +66,14 @@ class RabbitMQProtectedWorkflowTests(unittest.TestCase):
             self.assertIn(deployment, preflight["run"])
         self.assertNotIn("kubectl apply", self.workflow_text)
         self.assertNotIn("kubectl replace", self.workflow_text)
-        # The only delete is a never-reconciled RabbitmqCluster with no StatefulSet, Pod or PVC (no data).
-        self.assertEqual(self.workflow_text.count("kubectl delete"), 1)
+        # Only two guarded deletes: a RabbitmqCluster with no Bound PVC (no data), and the ebs-gp3 class
+        # with a reserved tag while no PersistentVolume uses it.
+        self.assertEqual(self.workflow_text.count("kubectl delete"), 2)
         delete_at = self.workflow_text.index("kubectl delete rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq")
-        guard_at = self.workflow_text.rindex('kubectl get statefulsets,pods,persistentvolumeclaims --namespace rabbitmq -o name)" ]]', 0, delete_at)
-        self.assertLess(delete_at - guard_at, 400)
+        guard_at = self.workflow_text.rindex('status.phase=="Bound"', 0, delete_at)
+        self.assertLess(delete_at - guard_at, 500)
+        sc_delete_at = self.workflow_text.index("kubectl delete storageclass ebs-gp3")
+        self.assertLess(sc_delete_at - self.workflow_text.rindex('test "$volumes" = 0', 0, sc_delete_at), 600)
         for release_url in (
             "cert-manager.yaml", "cluster-operator.yml", "messaging-topology-operator-with-certmanager.yaml",
         ):
