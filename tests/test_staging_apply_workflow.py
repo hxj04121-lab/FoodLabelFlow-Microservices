@@ -88,3 +88,14 @@ class StagingTerraformApplyWorkflowTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProviderLockOrderTest(unittest.TestCase):
+    def test_lockfile_is_hashed_after_init_like_the_plan_job(self):
+        apply = APPLY_WORKFLOW.read_text()
+        init = apply.index("name: Initialize only the approved source commit and staging workspace")
+        self.assertGreater(apply.index("name: Pin the provider lockfile used by the saved Plan"), init)
+        self.assertGreater(apply.index("name: Decrypt and verify Plan bytes and approvals"), init)
+        plan = PLAN_WORKFLOW.read_text()
+        self.assertGreater(plan.index('provider_lock_sha256="$(sha256sum .terraform.lock.hcl'),
+                           plan.index("name: Initialize the existing protected state"))
