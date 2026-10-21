@@ -61,12 +61,12 @@ variable "general_desired_size" {
 }
 
 variable "compliance_desired_size" {
-  description = "Desired c6i.large compliance nodes; two are required to place compliance workloads in both staging AZs."
+  description = "Desired c6i.large Compliance node count; the approved staging demo starts with one, with room to scale up to four."
   type        = number
-  default     = 2
+  default     = 1
   validation {
-    condition     = var.compliance_desired_size >= (var.enable_compliance_node_group ? 2 : 1) && var.compliance_desired_size <= 4
-    error_message = "Compliance node count must be between one and four; enabling the group requires at least two nodes for both AZs."
+    condition     = var.compliance_desired_size >= 1 && var.compliance_desired_size <= 4
+    error_message = "Compliance node count must be between one and four."
   }
 }
 

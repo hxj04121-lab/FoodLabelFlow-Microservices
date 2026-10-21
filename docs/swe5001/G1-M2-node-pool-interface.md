@@ -1,5 +1,7 @@
 # G1 M2 / M5 Compliance node-pool handoff — STCN-47
 
+> M1 staging-window decision (21 Oct 2026): the short demo starts with one Compliance node. This is a capacity baseline, not a revision to G1's two-AZ acceptance target. The Compliance chart still requires two eligible zones for its three-replica experiment; G1 remains NOT RUN until an approved run records actual scale-out and pod placement.
+
 M2 draft interface, 5 October 2026; architecture authority: AWS v3 §8–10, ADR-08/09. M5 owns Terraform and cloud lifecycle. No Terraform implementation or actual placement evidence is available in main/candidates at inspection; this interface is pending M5 agreement.
 
 | Requirement | Proposed exact interface for the chart |

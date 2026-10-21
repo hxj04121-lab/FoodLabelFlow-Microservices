@@ -6,6 +6,7 @@ WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/terraform-va
 ROOT_VARIABLES = Path(__file__).resolve().parents[1] / "infra/terraform/variables.tf"
 ROOT_MAIN = Path(__file__).resolve().parents[1] / "infra/terraform/main.tf"
 ADDON_VARIABLES = Path(__file__).resolve().parents[1] / "infra/terraform/modules/eks-addons/variables.tf"
+ROOT_EKS_MAIN = Path(__file__).resolve().parents[1] / "infra/terraform/modules/eks/main.tf"
 
 
 class TerraformPlanWorkflowGuardTest(unittest.TestCase):
@@ -17,6 +18,22 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
         self.assertRegex(addon_variables, r'variable "manage_load_balancer_controller" \{[^}]*default\s*=\s*true')
         self.assertIn("manage_load_balancer_controller = var.manage_load_balancer_controller", root_main)
         self.assertRegex(root_main, r"existing_namespaces\s*=\s*var\.existing_namespaces")
+
+    def test_staging_plan_uses_the_approved_single_node_compliance_baseline(self):
+        workflow = WORKFLOW.read_text()
+        root_variables = ROOT_VARIABLES.read_text()
+        eks_main = ROOT_EKS_MAIN.read_text()
+
+        self.assertIn(
+            "-var=general_desired_size=3 -var=enable_compliance_node_group=true -var=compliance_desired_size=1",
+            workflow,
+        )
+        compliance_variable = root_variables.split('variable "compliance_desired_size" {', 1)[1].split('variable "enable_compliance_node_group" {', 1)[0]
+        self.assertIn("default     = 1", compliance_variable)
+        self.assertIn("var.compliance_desired_size >= 1 && var.compliance_desired_size <= 4", compliance_variable)
+        compliance_group = eks_main.split('resource "aws_eks_node_group" "compliance" {', 1)[1].split('\nresource "aws_autoscaling_group_tag"', 1)[0]
+        self.assertIn("min_size     = 1", compliance_group)
+        self.assertIn("max_size     = 4", compliance_group)
 
     def test_plan_is_main_only_protected_and_read_only(self):
         workflow = WORKFLOW.read_text()
