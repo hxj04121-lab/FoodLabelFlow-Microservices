@@ -1,6 +1,6 @@
-# M1 CloudShell runbook: install RabbitMQ staging operators
+# M1 CloudShell fallback runbook: install RabbitMQ staging operators
 
-M5 executes this CloudShell runbook against the staging account under M1's approval. As of 2026-10-21, M5 holds hands-on access to that account; M1 remains the approval owner. Do not run any command until M1 records the separately approved operator-install window and M5 verifies the target account, cluster, and context. The normal RabbitMQ workflow must not install or upgrade these operators.
+The default path is the protected [RabbitMQ Operator bootstrap workflow](../../../.github/workflows/install-rabbitmq-operators.yml). This CloudShell procedure is a fallback only if M1 chooses that execution path and separately approves its identity, network, target, and install window. Do not run any command until that approval is recorded and M5 verifies the target account, cluster, and context. The normal RabbitMQ deployment workflow must not install or upgrade these operators.
 
 The manifests have been downloaded and checked from their versioned GitHub Release URLs. The lock file records the exact URLs, SHA-256 digests, and byte sizes. This procedure downloads them again and verifies the bytes before any cluster write.
 
@@ -158,7 +158,7 @@ kubectl create -f "$tmp_dir/messaging-topology-operator.yaml"
 kubectl rollout status deployment/messaging-topology-operator --namespace rabbitmq-system --timeout=5m
 ```
 
-The release manifests contain cluster-scoped CRDs, roles, and webhook configuration. Those writes require M1's explicit approval and are performed by M5 using the approved CloudShell identity; the M5 GitHub workflow has no permission to perform them.
+The release manifests contain cluster-scoped CRDs, roles, and webhook configuration. Those writes require M1's explicit approval. If the protected GitHub workflow is unavailable and M1 selects CloudShell, use only the separately approved CloudShell identity and this fallback procedure; do not treat approval for the GitHub workflow as approval for CloudShell writes.
 
 ## 5. Verify availability and capture after-state
 
@@ -209,4 +209,4 @@ done
 
 Record the lock file, its checksum, the manifest digests verified by the script, the AWS identity ARN/account, cluster ARN/status, context, CRD Established conditions, Deployment Available status, timestamps, approval reference, and any deviation. Never include Secret values or bearer tokens. Keep the evidence for the protected RabbitMQ deployment review.
 
-The protected GitHub workflow does not execute sections 4–5. M5 performs those steps manually in CloudShell only after M1 has recorded the approval and window; this document alone does not authorize an installation.
+This document alone does not authorize an installation. The GitHub workflow remains gated by the protected staging Environment, the existing `AWS_DEPLOY_ROLE_ARN` (`FoodLabelFlowStagingDeploy`, whose window-scoped cluster-admin association M1 accepted on #102 and removes at teardown), the staging-vpc runner, and M1's approved window. CloudShell use needs a separate M1 decision and approval.

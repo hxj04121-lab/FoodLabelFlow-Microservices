@@ -44,7 +44,10 @@ class StagingPlanRbacWorkflowTests(unittest.TestCase):
             self.workflow_text.index("for object in \"${objects[@]}\""),
             self.workflow_text.index('kubectl create --field-manager=foodlabelflow-plan-rbac-bootstrap -f "$manifest"'),
         )
-        self.assertIn("if (( ${#existing[@]} > 0 )); then", self.workflow_text)
+        self.assertIn("if (( ${#existing[@]} == 0 )); then", self.workflow_text)
+        self.assertIn("elif (( ${#existing[@]} == ${#objects[@]} )); then", self.workflow_text)
+        self.assertIn('if [[ "$managers" != foodlabelflow-plan-rbac-bootstrap ]]; then', self.workflow_text)
+        self.assertIn("Only some target RBAC objects exist", self.workflow_text)
         for name in (
             "spectrace-staging-plan-readonly",
             "spectrace-staging-plan-lbc-deployment-reader",
@@ -62,7 +65,7 @@ class StagingPlanRbacWorkflowTests(unittest.TestCase):
         self.assertIn("endpointPrivateAccess", self.workflow_text)
         self.assertIn("endpointPublicAccess", self.workflow_text)
         self.assertIn("--ignore-not-found", self.workflow_text)
-        self.assertIn("At least one target RBAC object already exists", self.workflow_text)
+        self.assertIn("was not written solely by this bootstrap workflow", self.workflow_text)
         self.assertIn("AmazonEKSClusterAdminPolicy", self.workflow_text)
         self.assertIn("if: always()", self.workflow_text)
 
@@ -70,6 +73,10 @@ class StagingPlanRbacWorkflowTests(unittest.TestCase):
         self.assertIn('for verb in get list watch; do check no "$verb" secrets kube-system; done', self.workflow_text)
         self.assertIn("check yes get deployments.apps/aws-load-balancer-controller kube-system", self.workflow_text)
         self.assertNotIn("check yes \"$verb\" secrets", self.workflow_text)
+
+    def test_expected_denials_do_not_abort_under_errexit(self):
+        self.assertIn('actual=$(kubectl "${args[@]}" 2>/dev/null || true)', self.workflow_text)
+        self.assertNotIn('actual=$(kubectl "${args[@]}")\n', self.workflow_text)
 
     def test_shell_steps_parse_as_bash(self):
         python_count = 0
