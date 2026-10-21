@@ -458,18 +458,19 @@ jobs:
           terraform_version="$(terraform version -json | python3 -c 'import json,sys; print(json.load(sys.stdin)["terraform_version"])')"
           test "$terraform_version" = 1.15.8
           export M5_TF_PLAN_TERRAFORM_VERSION="$terraform_version"
-          export M5_TF_PLAN_PROVIDER_LOCK_SHA256="$(sha256sum .terraform.lock.hcl | cut -d ' ' -f 1)"
+          provider_lock_sha256="$(sha256sum .terraform.lock.hcl | cut -d ' ' -f 1)"
+          export M5_TF_PLAN_PROVIDER_LOCK_SHA256="$provider_lock_sha256"
           node "$GITHUB_WORKSPACE/scripts/staging/secure_tfplan.mjs" encrypt
           plan_sha256="$(sha256sum "$TF_PLAN_FILE" | cut -d ' ' -f 1)"
           encrypted_sha256="$(sha256sum "$TF_PLAN_ENCRYPTED_FILE" | cut -d ' ' -f 1)"
           {
-            echo '## Encrypted saved Terraform Plan'
-            echo "- Source commit: `$M5_TF_PLAN_COMMIT_SHA`"
-            echo "- State VersionId: `$M5_TF_PLAN_STATE_VERSION_ID`"
-            echo "- Terraform Plan SHA-256: `$plan_sha256`"
-            echo "- Encrypted Plan SHA-256: `$encrypted_sha256`"
-            echo "- Artifact: `terraform-staging-plan-$GITHUB_RUN_ID` (encrypted, 1-day retention)"
-            echo '- No Apply was executed.'
+            printf '%s\n' '## Encrypted saved Terraform Plan'
+            printf -- '- Source commit: `%s`\n' "$M5_TF_PLAN_COMMIT_SHA"
+            printf -- '- State VersionId: `%s`\n' "$M5_TF_PLAN_STATE_VERSION_ID"
+            printf -- '- Terraform Plan SHA-256: `%s`\n' "$plan_sha256"
+            printf -- '- Encrypted Plan SHA-256: `%s`\n' "$encrypted_sha256"
+            printf -- '- Artifact: `terraform-staging-plan-%s` (encrypted, 1-day retention)\n' "$GITHUB_RUN_ID"
+            printf '%s\n' '- No Apply was executed.'
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
