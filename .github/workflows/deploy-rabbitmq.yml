@@ -330,6 +330,25 @@ jobs:
           if not any(message.get("payload") == os.environ["RABBITMQ_SMOKE_PAYLOAD"] for message in messages):
               raise SystemExit("Smoke message was not consumed from the isolated queue.")
           PY
+      - name: Print RabbitMQ and Operator diagnostics on failure (no Secret data)
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          echo '### RabbitmqCluster status'
+          kubectl get rabbitmqclusters.rabbitmq.com --namespace rabbitmq -o wide
+          kubectl get rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq \
+            -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}: {.message}{"\n"}{end}'
+          echo '### Workloads, storage and events in rabbitmq'
+          kubectl get statefulsets,pods,pvc,services --namespace rabbitmq -o wide
+          kubectl get events --namespace rabbitmq --sort-by=.lastTimestamp | tail -n 30
+          echo '### Operators in rabbitmq-system'
+          kubectl get deployments,pods --namespace rabbitmq-system -o wide
+          kubectl get events --namespace rabbitmq-system --sort-by=.lastTimestamp | tail -n 20
+          kubectl logs deployment/rabbitmq-cluster-operator --namespace rabbitmq-system --tail=40
+          echo '### NetworkPolicies'
+          kubectl get networkpolicies --namespace rabbitmq -o name
+          kubectl get networkpolicies --namespace rabbitmq-system -o name
       - name: Remove temporary kubeconfig and staging diagnostics
         if: always()
         shell: bash
