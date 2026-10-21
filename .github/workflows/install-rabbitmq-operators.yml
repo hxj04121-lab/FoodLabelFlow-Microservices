@@ -87,7 +87,7 @@ jobs:
           test "$(kubectl config current-context)" = arn:aws:eks:ap-southeast-1:679857346122:cluster/spectrace-staging
           kubectl get namespaces -o name >/dev/null
           whoami=$(kubectl auth whoami -o json)
-          printf '%s' "$whoami" | python3 -c 'import json,sys; u=json.load(sys.stdin)["status"]["userInfo"]["username"]; assert "/assumed-role/" in u; print("Kubernetes identity:", u)'
+          printf '%s' "$whoami" | python3 -c 'import json,os,sys; u=json.load(sys.stdin)["status"]["userInfo"]["username"]; role=os.environ["AWS_ROLE_ARN"].rsplit("/",1)[1]; assert f":assumed-role/{role}/" in u, "Kubernetes identity is not the approved role"; print("Kubernetes identity:", u)'
           for resource in namespaces customresourcedefinitions.apiextensions.k8s.io clusterroles clusterrolebindings mutatingwebhookconfigurations.admissionregistration.k8s.io validatingwebhookconfigurations.admissionregistration.k8s.io; do
             test "$(kubectl auth can-i create "$resource")" = yes
           done
