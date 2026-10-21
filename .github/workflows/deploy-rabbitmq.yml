@@ -117,12 +117,8 @@ jobs:
           kubectl get csidriver ebs.csi.aws.com -o name >/dev/null
           require_read get storageclasses.storage.k8s.io ebs-gp3 ""
           kubectl get storageclass ebs-gp3 -o json > "$RUNNER_TEMP/ebs-gp3.json"
-          python3 - "$RUNNER_TEMP/ebs-gp3.json" <<'PY'
-          import json,sys
-          row=json.load(open(sys.argv[1]))
-          if row.get('provisioner')!='ebs.csi.aws.com' or row.get('parameters',{}).get('type')!='gp3' or row.get('parameters',{}).get('encrypted')!='true' or row.get('reclaimPolicy')!='Retain' or row.get('volumeBindingMode')!='WaitForFirstConsumer':
-              raise SystemExit('ebs-gp3 must use encrypted gp3, WaitForFirstConsumer, and Retain.')
-          PY
+          python3 scripts/staging/verify_rabbitmq_storageclass.py "$RUNNER_TEMP/ebs-gp3.json" \
+            deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl
           require_read get daemonsets.apps ebs-csi-node kube-system
           kubectl get daemonset ebs-csi-node --namespace kube-system -o json > "$RUNNER_TEMP/ebs-csi-node.json"
           require_read get deployments.apps ebs-csi-controller kube-system
