@@ -115,13 +115,28 @@ jobs:
             found=$(kubectl "${args[@]}")
             if [[ -n "$found" ]]; then existing+=("$found"); fi
           done
-          if (( ${#existing[@]} > 0 )); then
-            echo '::error::At least one target RBAC object already exists. No object was changed; M1 must review ownership and drift.'
+          if (( ${#existing[@]} == 0 )); then
+            kubectl create --field-manager=foodlabelflow-plan-rbac-bootstrap -f "$manifest" > "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-created-rbac.txt"
+            echo 'Created only the four objects in the fixed, SHA-pinned manifest.'
+          elif (( ${#existing[@]} == ${#objects[@]} )); then
+            # Resume after an interrupted run of this workflow: accept the objects only if this workflow's
+            # field manager is their sole writer. The next step still verifies their exact rules and bindings.
+            for object in "${objects[@]}"; do
+              IFS='|' read -r kind name namespace <<< "$object"
+              args=(get "$kind" "$name" -o 'jsonpath={range .metadata.managedFields[*]}{.manager}{"\n"}{end}')
+              if [[ -n "$namespace" ]]; then args+=(--namespace "$namespace"); fi
+              managers=$(kubectl "${args[@]}" | sort -u | sed '/^$/d')
+              if [[ "$managers" != foodlabelflow-plan-rbac-bootstrap ]]; then
+                echo "::error::$kind/$name exists but was not written solely by this bootstrap workflow. No object was changed; M1 must review ownership and drift."
+                exit 1
+              fi
+            done
+            echo '::notice::All four objects already exist and were written only by this workflow; skipping creation and re-verifying them.'
+          else
+            echo '::error::Only some target RBAC objects exist. No object was changed; M1 must review ownership and drift.'
             printf 'Existing object: %s\n' "${existing[@]}"
             exit 1
           fi
-          kubectl create --field-manager=foodlabelflow-plan-rbac-bootstrap -f "$manifest" > "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-created-rbac.txt"
-          echo 'Created only the four objects in the fixed, SHA-pinned manifest.'
       - name: Verify exact RBAC rules and Plan Role read-only authorization
         shell: bash
         run: |

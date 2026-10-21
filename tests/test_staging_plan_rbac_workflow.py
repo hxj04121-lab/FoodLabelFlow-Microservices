@@ -44,7 +44,10 @@ class StagingPlanRbacWorkflowTests(unittest.TestCase):
             self.workflow_text.index("for object in \"${objects[@]}\""),
             self.workflow_text.index('kubectl create --field-manager=foodlabelflow-plan-rbac-bootstrap -f "$manifest"'),
         )
-        self.assertIn("if (( ${#existing[@]} > 0 )); then", self.workflow_text)
+        self.assertIn("if (( ${#existing[@]} == 0 )); then", self.workflow_text)
+        self.assertIn("elif (( ${#existing[@]} == ${#objects[@]} )); then", self.workflow_text)
+        self.assertIn('if [[ "$managers" != foodlabelflow-plan-rbac-bootstrap ]]; then', self.workflow_text)
+        self.assertIn("Only some target RBAC objects exist", self.workflow_text)
         for name in (
             "spectrace-staging-plan-readonly",
             "spectrace-staging-plan-lbc-deployment-reader",
@@ -62,7 +65,7 @@ class StagingPlanRbacWorkflowTests(unittest.TestCase):
         self.assertIn("endpointPrivateAccess", self.workflow_text)
         self.assertIn("endpointPublicAccess", self.workflow_text)
         self.assertIn("--ignore-not-found", self.workflow_text)
-        self.assertIn("At least one target RBAC object already exists", self.workflow_text)
+        self.assertIn("was not written solely by this bootstrap workflow", self.workflow_text)
         self.assertIn("AmazonEKSClusterAdminPolicy", self.workflow_text)
         self.assertIn("if: always()", self.workflow_text)
 
