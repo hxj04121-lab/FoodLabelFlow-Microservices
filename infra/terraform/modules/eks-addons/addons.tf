@@ -12,17 +12,11 @@ data "aws_eks_addon_version" "ebs_csi" {
 }
 
 resource "aws_eks_addon" "vpc_cni" {
-  count                    = var.manage_vpc_cni ? 1 : 0
-  cluster_name             = var.cluster_name
-  addon_name               = "vpc-cni"
-  addon_version            = data.aws_eks_addon_version.vpc_cni[0].version
-  service_account_role_arn = aws_iam_role.addons["vpc_cni"].arn
-  configuration_values = jsonencode({
-    enableNetworkPolicy = "true"
-    env = {
-      NETWORK_POLICY_ENFORCING_MODE = "strict"
-    }
-  })
+  count                       = var.manage_vpc_cni ? 1 : 0
+  cluster_name                = var.cluster_name
+  addon_name                  = "vpc-cni"
+  addon_version               = data.aws_eks_addon_version.vpc_cni[0].version
+  service_account_role_arn    = aws_iam_role.addons["vpc_cni"].arn
   resolve_conflicts_on_update = "PRESERVE"
   resolve_conflicts_on_create = "OVERWRITE"
   tags = {
@@ -30,7 +24,7 @@ resource "aws_eks_addon" "vpc_cni" {
     Environment = "staging"
   }
 
-  depends_on = [aws_iam_role_policy_attachment.vpc_cni, helm_release.network_policies]
+  depends_on = [aws_iam_role_policy_attachment.vpc_cni]
 }
 
 resource "aws_eks_addon" "ebs_csi" {
@@ -45,10 +39,15 @@ resource "aws_eks_addon" "ebs_csi" {
     Environment = "staging"
   }
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   depends_on = [aws_iam_role_policy_attachment.ebs_csi]
 }
 
 resource "helm_release" "load_balancer_controller" {
+  count      = var.manage_load_balancer_controller ? 1 : 0
   name       = "aws-load-balancer-controller"
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-load-balancer-controller"
@@ -65,10 +64,14 @@ resource "helm_release" "load_balancer_controller" {
       create = true
       name   = "aws-load-balancer-controller"
       annotations = {
-        "eks.amazonaws.com/role-arn" = aws_iam_role.addons["aws_load_balancer_controller"].arn
+        "eks.amazonaws.com/role-arn" = var.manage_load_balancer_controller ? aws_iam_role.addons["aws_load_balancer_controller"].arn : ""
       }
     }
   })]
+
+  lifecycle {
+    prevent_destroy = true
+  }
 
   depends_on = [aws_iam_role_policy_attachment.load_balancer_controller]
 }
@@ -106,6 +109,10 @@ resource "helm_release" "cluster_autoscaler" {
       }
     }
   })]
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "helm_release" "metrics_server" {
@@ -121,6 +128,10 @@ resource "helm_release" "metrics_server" {
     podDisruptionBudget = { enabled = true, minAvailable = 1 }
     args                = ["--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname"]
   })]
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "helm_release" "network_policies" {
@@ -140,23 +151,78 @@ resource "helm_release" "network_policies" {
     }
   })]
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   depends_on = [kubernetes_manifest.workload_namespace]
 }
 
 resource "kubernetes_manifest" "workload_namespace" {
-  for_each = toset(concat(values(var.workload_namespaces), values(var.operator_namespaces)))
+  for_each = toset([
+    for namespace in concat(values(var.workload_namespaces), values(var.operator_namespaces)) : namespace
+    if !contains(var.existing_namespaces, namespace)
+  ])
 
   manifest = {
     apiVersion = "v1"
     kind       = "Namespace"
     metadata = {
-      name = each.key
+      name = each.value
       labels = {
         "app.kubernetes.io/part-of"    = "spectrace-cn"
         "app.kubernetes.io/managed-by" = "terraform"
       }
     }
   }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "kubernetes_manifest" "rabbitmq_deployer_role" {
+  manifest = yamldecode(templatefile("${path.module}/manifests/rabbitmq-deployer-role.yaml.tmpl", {
+    namespace = var.workload_namespaces.rabbitmq
+  }))
+
+  depends_on = [kubernetes_manifest.workload_namespace]
+}
+
+resource "kubernetes_manifest" "rabbitmq_deployer_rolebinding" {
+  manifest = yamldecode(templatefile("${path.module}/manifests/rabbitmq-deployer-rolebinding.yaml.tmpl", {
+    namespace = var.workload_namespaces.rabbitmq
+    group     = var.deployer_kubernetes_group
+  }))
+
+  depends_on = [kubernetes_manifest.rabbitmq_deployer_role]
+}
+
+resource "kubernetes_manifest" "rabbitmq_service_deployer_role" {
+  for_each = {
+    for namespace, name in var.workload_namespaces : namespace => name
+    if !contains(["rabbitmq", "frontend"], namespace)
+  }
+
+  manifest = yamldecode(templatefile("${path.module}/manifests/rabbitmq-service-deployer-role.yaml.tmpl", {
+    namespace = each.value
+  }))
+
+  depends_on = [kubernetes_manifest.workload_namespace]
+}
+
+resource "kubernetes_manifest" "rabbitmq_service_deployer_rolebinding" {
+  for_each = {
+    for namespace, name in var.workload_namespaces : namespace => name
+    if !contains(["rabbitmq", "frontend"], namespace)
+  }
+
+  manifest = yamldecode(templatefile("${path.module}/manifests/rabbitmq-service-deployer-rolebinding.yaml.tmpl", {
+    namespace = each.value
+    group     = var.deployer_kubernetes_group
+  }))
+
+  depends_on = [kubernetes_manifest.rabbitmq_service_deployer_role]
 }
 
 resource "kubernetes_manifest" "deployer_custom_resource_role" {
@@ -186,6 +252,23 @@ resource "kubernetes_manifest" "deployer_custom_resource_rolebinding" {
   }))
 
   depends_on = [kubernetes_manifest.deployer_custom_resource_role]
+}
+
+resource "kubernetes_manifest" "keycloak_resource_role" {
+  manifest = yamldecode(templatefile("${path.module}/manifests/keycloak-resource-role.yaml.tmpl", {
+    namespace = var.workload_namespaces.keycloak
+  }))
+
+  depends_on = [kubernetes_manifest.workload_namespace]
+}
+
+resource "kubernetes_manifest" "keycloak_resource_rolebinding" {
+  manifest = yamldecode(templatefile("${path.module}/manifests/keycloak-resource-rolebinding.yaml.tmpl", {
+    namespace = var.workload_namespaces.keycloak
+    group     = var.deployer_kubernetes_group
+  }))
+
+  depends_on = [kubernetes_manifest.keycloak_resource_role]
 }
 
 resource "kubernetes_manifest" "staging_deployer_node_reader" {
@@ -223,6 +306,10 @@ resource "kubernetes_manifest" "ebs_gp3_storage_class" {
   manifest = yamldecode(templatefile("${path.module}/../../../../deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl", {
     cluster_name = var.cluster_name
   }))
+
+  lifecycle {
+    prevent_destroy = true
+  }
 
   depends_on = [aws_eks_addon.ebs_csi]
 }

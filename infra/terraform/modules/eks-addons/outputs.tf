@@ -9,6 +9,6 @@ output "ebs_csi_addon_version" {
 }
 
 output "load_balancer_controller_role_arn" {
-  value       = aws_iam_role.addons["aws_load_balancer_controller"].arn
+  value       = var.manage_load_balancer_controller ? aws_iam_role.addons["aws_load_balancer_controller"].arn : null
   description = "IRSA role used by the AWS Load Balancer Controller."
 }

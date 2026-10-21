@@ -75,20 +75,25 @@ variable "database_subnet_cidrs" {
 }
 
 variable "workload_namespaces" {
-  description = "Namespaces to create for gateway, keycloak, rabbitmq, observability, specification, formulation, compliance, label-workflow, and frontend."
+  description = "Platform workload namespaces; existing namespace ownership is verified against Terraform State before planning."
   type        = map(string)
 
   validation {
     condition = toset(keys(var.workload_namespaces)) == toset([
-      "gateway", "keycloak", "rabbitmq", "observability",
-      "specification", "formulation", "compliance", "label-workflow", "frontend"
+      "gateway", "keycloak", "rabbitmq", "observability", "specification",
+      "formulation", "compliance", "label-workflow", "frontend"
     ]) && alltrue([for ns in values(var.workload_namespaces) : trimspace(ns) != ""])
-    error_message = "Provide non-empty namespace names for all nine platform and service workloads."
+    error_message = "Provide non-empty namespace names for the complete M5 platform workload set."
   }
 }
 
+variable "deployer_kubernetes_group" {
+  description = "Kubernetes group mapped to the staging deploy role for narrowly scoped custom-resource access."
+  type        = string
+}
+
 variable "operator_namespaces" {
-  description = "Namespaces to create for the RabbitMQ and Keycloak operators."
+  description = "Existing/new operator namespaces included in platform NetworkPolicies."
   type        = map(string)
 
   validation {
@@ -98,11 +103,6 @@ variable "operator_namespaces" {
     )
     error_message = "Provide non-empty RabbitMQ and Keycloak operator namespace names."
   }
-}
-
-variable "deployer_kubernetes_group" {
-  description = "Kubernetes group mapped to the staging deploy role for narrowly scoped custom-resource access."
-  type        = string
 }
 
 variable "node_groups" {
@@ -148,4 +148,23 @@ variable "manage_vpc_cni" {
   description = "Migrate the self-managed CNI only after explicit inventory and approval."
   type        = bool
   default     = false
+}
+
+variable "manage_load_balancer_controller" {
+  description = "Manage the AWS Load Balancer Controller with Terraform; false preserves a separately owned live release and IAM resources."
+  type        = bool
+  default     = true
+}
+
+variable "existing_namespaces" {
+  description = "Existing namespaces excluded from namespace creation while remaining available to namespaced RBAC and policies."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = length(setsubtract(var.existing_namespaces, setunion(
+      toset(values(var.workload_namespaces)), toset(values(var.operator_namespaces))
+    ))) == 0
+    error_message = "existing_namespaces must be a subset of the declared workload and operator namespaces."
+  }
 }

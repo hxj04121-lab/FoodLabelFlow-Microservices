@@ -27,7 +27,7 @@ class VerifyAddonsTest(unittest.TestCase):
     def run_check(self, mode="foundations", *, enforced=True, encrypted=True,
                   gateway_healthy=True, keycloak_healthy=True, correct_route=True,
                   correct_gateway_route=True, correct_vpc=True, keycloak_binding=True,
-                  gateway_has_targets=True, keycloak_has_targets=True):
+                  gateway_has_targets=True, keycloak_has_targets=True, reclaim_policy="Retain"):
         rules = [
             {"Conditions": [{"Field": "path-pattern", "Values": ["/auth/*"]}],
              "Actions": [{"Type": "forward", "TargetGroupArn": KEYCLOAK_TG}]},
@@ -45,7 +45,7 @@ class VerifyAddonsTest(unittest.TestCase):
             ]}}}},
             "apiservice": {"status": {"conditions": [{"type": "Available", "status": "True"}]}},
             "storageclass": {"provisioner": "ebs.csi.aws.com", "volumeBindingMode": "WaitForFirstConsumer",
-                             "reclaimPolicy": "Delete", "allowVolumeExpansion": True,
+                             "reclaimPolicy": reclaim_policy, "allowVolumeExpansion": True,
                              "parameters": {"type": "gp3", "encrypted": str(encrypted).lower()}},
             "networkpolicy": {"items": [
                 self.policy("kube-system", "stcn-kube-system-required-traffic", {}),
@@ -137,6 +137,22 @@ else:
 
     def test_unencrypted_storage_is_rejected(self):
         self.assertNotEqual(self.run_check(encrypted=False).returncode, 0)
+
+    def test_nonretained_storage_is_rejected(self):
+        self.assertNotEqual(self.run_check(reclaim_policy="Delete").returncode, 0)
+
+    def test_addons_module_retains_platform_owners_and_scoped_custom_resource_rbac(self):
+        module = ROOT / "infra/terraform/modules/eks-addons"
+        source = "\n".join(path.read_text() for path in module.glob("*.tf"))
+        for release in ("load_balancer_controller", "cluster_autoscaler", "metrics_server", "network_policies"):
+            self.assertRegex(source, rf'resource\s+"helm_release"\s+"{release}"')
+        self.assertRegex(source, r'resource\s+"kubernetes_manifest"\s+"deployer_custom_resource_role"')
+        self.assertRegex(source, r'resource\s+"kubernetes_manifest"\s+"deployer_custom_resource_rolebinding"')
+        root_module = (ROOT / "infra/terraform/main.tf").read_text()
+        self.assertRegex(root_module, r'gateway\s*=\s*"gateway"')
+        self.assertRegex(root_module, r'keycloak\s*=\s*"keycloak"')
+        self.assertIn("frontend = var.workload_namespaces.frontend", source)
+        self.assertGreaterEqual(source.count("prevent_destroy = true"), 4)
 
     def test_https_path_routes_and_both_bindings(self):
         result = self.run_check("deploy")

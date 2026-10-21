@@ -61,12 +61,12 @@ variable "general_desired_size" {
 }
 
 variable "compliance_desired_size" {
-  description = "Desired c6i.large compliance nodes; autoscaler bounds remain 1-4."
+  description = "Desired c6i.large compliance nodes; two are required to place compliance workloads in both staging AZs."
   type        = number
-  default     = 1
+  default     = 2
   validation {
-    condition     = var.compliance_desired_size >= 1 && var.compliance_desired_size <= 4
-    error_message = "Compliance node count must be between one and four."
+    condition     = var.compliance_desired_size >= (var.enable_compliance_node_group ? 2 : 1) && var.compliance_desired_size <= 4
+    error_message = "Compliance node count must be between one and four; enabling the group requires at least two nodes for both AZs."
   }
 }
 
@@ -89,7 +89,7 @@ variable "enable_alb" {
 }
 
 variable "enable_eks_addons" {
-  description = "Install missing EKS controllers, storage, and network policies while preserving the existing ALB."
+  description = "Create only the confirmed-missing EBS CSI add-on, encrypted gp3 StorageClass, and six workload namespaces."
   type        = bool
   default     = false
   validation {
@@ -105,6 +105,26 @@ variable "manage_vpc_cni" {
   validation {
     condition     = !var.manage_vpc_cni || var.enable_eks_addons
     error_message = "VPC CNI migration requires the add-on module."
+  }
+}
+
+variable "manage_load_balancer_controller" {
+  description = "Manage the AWS Load Balancer Controller with Terraform. Keep true for new clusters; false only for the reviewed staging out-of-band owner."
+  type        = bool
+  default     = true
+}
+
+variable "existing_namespaces" {
+  description = "Namespaces already present and explicitly excluded from Terraform namespace creation for the reviewed staging plan."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = length(setsubtract(var.existing_namespaces, toset([
+      "gateway", "keycloak", "rabbitmq", "observability", "specification",
+      "formulation", "compliance", "label-workflow", "frontend", "rabbitmq-system", "keycloak-system"
+    ]))) == 0
+    error_message = "existing_namespaces may contain only declared workload and operator namespaces."
   }
 }
 

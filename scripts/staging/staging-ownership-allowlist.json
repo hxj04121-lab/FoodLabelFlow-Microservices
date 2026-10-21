@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "environment": "staging",
+  "aws_account_id": "679857346122",
+  "aws_region": "ap-southeast-1",
+  "cluster_name": "spectrace-staging",
+  "management_mode": "independent",
+  "manage_load_balancer_controller": false,
+  "maintenance_owner": "M1 / State owner",
+  "window_end_utc": "2026-10-23T00:00:00Z",
+  "decision_comment_id": 6287467427,
+  "load_balancer_controller": {
+    "namespace": "kube-system",
+    "release_name": "aws-load-balancer-controller",
+    "deployment_name": "aws-load-balancer-controller",
+    "deployment_ready": "1/1",
+    "iam_role_name": "spectrace-staging-aws_load_balancer_controller",
+    "iam_role_arn": "arn:aws:iam::679857346122:role/spectrace-staging-aws_load_balancer_controller",
+    "iam_policy_name": "spectrace-staging-aws-load-balancer-controller",
+    "iam_policy_arn": "arn:aws:iam::679857346122:policy/spectrace-staging-aws-load-balancer-controller",
+    "helm_metadata_secret_name_pattern": "sh\\.helm\\.release\\.v1\\.aws-load-balancer-controller\\.v[1-9][0-9]*"
+  },
+  "existing_namespaces": [
+    "gateway",
+    "keycloak",
+    "keycloak-system"
+  ]
+}

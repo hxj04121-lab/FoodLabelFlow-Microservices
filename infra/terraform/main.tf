@@ -106,17 +106,20 @@ module "eks_addons" {
   count  = var.enable_eks_addons ? 1 : 0
   source = "./modules/eks-addons"
 
-  cluster_name                = module.eks[0].cluster_name
-  cluster_oidc_provider_arn   = module.eks[0].oidc_provider_arn
-  cluster_autoscaler_role_arn = module.eks[0].cluster_autoscaler_role_arn
-  cluster_version             = var.eks_version
-  vpc_id                      = module.network.vpc_id
-  vpc_cidr                    = var.vpc_cidr
-  public_subnet_cidrs         = [for index in range(2) : cidrsubnet(var.vpc_cidr, 4, index)]
-  private_subnet_cidrs        = [for index in range(2) : cidrsubnet(var.vpc_cidr, 4, index + 4)]
-  database_subnet_cidrs       = [for index in range(2) : cidrsubnet(var.vpc_cidr, 4, index + 4)]
-  manage_vpc_cni              = var.manage_vpc_cni
-  node_groups                 = module.eks[0].autoscaler_node_groups
+  aws_region                      = var.region
+  cluster_name                    = module.eks[0].cluster_name
+  cluster_oidc_provider_arn       = module.eks[0].oidc_provider_arn
+  cluster_autoscaler_role_arn     = module.eks[0].cluster_autoscaler_role_arn
+  cluster_version                 = var.eks_version
+  vpc_id                          = module.network.vpc_id
+  vpc_cidr                        = var.vpc_cidr
+  public_subnet_cidrs             = [for index in range(2) : cidrsubnet(var.vpc_cidr, 4, index)]
+  private_subnet_cidrs            = [for index in range(2) : cidrsubnet(var.vpc_cidr, 4, index + 4)]
+  database_subnet_cidrs           = [for index in range(2) : cidrsubnet(var.vpc_cidr, 4, index + 4)]
+  node_groups                     = module.eks[0].autoscaler_node_groups
+  manage_vpc_cni                  = var.manage_vpc_cni
+  manage_load_balancer_controller = var.manage_load_balancer_controller
+  existing_namespaces             = var.existing_namespaces
   workload_namespaces = {
     gateway        = "gateway"
     keycloak       = "keycloak"
@@ -128,8 +131,8 @@ module "eks_addons" {
     label-workflow = "label-workflow"
     frontend       = "frontend"
   }
-  operator_namespaces       = { rabbitmq = "rabbitmq-system", keycloak = "keycloak-system" }
   deployer_kubernetes_group = local.deployer_kubernetes_group
+  operator_namespaces       = { rabbitmq = "rabbitmq-system", keycloak = "keycloak-system" }
 }
 
 resource "aws_iam_role_policy_attachment" "node_vpc_cni_fallback" {
