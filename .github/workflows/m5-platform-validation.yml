@@ -11,6 +11,7 @@ on:
       - '.github/workflows/deploy-business-services.yml'
       - '.github/workflows/deploy-rabbitmq.yml'
       - '.github/workflows/deploy-frontend.yml'
+      - '.github/workflows/staging-plan-rbac-bootstrap.yml'
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
       - 'scripts/staging/**'
@@ -24,6 +25,7 @@ on:
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
+      - 'tests/test_staging_plan_rbac_workflow.py'
       - 'tests/test_rabbitmq_*.py'
       - 'docs/aws/runbooks/install-rabbitmq-operators-cloudshell.md'
   push:
@@ -37,6 +39,7 @@ on:
       - '.github/workflows/deploy-business-services.yml'
       - '.github/workflows/deploy-rabbitmq.yml'
       - '.github/workflows/deploy-frontend.yml'
+      - '.github/workflows/staging-plan-rbac-bootstrap.yml'
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
       - 'scripts/staging/**'
@@ -50,6 +53,7 @@ on:
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
+      - 'tests/test_staging_plan_rbac_workflow.py'
       - 'tests/test_rabbitmq_*.py'
       - 'docs/aws/runbooks/install-rabbitmq-operators-cloudshell.md'
 
@@ -88,6 +92,7 @@ jobs:
           tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
           workflows=(
             .github/workflows/deploy-rabbitmq.yml
+            .github/workflows/staging-plan-rbac-bootstrap.yml
             .github/workflows/install-rabbitmq-operators.yml
             .github/workflows/staging-terraform-apply.yml
             .github/workflows/m5-platform-validation.yml
@@ -109,6 +114,7 @@ jobs:
       - run: python scripts/check_m5_platform.py
       - name: Verify protected staging release logic without AWS credentials
         run: |
+          python3 -m unittest discover -s tests -p 'test_staging_plan_rbac_workflow.py' -v
           python3 -m unittest discover -s tests -p 'test_helm_release_inventory.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_rds_values.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_service_digests.py' -v

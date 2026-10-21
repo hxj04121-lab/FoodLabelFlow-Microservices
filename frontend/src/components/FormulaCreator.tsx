@@ -241,7 +241,9 @@ export function FormulaCreator() {
                             disabled={items.length === 1}
                             aria-label={`Remove material ${index + 1}`}
                             onClick={() => {
-                              setItems(items.filter((i) => i.id !== item.id))
+                              setItems((current) =>
+                                current.filter((i) => i.id !== item.id),
+                              )
                               setFeedback(`Removed material ${index + 1}.`)
                             }}
                           >
@@ -360,9 +362,9 @@ export function FormulaCreator() {
                     type="button"
                     variant="outline"
                     onClick={() =>
-                      setItems([
-                        ...items,
-                        blank(Math.max(...items.map((i) => i.id)) + 1),
+                      setItems((current) => [
+                        ...current,
+                        blank(Math.max(...current.map((i) => i.id)) + 1),
                       ])
                     }
                   >

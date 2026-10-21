@@ -18,6 +18,8 @@ test('formula validation, dependent options, preview and discard', async ({
   await page.getByLabel('Unit (optional)').fill('kg')
   await page.getByRole('button', { name: 'Add material' }).click()
   await page.getByRole('button', { name: 'Remove material 2' }).click()
+  await expect(page.getByLabel('Quantity (optional)')).toHaveValue('12.5')
+  await expect(page.getByLabel('Unit (optional)')).toHaveValue('kg')
   await page.getByRole('button', { name: 'Preview formula', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Formula preview' }),

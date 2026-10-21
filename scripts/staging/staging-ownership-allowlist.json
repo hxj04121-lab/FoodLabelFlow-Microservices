@@ -18,7 +18,7 @@
     "iam_role_arn": "arn:aws:iam::679857346122:role/spectrace-staging-aws_load_balancer_controller",
     "iam_policy_name": "spectrace-staging-aws-load-balancer-controller",
     "iam_policy_arn": "arn:aws:iam::679857346122:policy/spectrace-staging-aws-load-balancer-controller",
-    "helm_metadata_secret_name_pattern": "sh\\.helm\\.release\\.v1\\.aws-load-balancer-controller\\.v[1-9][0-9]*"
+    "helm_managed_by_label": "Helm"
   },
   "existing_namespaces": [
     "gateway",
