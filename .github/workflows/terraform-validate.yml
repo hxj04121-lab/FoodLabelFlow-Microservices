@@ -439,7 +439,7 @@ jobs:
         working-directory: infra/terraform
         run: |
           set -euo pipefail
-          if ! terraform show -json "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" | python3 "$GITHUB_WORKSPACE/scripts/terraform_plan_summary.py" >> "$GITHUB_STEP_SUMMARY"; then
+          if ! terraform show -json "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" | python3 "$GITHUB_WORKSPACE/scripts/terraform_plan_summary.py" | tee -a "$GITHUB_STEP_SUMMARY"; then
             echo '::error::The redacted plan summary failed or found a protected foundation delete/replacement; no Apply was executed.'
             exit 1
           fi

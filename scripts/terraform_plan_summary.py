@@ -111,6 +111,15 @@ def is_protected_resource(item):
     )
 
 
+# M1-reviewed (21 Oct): narrowing the control-plane -> node rule from 1025-65535 to 10250 (with separate
+# 4443/9443 webhook rules) must replace it; create_before_destroy makes Terraform add the new rule first.
+REVIEWED_CREATE_BEFORE_DESTROY = {"module.eks[0].aws_security_group_rule.nodes_from_cluster"}
+
+
+def is_reviewed_create_before_destroy(item):
+    return item.get("address") in REVIEWED_CREATE_BEFORE_DESTROY and item["change"]["actions"] == ["create", "delete"]
+
+
 def main():
     try:
         plan = json.load(sys.stdin)
@@ -129,6 +138,7 @@ def main():
         for item in changes
         if is_protected_resource(item)
         and any(action in item["change"]["actions"] for action in ("delete", "forget"))
+        and not is_reviewed_create_before_destroy(item)
     ]
     counts = {"create": 0, "update": 0, "replace": 0, "delete": 0}
     for item in changes:
