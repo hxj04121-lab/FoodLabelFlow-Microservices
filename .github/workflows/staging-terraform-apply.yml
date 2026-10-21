@@ -246,12 +246,17 @@ jobs:
           TF_PLAN_FILE: ${{ runner.temp }}/foodlabelflow-m5-apply-${{ github.run_id }}-${{ github.run_attempt }}/approved.tfplan
         run: |
           set -euo pipefail
-          if ! terraform apply -input=false -no-color "$TF_PLAN_FILE" > "$APPLY_TEMP_DIR/terraform-apply.log" 2>&1; then
-            echo '::error::Terraform Apply failed; it may have partially applied. Terraform error blocks follow (diagnostics only). Re-plan before any rerun.'
-            awk '/^Error: /{n=14} n>0{print; n--}' "$APPLY_TEMP_DIR/terraform-apply.log" | head -n 120
-            echo '--- resources completed before the failure (addresses only) ---'
-            grep -E ': (Creation|Modifications|Destruction) complete after' "$APPLY_TEMP_DIR/terraform-apply.log" | sed -E 's/: (Creation|Modifications|Destruction) complete after.*/: \1 complete/' | head -n 120 || true
-            exit 1
+          if terraform apply -input=false -no-color "$TF_PLAN_FILE" > "$APPLY_TEMP_DIR/terraform-apply.log" 2>&1; then
+            :
+          else
+            apply_exit_code=$?
+            echo '::error::Terraform Apply failed; it may have partially applied. The safe summary follows. Re-plan before any rerun.'
+            if ! python3 "$GITHUB_WORKSPACE/scripts/staging/summarize_terraform_apply_failure.py" \
+              --exit-code "$apply_exit_code" --log-file "$APPLY_TEMP_DIR/terraform-apply.log" \
+              2> "$APPLY_TEMP_DIR/terraform-apply-summary.err"; then
+              echo '::warning::Safe Apply failure summary could not be generated.'
+            fi
+            exit "$apply_exit_code"
           fi
           new_state_version=$(aws s3api head-object --bucket "$TF_STATE_BUCKET" --key spectrace/staging/terraform.tfstate --query VersionId --output text)
           test -n "$new_state_version" && test "$new_state_version" != None
