@@ -198,16 +198,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "$(kubectl get rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq --ignore-not-found -o name)" ]]; then
-            existing_broker_data=$(kubectl get statefulsets,pods,persistentvolumeclaims --namespace rabbitmq -o name)
-            test -z "$existing_broker_data" || { echo '::error::RabbitMQ data or workload objects exist without the expected Cluster; refusing adoption.'; exit 1; }
-          fi
-          if [[ -n "$(kubectl get rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq --ignore-not-found -o name)" ]] \
-            && [[ -z "$(kubectl get statefulsets,pods,persistentvolumeclaims --namespace rabbitmq -o name)" ]]; then
-            # A Cluster that never created a StatefulSet, Pod or PVC holds no data; recreate it from the reviewed manifest.
-            echo '::notice::RabbitmqCluster exists without any StatefulSet, Pod or PVC; deleting it so the reviewed manifest can be created.'
-            kubectl delete rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq --wait=true --timeout=5m
-          fi
+          # The ownership helper checks kubectl status explicitly and never deletes an existing Cluster.
           python3 scripts/staging/apply_rabbitmq_owned.py deploy/operators/rabbitmq/rabbitmq-cluster.yaml
           python3 scripts/staging/apply_rabbitmq_owned.py deploy/kubernetes/staging/rabbitmq/rabbitmq-pdb.yaml
           # kubectl wait fails at once if the Operator has not created the pods yet; wait for all three to exist first.

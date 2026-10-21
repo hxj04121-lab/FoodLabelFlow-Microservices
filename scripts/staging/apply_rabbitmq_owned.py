@@ -17,6 +17,8 @@ OWNER = "rabbitmq-protected-workflow"
 FIELD_MANAGER = "foodlabelflow-m5-rabbitmq"
 WORKFLOW = "Protected RabbitMQ staging deployment and smoke test"
 CREATE_ATTEMPTS = 3
+RABBITMQ_CLUSTER_KEY = ("rabbitmq.com/v1beta1", "RabbitmqCluster", "rabbitmq", "spectrace")
+RECOVERY_GUIDANCE = " Contact the RabbitMQ owner and use the protected recovery workflow."
 ALLOWED_NAMESPACES = {"rabbitmq", "specification", "formulation", "compliance", "label-workflow"}
 TOPOLOGY_QUEUES = {
     "compliance": {
@@ -131,6 +133,21 @@ def response_objects(output):
     return [parsed]
 
 
+def checked_response_objects(output, failure_message):
+    try:
+        rows = response_objects(output)
+        if not isinstance(rows, list) or any(
+            not isinstance(row, dict)
+            or not isinstance(row.get("metadata"), dict)
+            or not row.get("metadata", {}).get("name")
+            for row in rows
+        ):
+            raise ValueError("unexpected Kubernetes response shape")
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise SafeApplyError(failure_message) from exc
+    return rows
+
+
 def call_kubectl(runner, args, payload=""):
     try:
         return runner(
@@ -153,22 +170,35 @@ def verify_owned_resource(runner, item):
         yaml.safe_dump(item, sort_keys=False),
     )
     if fetched.returncode:
-        raise SafeApplyError("Could not safely inspect a RabbitMQ resource after a create retry.")
-    rows = response_objects(fetched.stdout)
+        raise SafeApplyError(
+            "Could not safely inspect a RabbitMQ resource after a create retry; refusing changes."
+            + RECOVERY_GUIDANCE
+        )
+    rows = checked_response_objects(
+        fetched.stdout,
+        "Could not safely decode a RabbitMQ resource during create recovery; refusing changes."
+        + RECOVERY_GUIDANCE,
+    )
     if not rows:
         return False
     if len(rows) != 1 or object_key(rows[0]) != object_key(item):
         raise SafeApplyError("Kubernetes returned an unexpected resource while recovering a RabbitMQ create.")
     owner = rows[0].get("metadata", {}).get("annotations", {}).get(OWNER_ANNOTATION)
     if owner != OWNER:
-        raise SafeApplyError("Refusing to adopt a RabbitMQ resource with unknown ownership.")
+        raise SafeApplyError(
+            "Refusing to adopt a RabbitMQ resource with unknown ownership."
+            + RECOVERY_GUIDANCE
+        )
     diff = call_kubectl(
         runner,
         ["diff", "--server-side", "--field-manager", FIELD_MANAGER, "-f", "-"],
         yaml.safe_dump(item, sort_keys=False),
     )
     if diff.returncode:
-        raise SafeApplyError("RabbitMQ resource changed during create recovery; refusing to update it.")
+        raise SafeApplyError(
+            "RabbitMQ resource changed during create recovery; refusing to update it."
+            + RECOVERY_GUIDANCE
+        )
     return True
 
 
@@ -187,7 +217,10 @@ def apply_owned_manifest(path, runner=subprocess.run, env=None):
     payload = "---\n".join(rendered)
     fetched = call_kubectl(runner, ["get", "--ignore-not-found=true", "-f", "-", "-o", "json"], payload)
     if fetched.returncode:
-        raise SafeApplyError("Could not safely inspect existing RabbitMQ resources.")
+        raise SafeApplyError(
+            "Could not safely inspect existing RabbitMQ resources; refusing changes."
+            + RECOVERY_GUIDANCE
+        )
 
     desired = {}
     for item in documents:
@@ -196,22 +229,69 @@ def apply_owned_manifest(path, runner=subprocess.run, env=None):
             raise SafeApplyError("Manifest contains a duplicate Kubernetes resource identity.")
         desired[key] = item
     existing = {}
-    for item in response_objects(fetched.stdout):
-        key = object_key(item)
+    rows = checked_response_objects(
+        fetched.stdout,
+        "Could not safely decode existing RabbitMQ resources; refusing changes."
+        + RECOVERY_GUIDANCE,
+    )
+    for item in rows:
+        try:
+            key = object_key(item)
+        except (KeyError, TypeError, AttributeError) as exc:
+            raise SafeApplyError(
+                "Could not safely identify an existing RabbitMQ resource; refusing changes."
+                + RECOVERY_GUIDANCE
+            ) from exc
         if key not in desired:
             raise SafeApplyError("Kubernetes returned an unexpected resource for this manifest.")
         owner = item.get("metadata", {}).get("annotations", {}).get(OWNER_ANNOTATION)
         if owner not in (None, OWNER):
-            raise SafeApplyError(f"Refusing to take over existing {key[1]} {key[2]}/{key[3]} with unknown ownership.")
+            guidance = RECOVERY_GUIDANCE if key == RABBITMQ_CLUSTER_KEY else ""
+            raise SafeApplyError(
+                f"Refusing to take over existing {key[1]} {key[2]}/{key[3]} with unknown ownership."
+                + guidance
+            )
         existing[key] = item
+
+    if RABBITMQ_CLUSTER_KEY in desired and RABBITMQ_CLUSTER_KEY not in existing:
+        workload = call_kubectl(
+            runner,
+            [
+                "get",
+                "statefulsets,pods,persistentvolumeclaims",
+                "--namespace",
+                "rabbitmq",
+                "-o",
+                "name",
+            ],
+        )
+        if workload.returncode:
+            raise SafeApplyError(
+                "Could not verify RabbitMQ StatefulSet, Pod, and PVC state; refusing to create the Cluster."
+                + RECOVERY_GUIDANCE
+            )
+        if workload.stdout.strip():
+            raise SafeApplyError(
+                "RabbitMQ StatefulSet, Pod, or PVC objects exist without the expected Cluster; "
+                "refusing adoption or automatic recovery."
+                + RECOVERY_GUIDANCE
+            )
 
     for key, item in existing.items():
         owner = item.get("metadata", {}).get("annotations", {}).get(OWNER_ANNOTATION)
         if owner != OWNER:
-            raise SafeApplyError(f"Refusing to adopt existing {key[1]} {key[2]}/{key[3]} with unknown ownership.")
+            guidance = RECOVERY_GUIDANCE if key == RABBITMQ_CLUSTER_KEY else ""
+            raise SafeApplyError(
+                f"Refusing to adopt existing {key[1]} {key[2]}/{key[3]} with unknown ownership."
+                + guidance
+            )
         diff = call_kubectl(runner, ["diff", "--server-side", "--field-manager", FIELD_MANAGER, "-f", "-"], yaml.safe_dump(desired[key], sort_keys=False))
         if diff.returncode:
-            raise SafeApplyError(f"Existing owned {key[1]} {key[2]}/{key[3]} differs from the reviewed manifest; refusing to update it.")
+            guidance = RECOVERY_GUIDANCE if key == RABBITMQ_CLUSTER_KEY else ""
+            raise SafeApplyError(
+                f"Existing owned {key[1]} {key[2]}/{key[3]} differs from the reviewed manifest; refusing to update it."
+                + guidance
+            )
 
     created = 0
     for key, resource in desired.items():

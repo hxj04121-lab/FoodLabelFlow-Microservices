@@ -1,15 +1,19 @@
+import copy
 import importlib.util
 import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
+import subprocess
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
 import yaml
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/staging/apply_rabbitmq_owned.py"
+ROOT = Path(__file__).resolve().parents[1]
+CLUSTER_MANIFEST = ROOT / "deploy/operators/rabbitmq/rabbitmq-cluster.yaml"
 spec = importlib.util.spec_from_file_location("apply_rabbitmq_owned", SCRIPT)
 safe_apply = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(safe_apply)
@@ -25,12 +29,37 @@ def protected_env():
 
 
 class FakeKubectl:
-    def __init__(self, existing=(), diff_code=0, fail_on_create=None, fail_all_creates=False, lose_create_response=False):
+    def __init__(
+        self,
+        existing=(),
+        diff_code=0,
+        fail_on_create=None,
+        fail_all_creates=False,
+        lose_create_response=False,
+        workload_returncode=0,
+        workload_stdout="",
+        workload_stderr="",
+        workload_timeout=False,
+        on_workload_list=None,
+        resource_get_returncode=0,
+        resource_get_stdout=None,
+        resource_get_stderr="",
+        resource_get_timeout=False,
+    ):
         self.existing = {safe_apply.object_key(item): item for item in existing}
         self.diff_code = diff_code
         self.fail_on_create = fail_on_create
         self.fail_all_creates = fail_all_creates
         self.lose_create_response = lose_create_response
+        self.workload_returncode = workload_returncode
+        self.workload_stdout = workload_stdout
+        self.workload_stderr = workload_stderr
+        self.workload_timeout = workload_timeout
+        self.on_workload_list = on_workload_list
+        self.resource_get_returncode = resource_get_returncode
+        self.resource_get_stdout = resource_get_stdout
+        self.resource_get_stderr = resource_get_stderr
+        self.resource_get_timeout = resource_get_timeout
         self.create_calls = 0
         self.created = []
         self.calls = []
@@ -41,6 +70,34 @@ class FakeKubectl:
         self.calls.append(args[1])
         self.argv.append(args)
         self.payloads.append(input)
+        if args[1] == "get" and len(args) > 2 and args[2] == "statefulsets,pods,persistentvolumeclaims":
+            if self.on_workload_list:
+                self.on_workload_list(self)
+            if self.workload_timeout:
+                raise subprocess.TimeoutExpired(args, timeout)
+            return CompletedProcess(
+                args,
+                self.workload_returncode,
+                self.workload_stdout,
+                self.workload_stderr,
+            )
+        if args[1] == "get" and len(args) > 2 and args[2] == "--ignore-not-found=true":
+            if self.resource_get_timeout:
+                raise subprocess.TimeoutExpired(args, timeout)
+            if self.resource_get_returncode:
+                return CompletedProcess(
+                    args,
+                    self.resource_get_returncode,
+                    "",
+                    self.resource_get_stderr,
+                )
+            if self.resource_get_stdout is not None:
+                return CompletedProcess(
+                    args,
+                    0,
+                    self.resource_get_stdout,
+                    self.resource_get_stderr,
+                )
         resources = [item for item in yaml.safe_load_all(input) if item]
         if args[1] == "get":
             wanted = {safe_apply.object_key(item) for item in resources}
@@ -50,6 +107,8 @@ class FakeKubectl:
             return CompletedProcess(args, self.diff_code, "", "")
         if args[1] == "create":
             self.create_calls += 1
+            if any(safe_apply.object_key(resource) in self.existing for resource in resources):
+                return CompletedProcess(args, 1, "", "AlreadyExists")
             if self.fail_all_creates or self.create_calls == self.fail_on_create:
                 return CompletedProcess(args, 1, "", "create failed")
             self.created.extend(resources)
@@ -75,6 +134,19 @@ metadata:
 spec:
   tags: [management]
 """)
+
+    def use_cluster_manifest(self):
+        self.manifest.write_text(CLUSTER_MANIFEST.read_text())
+        return yaml.safe_load(self.manifest.read_text())
+
+    def owned_cluster(self):
+        cluster = copy.deepcopy(yaml.safe_load(CLUSTER_MANIFEST.read_text()))
+        cluster["metadata"]["annotations"] = {safe_apply.OWNER_ANNOTATION: safe_apply.OWNER}
+        return cluster
+
+    def assert_no_delete(self, kubectl):
+        self.assertNotIn("delete", kubectl.calls)
+        self.assertFalse(any(args[1] == "delete" for args in kubectl.argv))
 
     def test_creates_missing_resources_with_owner_marker(self):
         kubectl = FakeKubectl()
@@ -184,6 +256,138 @@ metadata:
         for api_version, kind, namespace, name in denied:
             resource = {"apiVersion": api_version, "kind": kind, "metadata": {"namespace": namespace, "name": name}}
             self.assertFalse(safe_apply.is_allowed_resource(resource), (kind, namespace, name))
+
+    def test_empty_workload_output_with_nonzero_status_fails_closed(self):
+        self.use_cluster_manifest()
+        kubectl = FakeKubectl(workload_returncode=7, workload_stdout="", workload_stderr="synthetic failure")
+
+        with self.assertRaisesRegex(safe_apply.SafeApplyError, "protected recovery workflow"):
+            safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env())
+
+        self.assertEqual(kubectl.create_calls, 0)
+        self.assertEqual(kubectl.created, [])
+        self.assert_no_delete(kubectl)
+
+    def test_workload_inventory_timeout_fails_closed(self):
+        self.use_cluster_manifest()
+        kubectl = FakeKubectl(workload_timeout=True)
+
+        with self.assertRaisesRegex(safe_apply.SafeApplyError, "Could not verify RabbitMQ"):
+            safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env())
+
+        self.assertEqual(kubectl.create_calls, 0)
+        self.assertEqual(kubectl.created, [])
+        self.assert_no_delete(kubectl)
+
+    def test_forbidden_workload_inventory_fails_closed(self):
+        self.use_cluster_manifest()
+        kubectl = FakeKubectl(
+            workload_returncode=1,
+            workload_stdout="",
+            workload_stderr="Error from server (Forbidden)",
+        )
+
+        with self.assertRaisesRegex(safe_apply.SafeApplyError, "Could not verify RabbitMQ"):
+            safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env())
+
+        self.assertEqual(kubectl.create_calls, 0)
+        self.assertEqual(kubectl.created, [])
+        self.assert_no_delete(kubectl)
+
+    def test_existing_workload_or_pvc_without_cluster_stops_without_mutation(self):
+        self.use_cluster_manifest()
+        kubectl = FakeKubectl(workload_stdout="persistentvolumeclaim/rabbitmq-server-0\n")
+
+        with self.assertRaisesRegex(safe_apply.SafeApplyError, "exist without the expected Cluster"):
+            safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env())
+
+        self.assertEqual(kubectl.create_calls, 0)
+        self.assertEqual(kubectl.created, [])
+        self.assert_no_delete(kubectl)
+
+    def test_cluster_appearing_between_reads_is_never_deleted_or_overwritten(self):
+        self.use_cluster_manifest()
+        concurrently_created = yaml.safe_load(CLUSTER_MANIFEST.read_text())
+        concurrently_created["metadata"]["annotations"] = {safe_apply.OWNER_ANNOTATION: "other-owner"}
+
+        def create_between_reads(fake):
+            key = safe_apply.object_key(concurrently_created)
+            fake.existing[key] = concurrently_created
+
+        kubectl = FakeKubectl(on_workload_list=create_between_reads)
+
+        with self.assertRaisesRegex(safe_apply.SafeApplyError, "protected recovery workflow"):
+            safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env())
+
+        self.assertEqual(kubectl.created, [])
+        self.assertEqual(kubectl.create_calls, 1)
+        self.assert_no_delete(kubectl)
+
+    def test_existing_mismatched_cluster_stops_and_requests_protected_recovery(self):
+        cluster = self.owned_cluster()
+        cluster["spec"]["replicas"] = 2
+        self.manifest.write_text(CLUSTER_MANIFEST.read_text())
+        kubectl = FakeKubectl(existing=[cluster], diff_code=1)
+
+        with self.assertRaisesRegex(safe_apply.SafeApplyError, "protected recovery workflow"):
+            safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env())
+
+        self.assertEqual(kubectl.create_calls, 0)
+        self.assertEqual(kubectl.created, [])
+        self.assert_no_delete(kubectl)
+
+    def test_existing_owned_unchanged_cluster_is_a_no_write_path(self):
+        self.manifest.write_text(CLUSTER_MANIFEST.read_text())
+        kubectl = FakeKubectl(existing=[self.owned_cluster()])
+
+        self.assertEqual(safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env()), (0, 1))
+
+        self.assertEqual(kubectl.create_calls, 0)
+        self.assertEqual(kubectl.created, [])
+        self.assert_no_delete(kubectl)
+
+    def test_missing_cluster_with_verified_empty_inventory_creates_normally(self):
+        self.use_cluster_manifest()
+        kubectl = FakeKubectl()
+
+        self.assertEqual(safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env()), (1, 0))
+
+        self.assertEqual(kubectl.create_calls, 1)
+        self.assertEqual(len(kubectl.created), 1)
+        self.assert_no_delete(kubectl)
+
+    def test_cluster_read_nonzero_with_empty_output_fails_closed(self):
+        self.use_cluster_manifest()
+        kubectl = FakeKubectl(resource_get_returncode=1, resource_get_stderr="Forbidden")
+
+        with self.assertRaisesRegex(safe_apply.SafeApplyError, "Could not safely inspect"):
+            safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env())
+
+        self.assertEqual(kubectl.create_calls, 0)
+        self.assertEqual(kubectl.created, [])
+        self.assert_no_delete(kubectl)
+
+    def test_cluster_read_timeout_fails_closed(self):
+        self.use_cluster_manifest()
+        kubectl = FakeKubectl(resource_get_timeout=True)
+
+        with self.assertRaisesRegex(safe_apply.SafeApplyError, "Could not safely inspect"):
+            safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env())
+
+        self.assertEqual(kubectl.create_calls, 0)
+        self.assertEqual(kubectl.created, [])
+        self.assert_no_delete(kubectl)
+
+    def test_unparseable_cluster_response_fails_closed(self):
+        self.use_cluster_manifest()
+        kubectl = FakeKubectl(resource_get_stdout="synthetic malformed response")
+
+        with self.assertRaisesRegex(safe_apply.SafeApplyError, "Could not safely decode"):
+            safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env())
+
+        self.assertEqual(kubectl.create_calls, 0)
+        self.assertEqual(kubectl.created, [])
+        self.assert_no_delete(kubectl)
 
 
 if __name__ == "__main__":

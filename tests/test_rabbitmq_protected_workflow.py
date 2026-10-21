@@ -66,11 +66,13 @@ class RabbitMQProtectedWorkflowTests(unittest.TestCase):
             self.assertIn(deployment, preflight["run"])
         self.assertNotIn("kubectl apply", self.workflow_text)
         self.assertNotIn("kubectl replace", self.workflow_text)
-        # The only delete is a never-reconciled RabbitmqCluster with no StatefulSet, Pod or PVC (no data).
-        self.assertEqual(self.workflow_text.count("kubectl delete"), 1)
-        delete_at = self.workflow_text.index("kubectl delete rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq")
-        guard_at = self.workflow_text.rindex('kubectl get statefulsets,pods,persistentvolumeclaims --namespace rabbitmq -o name)" ]]', 0, delete_at)
-        self.assertLess(delete_at - guard_at, 400)
+        self.assertNotIn("kubectl delete", self.workflow_text)
+        self.assertNotIn("deleting it so the reviewed manifest can be created", self.workflow_text)
+        apply_helper = (ROOT / "scripts/staging/apply_rabbitmq_owned.py").read_text()
+        self.assertIn('"statefulsets,pods,persistentvolumeclaims"', apply_helper)
+        self.assertIn("if workload.returncode:", apply_helper)
+        self.assertIn("refusing adoption or automatic recovery", apply_helper)
+        self.assertIn("protected recovery workflow", apply_helper)
         for release_url in (
             "cert-manager.yaml", "cluster-operator.yml", "messaging-topology-operator-with-certmanager.yaml",
         ):
