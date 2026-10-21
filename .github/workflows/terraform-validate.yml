@@ -390,7 +390,7 @@ jobs:
             -var=enable_eks=true -var=enable_eks_addons=true -var=manage_vpc_cni=false \
             -var=manage_load_balancer_controller=false \
             -var='existing_namespaces=["gateway","keycloak","keycloak-system"]' \
-            -var=general_desired_size=3 -var=enable_compliance_node_group=true -var=compliance_desired_size=2 \
+            -var=general_desired_size=3 -var=enable_compliance_node_group=true -var=compliance_desired_size=1 \
             -out="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-plan.log" 2>&1; then
             echo '::error::Read-only plan failed; inspect the restricted runner log. No Apply was executed.'
             exit 1
