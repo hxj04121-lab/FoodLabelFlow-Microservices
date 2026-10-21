@@ -44,10 +44,13 @@ jobs:
           set -euo pipefail
           test -n "$RUNNER_TEMP"
           echo "KUBECONFIG=$RUNNER_TEMP/m5-rabbitmq-kubeconfig-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
-      - uses: actions/setup-python@v5
+      # actions/setup-python ships no build for the self-hosted VPC runner's OS; uv installs a portable CPython 3.12.
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: '3.12'
-      - run: python3 -m pip install --no-cache-dir PyYAML==6.0.3
+          activate-environment: true
+          enable-cache: false
+      - run: uv pip install PyYAML==6.0.3
       - uses: azure/setup-kubectl@v4
         with:
           version: v1.36.1

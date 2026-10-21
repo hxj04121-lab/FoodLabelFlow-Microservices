@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import yaml
 
-from scripts.staging.verify_operator_manifest_lock import verify
+# Run as `python3 scripts/staging/<file>.py` in the workflow: make the repo root importable.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.staging.verify_operator_manifest_lock import verify  # noqa: E402
 
 
 def render_topology_manifest(lock_path: Path, manifest_dir: Path) -> Path:
