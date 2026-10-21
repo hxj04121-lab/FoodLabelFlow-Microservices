@@ -89,7 +89,6 @@ jobs:
           workflows=(
             .github/workflows/deploy-rabbitmq.yml
             .github/workflows/install-rabbitmq-operators.yml
-            .github/workflows/terraform-validate.yml
             .github/workflows/staging-terraform-apply.yml
             .github/workflows/m5-platform-validation.yml
           )

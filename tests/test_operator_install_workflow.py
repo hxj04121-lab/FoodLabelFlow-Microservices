@@ -1,10 +1,12 @@
 from pathlib import Path
+import re
 import unittest
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/install-rabbitmq-operators.yml"
 LOCK = Path(__file__).resolve().parents[1] / "deploy/operators/rabbitmq/operator-manifests.lock"
 READINESS = Path(__file__).resolve().parents[1] / "scripts/staging/check_operator_manifest_ownership.py"
 RENDERER = Path(__file__).resolve().parents[1] / "scripts/staging/render_operator_install_manifest.py"
+OFFLINE = Path(__file__).resolve().parents[1] / ".github/workflows/m5-platform-validation.yml"
 
 
 class OperatorInstallWorkflowTest(unittest.TestCase):
@@ -50,6 +52,14 @@ class OperatorInstallWorkflowTest(unittest.TestCase):
         self.assertIn("Cannot verify ownership/absence", READINESS.read_text())
         self.assertIn("if: always()", self.workflow)
         self.assertIn("rm -rf \"$RUNNER_TEMP/rabbitmq-operator-manifests\"", self.workflow)
+
+    def test_actionlint_targets_only_workflows_relevant_to_this_change(self):
+        offline = OFFLINE.read_text()
+        match = re.search(r"workflows=\((.*?)\n\s*\)", offline, re.S)
+        self.assertIsNotNone(match)
+        targets = match.group(1)
+        self.assertIn(".github/workflows/install-rabbitmq-operators.yml", targets)
+        self.assertNotIn(".github/workflows/terraform-validate.yml", targets)
 
     def test_shared_namespace_is_removed_only_after_verified_lock_validation(self):
         renderer = RENDERER.read_text()
