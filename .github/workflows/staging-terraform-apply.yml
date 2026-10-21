@@ -247,7 +247,10 @@ jobs:
         run: |
           set -euo pipefail
           if ! terraform apply -input=false -no-color "$TF_PLAN_FILE" > "$APPLY_TEMP_DIR/terraform-apply.log" 2>&1; then
-            echo '::error::Terraform Apply failed. The protected runner log remains private; do not rerun without reviewing State and resources.'
+            echo '::error::Terraform Apply failed; it may have partially applied. Terraform error blocks follow (diagnostics only). Re-plan before any rerun.'
+            awk '/^Error: /{n=14} n>0{print; n--}' "$APPLY_TEMP_DIR/terraform-apply.log" | head -n 120
+            echo '--- resources completed before the failure (addresses only) ---'
+            grep -E ': (Creation|Modifications|Destruction) complete after' "$APPLY_TEMP_DIR/terraform-apply.log" | sed -E 's/: (Creation|Modifications|Destruction) complete after.*/: \1 complete/' | head -n 120 || true
             exit 1
           fi
           new_state_version=$(aws s3api head-object --bucket "$TF_STATE_BUCKET" --key spectrace/staging/terraform.tfstate --query VersionId --output text)
