@@ -76,15 +76,14 @@ jobs:
           actual_account=$(aws sts get-caller-identity --query Account --output text)
           test "$actual_account" = "$AWS_ACCOUNT_ID"
           actual_arn=$(aws sts get-caller-identity --query Arn --output text)
-          expected_role=${AWS_ROLE_ARN##*/}
-          case "$actual_arn" in "arn:aws:sts::$AWS_ACCOUNT_ID:assumed-role/$expected_role/"*) ;; *) echo '::error::AWS session is not the approved Operator install role.'; exit 1 ;; esac
+          printf '%s' "$actual_arn" | python3 -m scripts.staging.validate_operator_install_preflight caller-arn
           cluster=$(aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --output json)
-          printf '%s' "$cluster" | python3 -c 'import json,sys; c=json.load(sys.stdin)["cluster"]; assert c["status"] == "ACTIVE"; assert c["arn"] == "arn:aws:eks:ap-southeast-1:679857346122:cluster/spectrace-staging"; assert c["resourcesVpcConfig"]["endpointPrivateAccess"] is True'
+          printf '%s' "$cluster" | python3 -m scripts.staging.validate_operator_install_preflight cluster
           aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --kubeconfig "$KUBECONFIG" >/dev/null
           test "$(kubectl config current-context)" = arn:aws:eks:ap-southeast-1:679857346122:cluster/spectrace-staging
           kubectl get namespaces -o name >/dev/null
           whoami=$(kubectl auth whoami -o json)
-          printf '%s' "$whoami" | python3 -c 'import json,sys; u=json.load(sys.stdin)["status"]["userInfo"]["username"]; assert "/assumed-role/" in u; print("Kubernetes identity:", u)'
+          printf '%s' "$whoami" | python3 -m scripts.staging.validate_operator_install_preflight identity
           for resource in namespaces customresourcedefinitions.apiextensions.k8s.io clusterroles clusterrolebindings mutatingwebhookconfigurations.admissionregistration.k8s.io validatingwebhookconfigurations.admissionregistration.k8s.io; do
             test "$(kubectl auth can-i create "$resource")" = yes
           done
@@ -105,9 +104,9 @@ jobs:
           curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 'https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.2/messaging-topology-operator-with-certmanager.yaml' --output "$manifest_dir/messaging-topology-operator.yaml"
           python3 scripts/staging/verify_operator_manifest_lock.py --manifest-dir "$manifest_dir"
       - name: Stop if any target object exists or ownership cannot be verified
-        run: python3 scripts/staging/check_operator_manifest_ownership.py --manifest-dir "$RUNNER_TEMP/rabbitmq-operator-manifests"
+        run: python3 -m scripts.staging.check_operator_manifest_ownership --manifest-dir "$RUNNER_TEMP/rabbitmq-operator-manifests"
       - name: Prepare topology install input without its duplicate Namespace object
-        run: python3 scripts/staging/render_operator_install_manifest.py --manifest-dir "$RUNNER_TEMP/rabbitmq-operator-manifests"
+        run: python3 -m scripts.staging.render_operator_install_manifest --manifest-dir "$RUNNER_TEMP/rabbitmq-operator-manifests"
       - name: Install the locked Operators without replacing existing objects
         run: |
           set -euo pipefail
