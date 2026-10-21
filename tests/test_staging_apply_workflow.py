@@ -2,9 +2,18 @@ from pathlib import Path
 import re
 import unittest
 
+from scripts.staging.validate_apply_identity import validate_whoami_document
+
 APPLY_WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/staging-terraform-apply.yml"
 PLAN_WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/terraform-validate.yml"
 OFFLINE_WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/m5-platform-validation.yml"
+
+EXPECTED_ACCOUNT_ID = "679857346122"
+EXPECTED_APPLY_ROLE_ARN = "arn:aws:iam::679857346122:role/spectrace-staging-github-apply"
+
+
+def whoami_document(username):
+    return {"status": {"userInfo": {"username": username}}}
 
 
 class StagingTerraformApplyWorkflowTest(unittest.TestCase):
@@ -36,6 +45,109 @@ class StagingTerraformApplyWorkflowTest(unittest.TestCase):
         self.assertIn("kubectl config current-context", self.apply)
         self.assertIn("APPROVED_STATE_VERSION_ID", self.apply)
         self.assertIn("aws s3api head-object", self.apply)
+        self.assertIn('python3 "$GITHUB_WORKSPACE/scripts/staging/validate_apply_identity.py"', self.apply)
+        self.assertNotIn('assert "/assumed-role/" in user', self.apply)
+
+    def test_accepts_the_default_eks_username_for_the_dedicated_apply_role(self):
+        username = (
+            "arn:aws:sts::679857346122:assumed-role/"
+            "spectrace-staging-github-apply/GitHubActions"
+        )
+        self.assertTrue(
+            validate_whoami_document(
+                whoami_document(username), EXPECTED_ACCOUNT_ID, EXPECTED_APPLY_ROLE_ARN
+            )
+        )
+
+    def test_rejects_wrong_account_role_empty_session_and_custom_usernames(self):
+        rejected = (
+            "arn:aws:sts::123456789012:assumed-role/spectrace-staging-github-apply/GitHubActions",
+            "arn:aws:sts::679857346122:assumed-role/other-role/GitHubActions",
+            "arn:aws:sts::679857346122:assumed-role/spectrace-staging-github-apply/",
+            "system:masters",
+            "spectrace-staging-github-apply:GitHubActions",
+        )
+        for username in rejected:
+            with self.subTest(username=username):
+                self.assertFalse(
+                    validate_whoami_document(
+                        whoami_document(username), EXPECTED_ACCOUNT_ID, EXPECTED_APPLY_ROLE_ARN
+                    )
+                )
+
+    def test_rejects_extra_username_path_and_invalid_session_names(self):
+        rejected = (
+            "arn:aws:sts::679857346122:assumed-role/team/spectrace-staging-github-apply/GitHubActions",
+            "arn:aws:sts::679857346122:assumed-role/spectrace-staging-github-apply/a",
+            "arn:aws:sts::679857346122:assumed-role/spectrace-staging-github-apply/has space",
+            "arn:aws:sts::679857346122:assumed-role/spectrace-staging-github-apply/"
+            + "a" * 65,
+        )
+        for username in rejected:
+            with self.subTest(username=username):
+                self.assertFalse(
+                    validate_whoami_document(
+                        whoami_document(username), EXPECTED_ACCOUNT_ID, EXPECTED_APPLY_ROLE_ARN
+                    )
+                )
+
+    def test_rejects_malformed_or_cross_account_expected_role_configuration(self):
+        valid_username = (
+            "arn:aws:sts::679857346122:assumed-role/"
+            "spectrace-staging-github-apply/GitHubActions"
+        )
+        self.assertFalse(
+            validate_whoami_document(
+                whoami_document(valid_username), "not-an-account", EXPECTED_APPLY_ROLE_ARN
+            )
+        )
+        self.assertFalse(
+            validate_whoami_document(
+                whoami_document(valid_username),
+                EXPECTED_ACCOUNT_ID,
+                "arn:aws:iam::123456789012:role/spectrace-staging-github-apply",
+            )
+        )
+        self.assertFalse(
+            validate_whoami_document(
+                whoami_document(valid_username), EXPECTED_ACCOUNT_ID, "custom-role-name"
+            )
+        )
+
+    def test_rejects_missing_or_malformed_whoami_identity(self):
+        for document in (None, {}, {"status": {}}, {"status": {"userInfo": {}}}):
+            with self.subTest(document=document):
+                self.assertFalse(
+                    validate_whoami_document(
+                        document, EXPECTED_ACCOUNT_ID, EXPECTED_APPLY_ROLE_ARN
+                    )
+                )
+
+    def test_eks_strips_iam_role_path_from_default_username(self):
+        path_role_arn = (
+            "arn:aws:iam::679857346122:role/team/staging/"
+            "spectrace-staging-github-apply"
+        )
+        self.assertTrue(
+            validate_whoami_document(
+                whoami_document(
+                    "arn:aws:sts::679857346122:assumed-role/"
+                    "spectrace-staging-github-apply/GitHubActions"
+                ),
+                EXPECTED_ACCOUNT_ID,
+                path_role_arn,
+            )
+        )
+        self.assertFalse(
+            validate_whoami_document(
+                whoami_document(
+                    "arn:aws:sts::679857346122:assumed-role/team/staging/"
+                    "spectrace-staging-github-apply/GitHubActions"
+                ),
+                EXPECTED_ACCOUNT_ID,
+                path_role_arn,
+            )
+        )
 
     def test_workspace_is_not_overridden_by_the_tf_workspace_environment_variable(self):
         # Terraform refuses `workspace select` while TF_WORKSPACE is set in the environment.
