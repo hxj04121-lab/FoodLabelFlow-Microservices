@@ -212,7 +212,7 @@ jobs:
           aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --kubeconfig "$KUBECONFIG" --alias "$EKS_CLUSTER_NAME" >/dev/null
           test "$(kubectl config current-context)" = "$EKS_CLUSTER_NAME"
           whoami=$(kubectl auth whoami -o json)
-          printf '%s' "$whoami" | python3 -c 'import json,sys; user=json.load(sys.stdin)["status"]["userInfo"]["username"]; assert "/assumed-role/" in user; print("Kubernetes identity:", user)'
+          printf '%s' "$whoami" | python3 -c 'import json,os,sys; u=json.load(sys.stdin)["status"]["userInfo"]["username"]; role=os.environ["AWS_ROLE_ARN"].rsplit("/",1)[1]; assert f":assumed-role/{role}/" in u, "Kubernetes identity is not the approved role"; print("Kubernetes identity:", u)'
       - name: Initialize only the approved source commit and staging workspace
         working-directory: plan-source/infra/terraform
         run: |
