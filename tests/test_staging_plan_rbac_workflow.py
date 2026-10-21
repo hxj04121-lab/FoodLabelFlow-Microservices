@@ -71,6 +71,10 @@ class StagingPlanRbacWorkflowTests(unittest.TestCase):
         self.assertIn("check yes get deployments.apps/aws-load-balancer-controller kube-system", self.workflow_text)
         self.assertNotIn("check yes \"$verb\" secrets", self.workflow_text)
 
+    def test_expected_denials_do_not_abort_under_errexit(self):
+        self.assertIn('actual=$(kubectl "${args[@]}" 2>/dev/null || true)', self.workflow_text)
+        self.assertNotIn('actual=$(kubectl "${args[@]}")\n', self.workflow_text)
+
     def test_shell_steps_parse_as_bash(self):
         python_count = 0
         for step in self.steps:

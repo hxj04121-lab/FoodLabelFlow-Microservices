@@ -167,7 +167,9 @@ jobs:
             local expected="$1" verb="$2" resource="$3" namespace="$4"
             args=(auth can-i "$verb" "$resource" --as="$plan_user" --as-group="$plan_group")
             if [[ -n "$namespace" ]]; then args+=(--namespace "$namespace"); fi
-            actual=$(kubectl "${args[@]}")
+            # `kubectl auth can-i` exits 1 when the answer is "no"; compare the printed answer instead of
+            # letting set -e abort after the four objects were already created.
+            actual=$(kubectl "${args[@]}" 2>/dev/null || true)
             if [[ "$actual" != "$expected" ]]; then
               echo "::error::Expected Plan Role authorization '$expected' for $verb $resource${namespace:+ in $namespace}; received '$actual'."
               exit 1
