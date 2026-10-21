@@ -100,10 +100,27 @@ class ChangedAttributeNamesTest(unittest.TestCase):
         change = resource("module.edge[0].aws_lb.this", ["update"], resource_type="aws_lb")
         change["change"].update({
             "before": {"name": "spectrace-staging-alb", "tags": {"Owner": "secret-owner"}, "idle_timeout": 60},
-            "after": {"name": "spectrace-staging-alb", "tags": {"Owner": "new-owner"}, "idle_timeout": 60},
+            "after": {"name": "spectrace-staging-alb", "tags": {"Owner": "new-owner"}, "idle_timeout": 120},
             "after_unknown": {"tags_all": True},
         })
         [violation] = check_plan(plan(change))
-        self.assertIn("changed attributes (names only): tags, tags_all", violation)
+        self.assertIn("changed attributes (names only): idle_timeout, tags, tags_all", violation)
         self.assertNotIn("secret-owner", violation)
         self.assertNotIn("new-owner", violation)
+
+
+class TagOnlyAlbUpdateTest(unittest.TestCase):
+    def alb(self, actions, before, after, unknown=None, resource_type="aws_lb"):
+        change = resource("module.edge[0].aws_lb.this", actions, resource_type=resource_type)
+        change["change"].update({"before": before, "after": after, "after_unknown": unknown or {}})
+        return change
+
+    def test_tag_only_in_place_update_is_allowed(self):
+        self.assertEqual(check_plan(plan(self.alb(["update"], {"tags": {"a": "1"}, "idle_timeout": 60}, {"tags": {"a": "2"}, "idle_timeout": 60}))), [])
+        self.assertEqual(check_plan(plan(self.alb(["update"], {"tags": {}}, {"tags": {"a": "2"}}, resource_type="aws_lb_target_group"))), [])
+
+    def test_any_non_tag_attribute_or_replace_still_blocks(self):
+        self.assertEqual(len(check_plan(plan(self.alb(["update"], {"tags": {}, "idle_timeout": 60}, {"tags": {"a": "1"}, "idle_timeout": 120})))), 1)
+        self.assertEqual(len(check_plan(plan(self.alb(["delete", "create"], {"tags": {}}, {"tags": {"a": "1"}})))), 1)
+        self.assertEqual(len(check_plan(plan(self.alb(["delete"], {"tags": {}}, None)))), 1)
+        self.assertEqual(len(check_plan(plan(self.alb(["update"], {"tags": {}}, {"tags": {}}, {"subnets": True})))), 1)
