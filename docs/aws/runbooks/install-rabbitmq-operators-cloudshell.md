@@ -1,6 +1,6 @@
 # M1 CloudShell runbook: install RabbitMQ staging operators
 
-This is an M1 account-owner action, separate from the RabbitMQ deploy workflow and its limited deployment role. Do not run it until the operator-install change window is separately approved and the account owner has verified the target. The normal RabbitMQ workflow must not install or upgrade these operators.
+M5 executes this CloudShell runbook against the staging account under M1's approval. As of 2026-10-21, M5 holds hands-on access to that account; M1 remains the approval owner. Do not run any command until M1 records the separately approved operator-install window and M5 verifies the target account, cluster, and context. The normal RabbitMQ workflow must not install or upgrade these operators.
 
 The manifests have been downloaded and checked from their versioned GitHub Release URLs. The lock file records the exact URLs, SHA-256 digests, and byte sizes. This procedure downloads them again and verifies the bytes before any cluster write.
 
@@ -158,7 +158,7 @@ kubectl create -f "$tmp_dir/messaging-topology-operator.yaml"
 kubectl rollout status deployment/messaging-topology-operator --namespace rabbitmq-system --timeout=5m
 ```
 
-The release manifests contain cluster-scoped CRDs, roles, and webhook configuration. Those writes remain under M1's account-owner approval and CloudShell identity; the M5 GitHub workflow has no permission to perform them.
+The release manifests contain cluster-scoped CRDs, roles, and webhook configuration. Those writes require M1's explicit approval and are performed by M5 using the approved CloudShell identity; the M5 GitHub workflow has no permission to perform them.
 
 ## 5. Verify availability and capture after-state
 
@@ -209,4 +209,4 @@ done
 
 Record the lock file, its checksum, the manifest digests verified by the script, the AWS identity ARN/account, cluster ARN/status, context, CRD Established conditions, Deployment Available status, timestamps, approval reference, and any deviation. Never include Secret values or bearer tokens. Keep the evidence for the protected RabbitMQ deployment review.
 
-This runbook is documentation only. The PR author and M5 workflow do not execute any command in sections 4–5.
+The protected GitHub workflow does not execute sections 4–5. M5 performs those steps manually in CloudShell only after M1 has recorded the approval and window; this document alone does not authorize an installation.
