@@ -394,7 +394,8 @@ jobs:
                   'module.eks_addons[0].aws_iam_role_policy_attachment.load_balancer_controller[0]'|\
                   'module.eks_addons[0].kubernetes_manifest.workload_namespace["gateway"]'|\
                   'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak"]'|\
-                  'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak-system"]')
+                  'module.eks_addons[0].kubernetes_manifest.workload_namespace["keycloak-system"]'|\
+                  'module.eks_addons[0].kubernetes_manifest.workload_namespace["rabbitmq-system"]')
                     printf -- '- `%s`: reviewed independent owner; creation is disabled and the Plan action guard forbids any operation.\n' "$address"
                     ;;
                   *) printf -- '- `%s`: not in Terraform State; verified by the live ownership guard before Plan.\n' "$address" ;;
@@ -409,7 +410,7 @@ jobs:
           if ! terraform plan -input=false -no-color -var-file="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfvars.json" \
             -var=enable_eks=true -var=enable_eks_addons=true -var=manage_vpc_cni=false \
             -var=manage_load_balancer_controller=false \
-            -var='existing_namespaces=["gateway","keycloak","keycloak-system"]' \
+            -var='existing_namespaces=["gateway","keycloak","keycloak-system","rabbitmq-system"]' \
             -var=general_desired_size=3 -var=enable_compliance_node_group=true -var=compliance_desired_size=1 \
             -out="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-plan.log" 2>&1; then
             echo '::error::Read-only plan failed. No Apply was executed. Terraform error blocks follow (diagnostics only, no plan output).'
@@ -438,7 +439,7 @@ jobs:
         working-directory: infra/terraform
         run: |
           set -euo pipefail
-          if ! terraform show -json "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" | python3 "$GITHUB_WORKSPACE/scripts/terraform_plan_summary.py" >> "$GITHUB_STEP_SUMMARY"; then
+          if ! terraform show -json "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" | python3 "$GITHUB_WORKSPACE/scripts/terraform_plan_summary.py" | tee -a "$GITHUB_STEP_SUMMARY"; then
             echo '::error::The redacted plan summary failed or found a protected foundation delete/replacement; no Apply was executed.'
             exit 1
           fi
