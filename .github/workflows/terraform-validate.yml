@@ -13,6 +13,8 @@ on:
       - "scripts/terraform_plan_summary.py"
       - "scripts/staging/guard_staging_ownership.py"
       - "scripts/staging/guard_staging_plan_actions.py"
+      - "scripts/staging/secure_tfplan.mjs"
+      - "tests/test_secure_tfplan.mjs"
       - "tests/test_staging_plan_action_guard.py"
       - "scripts/staging/staging-ownership-allowlist.json"
       - "tests/test_aws_staging_budget.py"
@@ -36,6 +38,8 @@ on:
       - "scripts/terraform_plan_summary.py"
       - "scripts/staging/guard_staging_ownership.py"
       - "scripts/staging/guard_staging_plan_actions.py"
+      - "scripts/staging/secure_tfplan.mjs"
+      - "tests/test_secure_tfplan.mjs"
       - "tests/test_staging_plan_action_guard.py"
       - "scripts/staging/staging-ownership-allowlist.json"
       - "tests/test_aws_staging_budget.py"
@@ -86,6 +90,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
@@ -105,6 +112,8 @@ jobs:
           python3 -m unittest discover -s tests -p test_terraform_plan_workflow_guard.py -v
           python3 -m unittest discover -s tests -p test_staging_ownership_guard.py -v
           python3 -m unittest discover -s tests -p test_staging_plan_action_guard.py -v
+          python3 -m unittest discover -s tests -p test_staging_apply_workflow.py -v
+          node --test tests/test_secure_tfplan.mjs
       - name: Verify deployment safety without AWS writes
         run: terraform test -filter=tests/deployment-safety.tftest.hcl
         working-directory: infra/terraform
@@ -139,6 +148,7 @@ jobs:
       STAGING_TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
       STAGING_CLUSTER_NAME: spectrace-staging
       TF_PLAN_VARS_JSON: ${{ secrets.TF_PLAN_VARS_JSON }}
+      TF_PLAN_ENCRYPTION_KEY: ${{ secrets.TF_PLAN_ENCRYPTION_KEY }}
       EXPECTED_STATE_VERSION_ID: ${{ inputs.expected_state_version_id }}
       STAGING_WINDOW_HOURS: ${{ inputs.staging_window_hours }}
       EXPERIMENT_HOURS: ${{ inputs.experiment_hours }}
@@ -150,6 +160,9 @@ jobs:
       - uses: azure/setup-kubectl@v4
         with:
           version: v1.36.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
@@ -176,7 +189,7 @@ jobs:
       - name: Require the existing S3 state backend and plan role configuration
         run: |
           test -n "$AWS_ACCOUNT_ID" && test -n "$AWS_ROLE_ARN" && test -n "$TF_STATE_BUCKET"
-          test -n "$TF_STATE_KEY" && test -n "$STAGING_TF_WORKSPACE" && test -n "$TF_PLAN_VARS_JSON"
+          test -n "$TF_STATE_KEY" && test -n "$STAGING_TF_WORKSPACE" && test -n "$TF_PLAN_VARS_JSON" && test -n "$TF_PLAN_ENCRYPTION_KEY"
           test -n "$EXPECTED_STATE_VERSION_ID"
           test "$AWS_ACCOUNT_ID" = 679857346122
           test "$TF_STATE_BUCKET" = foodlabelflow-staging-tfstate-679857346122-ap-southeast-1
@@ -426,6 +439,47 @@ jobs:
           fi
           sha256sum "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan"
           echo "Read-only plan completed for source $GITHUB_SHA. No Apply was executed."
+      - name: Encrypt and publish the exact Plan for protected review
+        working-directory: infra/terraform
+        env:
+          TF_PLAN_FILE: ${{ runner.temp }}/foodlabelflow-m5-plan-${{ github.run_id }}-${{ github.run_attempt }}/staging.tfplan
+          TF_PLAN_ENCRYPTED_FILE: ${{ runner.temp }}/foodlabelflow-m5-plan-${{ github.run_id }}-${{ github.run_attempt }}/staging.tfplan.enc
+          TF_PLAN_METADATA_FILE: ${{ runner.temp }}/foodlabelflow-m5-plan-${{ github.run_id }}-${{ github.run_attempt }}/staging-plan-metadata.json
+          M5_TF_PLAN_COMMIT_SHA: ${{ github.sha }}
+          M5_TF_PLAN_STATE_VERSION_ID: ${{ inputs.expected_state_version_id }}
+          M5_TF_PLAN_STATE_OBJECT_KEY: spectrace/staging/terraform.tfstate
+          M5_TF_PLAN_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          M5_TF_PLAN_WORKSPACE: ${{ vars.TF_WORKSPACE }}
+          M5_TF_PLAN_AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          M5_TF_PLAN_AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          set -euo pipefail
+          test -n "$TF_PLAN_ENCRYPTION_KEY"
+          terraform_version="$(terraform version -json | python3 -c 'import json,sys; print(json.load(sys.stdin)["terraform_version"])')"
+          test "$terraform_version" = 1.15.8
+          export M5_TF_PLAN_TERRAFORM_VERSION="$terraform_version"
+          provider_lock_sha256="$(sha256sum .terraform.lock.hcl | cut -d ' ' -f 1)"
+          export M5_TF_PLAN_PROVIDER_LOCK_SHA256="$provider_lock_sha256"
+          node "$GITHUB_WORKSPACE/scripts/staging/secure_tfplan.mjs" encrypt
+          plan_sha256="$(sha256sum "$TF_PLAN_FILE" | cut -d ' ' -f 1)"
+          encrypted_sha256="$(sha256sum "$TF_PLAN_ENCRYPTED_FILE" | cut -d ' ' -f 1)"
+          {
+            printf '%s\n' '## Encrypted saved Terraform Plan'
+            printf -- '- Source commit: `%s`\n' "$M5_TF_PLAN_COMMIT_SHA"
+            printf -- '- State VersionId: `%s`\n' "$M5_TF_PLAN_STATE_VERSION_ID"
+            printf -- '- Terraform Plan SHA-256: `%s`\n' "$plan_sha256"
+            printf -- '- Encrypted Plan SHA-256: `%s`\n' "$encrypted_sha256"
+            printf -- '- Artifact: `terraform-staging-plan-%s` (encrypted, 1-day retention)\n' "$GITHUB_RUN_ID"
+            printf '%s\n' '- No Apply was executed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-staging-plan-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/foodlabelflow-m5-plan-${{ github.run_id }}-${{ github.run_attempt }}/staging.tfplan.enc
+            ${{ runner.temp }}/foodlabelflow-m5-plan-${{ github.run_id }}-${{ github.run_attempt }}/staging-plan-metadata.json
+          retention-days: 1
+          if-no-files-found: error
       - name: Remove private Terraform plan artifacts
         if: ${{ always() }}
         shell: bash
