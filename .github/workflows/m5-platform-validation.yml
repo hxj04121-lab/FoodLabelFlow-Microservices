@@ -19,6 +19,9 @@ on:
       - 'tests/test_helm_release_inventory.py'
       - 'tests/test_staging_rds_values.py'
       - 'tests/test_staging_service_digests.py'
+      - 'tests/test_operator_install_workflow.py'
+      - 'tests/test_operator_install_ownership.py'
+      - 'tests/test_operator_manifest_lock.py'
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
@@ -44,6 +47,9 @@ on:
       - 'tests/test_helm_release_inventory.py'
       - 'tests/test_staging_rds_values.py'
       - 'tests/test_staging_service_digests.py'
+      - 'tests/test_operator_install_workflow.py'
+      - 'tests/test_operator_install_ownership.py'
+      - 'tests/test_operator_manifest_lock.py'
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
@@ -84,7 +90,18 @@ jobs:
             --output "$archive"
           printf '%s  %s\n' "$asset_sha" "$archive" | sha256sum --check --status
           tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
-          "$RUNNER_TEMP/actionlint" .github/workflows/deploy-rabbitmq.yml .github/workflows/staging-plan-rbac-bootstrap.yml .github/workflows/m5-platform-validation.yml
+          workflows=(
+            .github/workflows/deploy-rabbitmq.yml
+            .github/workflows/staging-plan-rbac-bootstrap.yml
+            .github/workflows/install-rabbitmq-operators.yml
+            .github/workflows/staging-terraform-apply.yml
+            .github/workflows/m5-platform-validation.yml
+          )
+          present=()
+          for workflow in "${workflows[@]}"; do
+            if [[ -f "$workflow" ]]; then present+=("$workflow"); fi
+          done
+          "$RUNNER_TEMP/actionlint" "${present[@]}"
       - uses: hashicorp/setup-terraform@v3
         with: {terraform_version: 1.15.8}
       - run: terraform fmt -check -recursive
@@ -101,6 +118,9 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_helm_release_inventory.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_rds_values.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_service_digests.py' -v
+          python3 -m unittest discover -s tests -p 'test_operator_install_workflow.py' -v
+          python3 -m unittest discover -s tests -p 'test_operator_install_ownership.py' -v
+          python3 -m unittest discover -s tests -p 'test_operator_manifest_lock.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_window.py' -v
           bash tests/test-runtime-secrets.sh
           bash tests/test_mysql_bootstrap_workflow_guard.sh

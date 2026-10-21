@@ -1,0 +1,147 @@
+name: Protected RabbitMQ Operator bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_window_end_sgt:
+        description: Owner-confirmed shutdown time in Asia/Singapore (YYYY-MM-DD HH:MM)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rabbitmq-operator-staging-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  reject-non-main:
+    if: ${{ github.ref != 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo '::error::This installer may only run from main.' && exit 1
+
+  install:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: [self-hosted, linux, staging-vpc]
+    environment: staging
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
+      STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
+      APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.1
+      - name: Require protected install identity and approved window
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$AWS_ACCOUNT_ID" = 679857346122
+          test "$AWS_REGION" = ap-southeast-1
+          test "$EKS_CLUSTER_NAME" = spectrace-staging
+          test -n "$AWS_ROLE_ARN"
+          # M1 decision (21 Oct, #103): install with the existing deploy role, which already holds the
+          # window-scoped cluster-admin association accepted on #102; no second cluster-admin principal.
+          test "$AWS_ROLE_ARN" = arn:aws:iam::679857346122:role/FoodLabelFlowStagingDeploy
+          test "$AWS_ROLE_ARN" != "$AWS_PLAN_ROLE_ARN"
+          KUBECONFIG="$RUNNER_TEMP/rabbitmq-operator-kubeconfig-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          printf 'KUBECONFIG=%s\n' "$KUBECONFIG" >> "$GITHUB_ENV"
+          python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
+          python3 platform/staging/validate_window.py 24 "$STAGING_WINDOW_END_SGT" > "$RUNNER_TEMP/operator-window.json"
+          if ! env -u AVAILABLE_CREDIT_USD python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/operator-budget-gate.log" 2>&1; then
+            echo '::error::The protected staging funding/pricing gate did not pass; no cluster write was attempted.'
+            exit 1
+          fi
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify AWS identity, private EKS target, Kubernetes identity, and access
+        run: |
+          set -euo pipefail
+          actual_account=$(aws sts get-caller-identity --query Account --output text)
+          test "$actual_account" = "$AWS_ACCOUNT_ID"
+          actual_arn=$(aws sts get-caller-identity --query Arn --output text)
+          expected_role=${AWS_ROLE_ARN##*/}
+          case "$actual_arn" in "arn:aws:sts::$AWS_ACCOUNT_ID:assumed-role/$expected_role/"*) ;; *) echo '::error::AWS session is not the approved Operator install role.'; exit 1 ;; esac
+          cluster=$(aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --output json)
+          printf '%s' "$cluster" | python3 -c 'import json,sys; c=json.load(sys.stdin)["cluster"]; assert c["status"] == "ACTIVE"; assert c["arn"] == "arn:aws:eks:ap-southeast-1:679857346122:cluster/spectrace-staging"; assert c["resourcesVpcConfig"]["endpointPrivateAccess"] is True'
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --kubeconfig "$KUBECONFIG" >/dev/null
+          test "$(kubectl config current-context)" = arn:aws:eks:ap-southeast-1:679857346122:cluster/spectrace-staging
+          kubectl get namespaces -o name >/dev/null
+          whoami=$(kubectl auth whoami -o json)
+          printf '%s' "$whoami" | python3 -c 'import json,sys; u=json.load(sys.stdin)["status"]["userInfo"]["username"]; assert "/assumed-role/" in u; print("Kubernetes identity:", u)'
+          for resource in namespaces customresourcedefinitions.apiextensions.k8s.io clusterroles clusterrolebindings mutatingwebhookconfigurations.admissionregistration.k8s.io validatingwebhookconfigurations.admissionregistration.k8s.io; do
+            test "$(kubectl auth can-i create "$resource")" = yes
+          done
+          for namespace in cert-manager rabbitmq-system; do
+            for resource in deployments services serviceaccounts roles rolebindings; do
+              test "$(kubectl auth can-i create "$resource" --namespace "$namespace")" = yes
+            done
+          done
+          echo "Verified AWS account $actual_account, private EKS cluster $EKS_CLUSTER_NAME, and assumed-role Kubernetes identity."
+      - name: Download and verify the exact locked Operator manifests
+        run: |
+          set -euo pipefail
+          manifest_dir="$RUNNER_TEMP/rabbitmq-operator-manifests"
+          install -d -m 700 "$manifest_dir"
+          test "$(sha256sum deploy/operators/rabbitmq/operator-manifests.lock | cut -d ' ' -f 1)" = c79ee4386fc120dc022f613da6808154a4171f1518f473e1f6d1a723d34a4517
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 'https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml' --output "$manifest_dir/cert-manager.yaml"
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 'https://github.com/rabbitmq/cluster-operator/releases/download/v2.22.3/cluster-operator.yml' --output "$manifest_dir/rabbitmq-cluster-operator.yaml"
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 'https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.2/messaging-topology-operator-with-certmanager.yaml' --output "$manifest_dir/messaging-topology-operator.yaml"
+          python3 scripts/staging/verify_operator_manifest_lock.py --manifest-dir "$manifest_dir"
+      - name: Stop if any target object exists or ownership cannot be verified
+        run: python3 scripts/staging/check_operator_manifest_ownership.py --manifest-dir "$RUNNER_TEMP/rabbitmq-operator-manifests"
+      - name: Prepare topology install input without its duplicate Namespace object
+        run: python3 scripts/staging/render_operator_install_manifest.py --manifest-dir "$RUNNER_TEMP/rabbitmq-operator-manifests"
+      - name: Install the locked Operators without replacing existing objects
+        run: |
+          set -euo pipefail
+          manifest_dir="$RUNNER_TEMP/rabbitmq-operator-manifests"
+          kubectl create -f "$manifest_dir/cert-manager.yaml"
+          for deployment in cert-manager cert-manager-webhook cert-manager-cainjector; do
+            kubectl rollout status "deployment/$deployment" --namespace cert-manager --timeout=5m
+          done
+          for crd in certificates.cert-manager.io certificaterequests.cert-manager.io issuers.cert-manager.io clusterissuers.cert-manager.io orders.acme.cert-manager.io challenges.acme.cert-manager.io; do
+            kubectl wait --for=condition=Established "crd/$crd" --timeout=2m
+          done
+          kubectl create -f "$manifest_dir/rabbitmq-cluster-operator.yaml"
+          kubectl rollout status deployment/rabbitmq-cluster-operator --namespace rabbitmq-system --timeout=5m
+          kubectl wait --for=condition=Established crd/rabbitmqclusters.rabbitmq.com --timeout=2m
+          kubectl create -f "$manifest_dir/messaging-topology-operator-install.yaml"
+          kubectl rollout status deployment/messaging-topology-operator --namespace rabbitmq-system --timeout=5m
+          for crd in users.rabbitmq.com permissions.rabbitmq.com exchanges.rabbitmq.com queues.rabbitmq.com bindings.rabbitmq.com policies.rabbitmq.com; do
+            kubectl wait --for=condition=Established "crd/$crd" --timeout=2m
+          done
+      - name: Record metadata-only readiness evidence
+        run: |
+          set -euo pipefail
+          kubectl get deployments --namespace cert-manager -o name
+          kubectl get deployments --namespace rabbitmq-system -o name
+          kubectl get crd certificates.cert-manager.io certificaterequests.cert-manager.io issuers.cert-manager.io clusterissuers.cert-manager.io orders.acme.cert-manager.io challenges.acme.cert-manager.io rabbitmqclusters.rabbitmq.com users.rabbitmq.com permissions.rabbitmq.com exchanges.rabbitmq.com queues.rabbitmq.com bindings.rabbitmq.com policies.rabbitmq.com -o name
+          {
+            echo '### Operator bootstrap completed'
+            echo "- Commit: $GITHUB_SHA"
+            echo '- AWS Account: 679857346122'
+            echo '- Region / EKS: ap-southeast-1 / spectrace-staging'
+            echo '- Release manifests: cert-manager v1.21.2, RabbitMQ Cluster Operator v2.22.3, Messaging Topology Operator v1.20.2'
+            echo '- Existing-object check: passed before writes'
+            echo '- Evidence includes resource names only; no Secret data was read or logged.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove temporary manifests and kubeconfig
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/rabbitmq-operator-manifests" "$KUBECONFIG" "$RUNNER_TEMP/operator-window.json" "$RUNNER_TEMP/operator-budget-gate.log"

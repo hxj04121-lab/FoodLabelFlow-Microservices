@@ -4,7 +4,7 @@
 
 M1, as AWS account owner, independently installs and maintains cert-manager v1.21.2, RabbitMQ Cluster Operator v2.22.3, and Messaging Topology Operator v1.20.2 from the reviewed bytes in [`operator-manifests.lock`](../../deploy/operators/rabbitmq/operator-manifests.lock). The CloudShell procedure is in [`install-rabbitmq-operators-cloudshell.md`](runbooks/install-rabbitmq-operators-cloudshell.md).
 
-These cluster-scoped namespaces, CRDs, ClusterRoles, ClusterRoleBindings, webhook configurations, operator Services, Deployments, and certificates are outside the RabbitMQ GitHub Workflow's ownership. The workflow does not assume an operator-install role and cannot install, upgrade, patch, or delete them. The workflow fails its read-only preflight if the expected CRDs and operator Deployments are not already available. An absent read-only permission is a blocker for M1 to review separately; it is not a reason to grant cluster-admin.
+These cluster-scoped namespaces, CRDs, ClusterRoles, ClusterRoleBindings, webhook configurations, operator Services, Deployments, and certificates are outside the RabbitMQ GitHub Workflow's ownership. The RabbitMQ deploy workflow cannot install, upgrade, patch, or delete them; only the separate protected Operator bootstrap workflow creates them once, using `AWS_DEPLOY_ROLE_ARN` under M1's 21 Oct decision. The workflow fails its read-only preflight if the expected CRDs and operator Deployments are not already available. An absent read-only permission is a blocker for M1 to review separately; it is not a reason to grant cluster-admin.
 
 ## M5 RabbitMQ deployment ownership
 
