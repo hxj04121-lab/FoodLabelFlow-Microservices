@@ -40,9 +40,12 @@ jobs:
       APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # actions/setup-python ships no build for the self-hosted VPC runner's OS; uv installs a portable CPython 3.12.
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: '3.12'
+          activate-environment: true
+          enable-cache: false
       - uses: azure/setup-kubectl@v4
         with:
           version: v1.36.1
@@ -60,7 +63,7 @@ jobs:
           test "$AWS_ROLE_ARN" != "$AWS_PLAN_ROLE_ARN"
           KUBECONFIG="$RUNNER_TEMP/rabbitmq-operator-kubeconfig-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           printf 'KUBECONFIG=%s\n' "$KUBECONFIG" >> "$GITHUB_ENV"
-          python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
+          uv pip install PyYAML==6.0.3
           python3 platform/staging/validate_window.py 24 "$STAGING_WINDOW_END_SGT" > "$RUNNER_TEMP/operator-window.json"
           if ! env -u AVAILABLE_CREDIT_USD python3 scripts/aws_staging_budget.py --require-gate --hours 24 --experiment-hours 4 --k6-hours 2 > "$RUNNER_TEMP/operator-budget-gate.log" 2>&1; then
             echo '::error::The protected staging funding/pricing gate did not pass; no cluster write was attempted.'
@@ -84,7 +87,7 @@ jobs:
           test "$(kubectl config current-context)" = arn:aws:eks:ap-southeast-1:679857346122:cluster/spectrace-staging
           kubectl get namespaces -o name >/dev/null
           whoami=$(kubectl auth whoami -o json)
-          printf '%s' "$whoami" | python3 -c 'import json,sys; u=json.load(sys.stdin)["status"]["userInfo"]["username"]; assert "/assumed-role/" in u; print("Kubernetes identity:", u)'
+          printf '%s' "$whoami" | python3 -c 'import json,os,sys; u=json.load(sys.stdin)["status"]["userInfo"]["username"]; role=os.environ["AWS_ROLE_ARN"].rsplit("/",1)[1]; assert f":assumed-role/{role}/" in u, "Kubernetes identity is not the approved role"; print("Kubernetes identity:", u)'
           for resource in namespaces customresourcedefinitions.apiextensions.k8s.io clusterroles clusterrolebindings mutatingwebhookconfigurations.admissionregistration.k8s.io validatingwebhookconfigurations.admissionregistration.k8s.io; do
             test "$(kubectl auth can-i create "$resource")" = yes
           done

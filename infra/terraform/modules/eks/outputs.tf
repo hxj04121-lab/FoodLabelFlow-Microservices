@@ -8,15 +8,15 @@ output "autoscaler_node_groups" {
     {
       general = {
         asg_name = aws_eks_node_group.general.resources[0].autoscaling_groups[0].name
-        min_size = 2
-        max_size = 3
+        min_size = aws_eks_node_group.general.scaling_config[0].min_size
+        max_size = aws_eks_node_group.general.scaling_config[0].max_size
       }
     },
     var.enable_compliance_node_group ? {
       compliance = {
         asg_name = aws_eks_node_group.compliance[0].resources[0].autoscaling_groups[0].name
-        min_size = 1
-        max_size = 4
+        min_size = aws_eks_node_group.compliance[0].scaling_config[0].min_size
+        max_size = aws_eks_node_group.compliance[0].scaling_config[0].max_size
       }
     } : {}
   )
