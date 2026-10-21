@@ -47,6 +47,15 @@ def changed_attribute_names(change: dict) -> list[str]:
     return sorted(names)
 
 
+TAG_ONLY_ATTRIBUTES = {"tags", "tags_all"}
+
+
+def is_tag_only_update(actions: list, change: dict) -> bool:
+    """M1 decision (21 Oct): an in-place update of only tags on a protected ALB/ACM resource is allowed."""
+    names = changed_attribute_names(change)
+    return actions == ["update"] and bool(names) and set(names) <= TAG_ONLY_ATTRIBUTES
+
+
 def check_plan(plan: dict) -> list[str]:
     format_version = plan.get("format_version") if isinstance(plan, dict) else None
     format_major, separator, format_minor = format_version.partition(".") if isinstance(format_version, str) else ("", "", "")
@@ -88,7 +97,7 @@ def check_plan(plan: dict) -> list[str]:
         if is_protected_alb_type(resource_type) and (
             PROTECTED_MUTATING_ACTIONS.intersection(actions)
             or set(actions) == {"create", "delete"}
-        ):
+        ) and not is_tag_only_update(actions, change):
             violations.append(
                 f"{address} ({resource_type}): planned actions {actions} are forbidden for protected ALB/ACM resources; "
                 f"changed attributes (names only): {', '.join(changed_attribute_names(change)) or 'none reported'}"
