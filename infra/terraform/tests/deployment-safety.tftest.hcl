@@ -205,12 +205,14 @@ run "worker_network_is_port_scoped" {
     error_message = "Control-plane ingress must be restricted to kubelet and the reviewed webhook ports."
   }
   assert {
-    condition = !aws_eks_cluster.this.vpc_config[0].endpoint_public_access &&
+    condition = (
+      !aws_eks_cluster.this.vpc_config[0].endpoint_public_access &&
       aws_launch_template.nodes.metadata_options[0].http_tokens == "required" &&
       aws_eks_node_group.compliance[0].labels.dedicated == "compliance" &&
       aws_eks_node_group.compliance[0].scaling_config[0].desired_size == 1 &&
       aws_eks_node_group.compliance[0].scaling_config[0].min_size == 1 &&
       aws_eks_node_group.compliance[0].scaling_config[0].max_size == 4
+    )
     error_message = "Keep the private API, IMDSv2, dedicated isolation, and the approved one-to-four Compliance node bounds."
   }
 }
