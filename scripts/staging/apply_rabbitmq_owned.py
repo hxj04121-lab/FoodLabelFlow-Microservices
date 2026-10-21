@@ -129,7 +129,10 @@ def response_objects(output):
     if isinstance(parsed, list):
         return parsed
     if parsed.get("kind") == "List":
-        return parsed.get("items", [])
+        items = parsed.get("items")
+        if not isinstance(items, list):
+            raise ValueError("Kubernetes List response must contain an items array")
+        return items
     return [parsed]
 
 

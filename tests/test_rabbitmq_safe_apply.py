@@ -43,6 +43,7 @@ class FakeKubectl:
         on_workload_list=None,
         resource_get_returncode=0,
         resource_get_stdout=None,
+        resource_get_stdout_sequence=None,
         resource_get_stderr="",
         resource_get_timeout=False,
     ):
@@ -58,8 +59,10 @@ class FakeKubectl:
         self.on_workload_list = on_workload_list
         self.resource_get_returncode = resource_get_returncode
         self.resource_get_stdout = resource_get_stdout
+        self.resource_get_stdout_sequence = resource_get_stdout_sequence
         self.resource_get_stderr = resource_get_stderr
         self.resource_get_timeout = resource_get_timeout
+        self.resource_get_calls = 0
         self.create_calls = 0
         self.created = []
         self.calls = []
@@ -82,6 +85,7 @@ class FakeKubectl:
                 self.workload_stderr,
             )
         if args[1] == "get" and len(args) > 2 and args[2] == "--ignore-not-found=true":
+            self.resource_get_calls += 1
             if self.resource_get_timeout:
                 raise subprocess.TimeoutExpired(args, timeout)
             if self.resource_get_returncode:
@@ -89,6 +93,13 @@ class FakeKubectl:
                     args,
                     self.resource_get_returncode,
                     "",
+                    self.resource_get_stderr,
+                )
+            if self.resource_get_stdout_sequence is not None and self.resource_get_calls <= len(self.resource_get_stdout_sequence):
+                return CompletedProcess(
+                    args,
+                    0,
+                    self.resource_get_stdout_sequence[self.resource_get_calls - 1],
                     self.resource_get_stderr,
                 )
             if self.resource_get_stdout is not None:
@@ -388,6 +399,44 @@ metadata:
         self.assertEqual(kubectl.create_calls, 0)
         self.assertEqual(kubectl.created, [])
         self.assert_no_delete(kubectl)
+
+    def test_list_response_without_list_items_fails_closed_on_initial_read(self):
+        malformed_responses = (
+            '{"kind":"List"}',
+            '{"kind":"List","items":null}',
+            '{"kind":"List","items":{}}',
+        )
+        for response in malformed_responses:
+            with self.subTest(response=response):
+                kubectl = FakeKubectl(resource_get_stdout=response)
+
+                with self.assertRaisesRegex(safe_apply.SafeApplyError, "Could not safely decode"):
+                    safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env())
+
+                self.assertEqual(kubectl.create_calls, 0)
+                self.assertEqual(kubectl.created, [])
+                self.assert_no_delete(kubectl)
+
+    def test_list_response_without_list_items_fails_closed_during_create_recovery(self):
+        malformed_responses = (
+            '{"kind":"List"}',
+            '{"kind":"List","items":null}',
+            '{"kind":"List","items":{}}',
+        )
+        for response in malformed_responses:
+            with self.subTest(response=response):
+                kubectl = FakeKubectl(
+                    lose_create_response=True,
+                    resource_get_stdout_sequence=["", response],
+                )
+
+                with patch.object(safe_apply.time, "sleep"):
+                    with self.assertRaisesRegex(safe_apply.SafeApplyError, "Could not safely decode"):
+                        safe_apply.apply_owned_manifest(self.manifest, kubectl, protected_env())
+
+                self.assertEqual(kubectl.create_calls, 1)
+                self.assertEqual(len(kubectl.created), 1)
+                self.assert_no_delete(kubectl)
 
 
 if __name__ == "__main__":
