@@ -141,7 +141,8 @@ resource "helm_release" "network_policies" {
   wait      = true
 
   values = [yamlencode({
-    namespaces         = var.workload_namespaces
+    # The platform chart's schema accepts only its eight workload namespaces; frontend has its own policies.
+    namespaces         = { for name, namespace in var.workload_namespaces : name => namespace if name != "frontend" }
     operatorNamespaces = var.operator_namespaces
     cidrs = {
       vpc      = var.vpc_cidr
