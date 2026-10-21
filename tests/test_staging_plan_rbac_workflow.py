@@ -9,7 +9,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = ROOT / ".github/workflows/staging-plan-rbac-bootstrap.yml"
 MANIFEST_PATH = "infra/terraform/manual/plan-readonly-rbac.yaml"
-MANIFEST_SHA256 = "4417de8d94e9074240f39879c35b2e1b7fff2c559dfed6694ad634eaae343a14"
+MANIFEST_SHA256 = "1733291f9f42f2dd242f7de91ce564c7e381d93a0b39570e16694d326aad12b3"
 
 
 class StagingPlanRbacWorkflowTests(unittest.TestCase):
@@ -47,7 +47,7 @@ class StagingPlanRbacWorkflowTests(unittest.TestCase):
         self.assertIn("if (( ${#existing[@]} > 0 )); then", self.workflow_text)
         for name in (
             "spectrace-staging-plan-readonly",
-            "spectrace-staging-plan-helm-secret-reader",
+            "spectrace-staging-plan-lbc-deployment-reader",
             "spectrace-staging-github-plan-readonly",
             "kube-system",
         ):
@@ -65,6 +65,11 @@ class StagingPlanRbacWorkflowTests(unittest.TestCase):
         self.assertIn("At least one target RBAC object already exists", self.workflow_text)
         self.assertIn("AmazonEKSClusterAdminPolicy", self.workflow_text)
         self.assertIn("if: always()", self.workflow_text)
+
+    def test_secret_reads_are_verified_as_denied(self):
+        self.assertIn('for verb in get list watch; do check no "$verb" secrets kube-system; done', self.workflow_text)
+        self.assertIn("check yes get deployments.apps/aws-load-balancer-controller kube-system", self.workflow_text)
+        self.assertNotIn("check yes \"$verb\" secrets", self.workflow_text)
 
     def test_shell_steps_parse_as_bash(self):
         python_count = 0
