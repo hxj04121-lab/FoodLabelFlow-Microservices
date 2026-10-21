@@ -47,9 +47,14 @@ spec:
           spec:
             containers:
               - name: rabbitmq
+                # The override replaces the Operator's probes, so each must name its handler.
                 readinessProbe:
+                  tcpSocket:
+                    port: 5672
                   initialDelaySeconds: 20
                   periodSeconds: 10
                 livenessProbe:
+                  tcpSocket:
+                    port: 5672
                   initialDelaySeconds: 60
                   periodSeconds: 20

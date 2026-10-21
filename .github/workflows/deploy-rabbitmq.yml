@@ -171,8 +171,11 @@ jobs:
           zones={n.get('metadata',{}).get('labels',{}).get('topology.kubernetes.io/zone') for n in ready}
           group=json.load(open(sys.argv[2]))['nodegroup']
           scale=group.get('scalingConfig',{})
-          if group.get('status')!='ACTIVE' or scale.get('desiredSize',0)<3 or group.get('health',{}).get('issues') or len(ready)<3 or len(hosts)<3 or len(zones)<2 or None in hosts or None in zones:
-              raise SystemExit('RabbitMQ requires at least three Ready general nodes across at least two AZs and an ACTIVE general node group.')
+          print(f"general node group: status={group.get('status')} desired={scale.get('desiredSize')} max={scale.get('maxSize')} ready={len(ready)} zones={len(zones)}")
+          # Cluster Autoscaler may scale idle general nodes down; it scales back up for the three Pending brokers.
+          # Three distinct Ready nodes across two AZs are verified after the brokers become Ready.
+          if group.get('status')!='ACTIVE' or scale.get('maxSize',0)<3 or group.get('health',{}).get('issues') or len(ready)<1 or None in hosts or None in zones:
+              raise SystemExit('RabbitMQ requires an ACTIVE, healthy general node group that can scale to three nodes.')
           print(f'General node pool: {len(ready)} Ready nodes across {len(zones)} AZs.')
           PY
 
@@ -198,6 +201,12 @@ jobs:
           if [[ -z "$(kubectl get rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq --ignore-not-found -o name)" ]]; then
             existing_broker_data=$(kubectl get statefulsets,pods,persistentvolumeclaims --namespace rabbitmq -o name)
             test -z "$existing_broker_data" || { echo '::error::RabbitMQ data or workload objects exist without the expected Cluster; refusing adoption.'; exit 1; }
+          fi
+          if [[ -n "$(kubectl get rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq --ignore-not-found -o name)" ]] \
+            && [[ -z "$(kubectl get statefulsets,pods,persistentvolumeclaims --namespace rabbitmq -o name)" ]]; then
+            # A Cluster that never created a StatefulSet, Pod or PVC holds no data; recreate it from the reviewed manifest.
+            echo '::notice::RabbitmqCluster exists without any StatefulSet, Pod or PVC; deleting it so the reviewed manifest can be created.'
+            kubectl delete rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq --wait=true --timeout=5m
           fi
           python3 scripts/staging/apply_rabbitmq_owned.py deploy/operators/rabbitmq/rabbitmq-cluster.yaml
           python3 scripts/staging/apply_rabbitmq_owned.py deploy/kubernetes/staging/rabbitmq/rabbitmq-pdb.yaml
