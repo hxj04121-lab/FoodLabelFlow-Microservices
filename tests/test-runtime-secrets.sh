@@ -75,6 +75,17 @@ case "$1 ${2:-}" in
       "delete secret")
         printf '%s/%s\n' "$namespace" "$5" >> "$TEST_CAPTURE_DIR/deleted"
         ;;
+      "get secret")
+        count=$(( $(cat "$TEST_CAPTURE_DIR/secret-reads" 2>/dev/null || echo 0) + 1 ))
+        printf '%s' "$count" > "$TEST_CAPTURE_DIR/secret-reads"
+        printf '%s' "$count"
+        ;;
+      "get statefulset")
+        printf 'statefulset.apps/%s\n' "$5"
+        ;;
+      "rollout restart"|"rollout status")
+        printf '%s\n' "$*" >> "$TEST_CAPTURE_DIR/rollouts"
+        ;;
       *) exit 2 ;;
     esac
     ;;
@@ -195,3 +206,5 @@ bash "$repo_root/scripts/staging/apply-runtime-secrets.sh" delete > "$tmp_dir/de
 [[ $(wc -l < "$tmp_dir/captures/deleted") -eq 5 ]]
 echo "PASS runtime Secret injection and cleanup: isolated DBs, OIDC configuration, protected window, exact staging context and redaction"
 grep -Fq 'BOOTSTRAP_KUBECTL_NAMESPACE=specification' "$workflow"
+grep -Fq -- '--force-conflicts' "$repo_root/scripts/staging/apply-runtime-secrets.sh"
+grep -Fq 'rollout restart statefulset/spectrace-keycloak' "$tmp_dir/captures/rollouts" 2>/dev/null

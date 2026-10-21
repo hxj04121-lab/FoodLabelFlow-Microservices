@@ -97,11 +97,22 @@ done
 if [[ "$action" == delete ]]; then
   kubectl --namespace keycloak delete secret keycloak-db --ignore-not-found=true >/dev/null
 else
+  before=$(kubectl --namespace keycloak get secret keycloak-db --ignore-not-found -o jsonpath='{.metadata.resourceVersion}')
+  # The bootstrap above has just set the keycloak DB account to KEYCLOAK_DB_PASSWORD, so this Secret must
+  # carry the same value even if another manager (kubectl create) wrote it first.
   kubectl --namespace keycloak create secret generic keycloak-db \
     --from-env-file=<(printf '%s\n' \
       'username=keycloak' \
       "password=${KEYCLOAK_DB_PASSWORD}") \
-    --dry-run=client --output=yaml | kubectl apply --server-side \
+    --dry-run=client --output=yaml | kubectl apply --server-side --force-conflicts \
       --field-manager=stcn15-runtime-secrets -f - >/dev/null
+  after=$(kubectl --namespace keycloak get secret keycloak-db -o jsonpath='{.metadata.resourceVersion}')
+  if [[ -n "$before" && "$before" != "$after" ]] \
+    && kubectl --namespace keycloak get statefulset spectrace-keycloak -o name >/dev/null 2>&1; then
+    # Running Keycloak pods still hold the previous password; restart them onto the new one.
+    echo 'keycloak-db changed; restarting Keycloak so it reconnects with the new database password'
+    kubectl --namespace keycloak rollout restart statefulset/spectrace-keycloak >/dev/null
+    kubectl --namespace keycloak rollout status statefulset/spectrace-keycloak --timeout=10m
+  fi
 fi
 printf '%s runtime Secret keycloak/keycloak-db\n' "$action"
