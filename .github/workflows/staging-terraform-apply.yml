@@ -68,7 +68,8 @@ jobs:
       AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
-      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
+      # Not TF_WORKSPACE: that env var overrides workspaces and makes `terraform workspace select` fail.
+      STAGING_TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
       TF_PLAN_ENCRYPTION_KEY: ${{ secrets.TF_PLAN_ENCRYPTION_KEY }}
       APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
       PLAN_RUN_ID: ${{ inputs.plan_run_id }}
@@ -99,7 +100,7 @@ jobs:
           test "$EKS_CLUSTER_NAME" = spectrace-staging
           test "$TF_STATE_BUCKET" = foodlabelflow-staging-tfstate-679857346122-ap-southeast-1
           test "$TF_STATE_KEY" = terraform.tfstate
-          test "$TF_WORKSPACE" = staging
+          test "$STAGING_TF_WORKSPACE" = staging
           test -n "$AWS_ROLE_ARN" && test -n "$TF_PLAN_ENCRYPTION_KEY"
           case "$AWS_ROLE_ARN" in arn:aws:iam::679857346122:role/*) ;; *) echo '::error::Unexpected Terraform Apply role ARN.'; exit 1 ;; esac
           test "$AWS_ROLE_ARN" != "$AWS_PLAN_ROLE_ARN"
@@ -218,8 +219,8 @@ jobs:
             -backend-config="key=$TF_STATE_KEY" -backend-config="region=$AWS_REGION" \
             -backend-config="workspace_key_prefix=spectrace" -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true" > "$APPLY_TEMP_DIR/terraform-init.log" 2>&1
-          terraform workspace select "$TF_WORKSPACE" > "$APPLY_TEMP_DIR/terraform-workspace.log" 2>&1
-          test "$(terraform workspace show)" = "$TF_WORKSPACE"
+          terraform workspace select "$STAGING_TF_WORKSPACE" > "$APPLY_TEMP_DIR/terraform-workspace.log" 2>&1
+          test "$(terraform workspace show)" = "$STAGING_TF_WORKSPACE"
       - name: Re-run protected resource action guard against the approved Plan
         working-directory: plan-source/infra/terraform
         env:

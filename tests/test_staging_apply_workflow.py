@@ -34,6 +34,12 @@ class StagingTerraformApplyWorkflowTest(unittest.TestCase):
         self.assertIn("APPROVED_STATE_VERSION_ID", self.apply)
         self.assertIn("aws s3api head-object", self.apply)
 
+    def test_workspace_is_not_overridden_by_the_tf_workspace_environment_variable(self):
+        # Terraform refuses `workspace select` while TF_WORKSPACE is set in the environment.
+        self.assertNotRegex(self.apply, r"(?m)^\s+TF_WORKSPACE:")
+        self.assertIn("STAGING_TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}", self.apply)
+        self.assertIn('terraform workspace select "$STAGING_TF_WORKSPACE"', self.apply)
+
     def test_only_a_successful_exact_main_plan_run_and_artifact_can_be_applied(self):
         self.assertIn("event !== 'workflow_dispatch'", self.apply)
         self.assertIn("run.head_branch !== 'main'", self.apply)
