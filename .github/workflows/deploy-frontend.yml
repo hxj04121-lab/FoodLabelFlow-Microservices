@@ -47,9 +47,12 @@ jobs:
       STAGING_ALB_NAME: foodlabelflow-staging-public-alb
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # actions/setup-python ships no build for the self-hosted VPC runner's OS; uv installs a portable CPython 3.12.
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: '3.12'
+          activate-environment: true
+          enable-cache: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
