@@ -13,6 +13,7 @@ on:
       - "scripts/terraform_plan_summary.py"
       - "scripts/staging/guard_staging_ownership.py"
       - "scripts/staging/guard_staging_plan_actions.py"
+      - "tests/test_staging_plan_action_guard.py"
       - "scripts/staging/staging-ownership-allowlist.json"
       - "tests/test_aws_staging_budget.py"
       - "tests/test_staging_window.py"
@@ -35,6 +36,7 @@ on:
       - "scripts/terraform_plan_summary.py"
       - "scripts/staging/guard_staging_ownership.py"
       - "scripts/staging/guard_staging_plan_actions.py"
+      - "tests/test_staging_plan_action_guard.py"
       - "scripts/staging/staging-ownership-allowlist.json"
       - "tests/test_aws_staging_budget.py"
       - "tests/test_staging_window.py"
@@ -405,9 +407,15 @@ jobs:
           test "$after_version_id" != "None" && test "$after_version_id" != "null"
           test "$after_version_id" = "$EXPECTED_STATE_VERSION_ID"
           echo 'S3 State VersionId was unchanged before and after this read-only Plan. This does not prove absence of AWS drift.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Reject actions against independently managed staging objects
+      - name: Reject protected ALB, ACM, LBC, and namespace changes
         working-directory: infra/terraform
-        run: terraform show -json "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" | python3 "$GITHUB_WORKSPACE/scripts/staging/guard_staging_plan_actions.py" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -euo pipefail
+          if ! terraform show -json "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" \
+            | python3 "$GITHUB_WORKSPACE/scripts/staging/guard_staging_plan_actions.py" >> "$GITHUB_STEP_SUMMARY"; then
+            echo '::error::A protected resource action or invalid Plan JSON was detected. The Plan job is blocked.'
+            exit 1
+          fi
       - name: Publish resource actions without plan values
         working-directory: infra/terraform
         run: |
