@@ -203,7 +203,7 @@ jobs:
           if kubectl get storageclass ebs-gp3 -o json | python3 -c 'import json,sys; p=json.load(sys.stdin).get("parameters",{}); sys.exit(0 if any(k.startswith("tagSpecification") and v.startswith("kubernetes.io/") for k,v in p.items()) else 1)'; then
             volumes=$(kubectl get persistentvolumes -o json | python3 -c 'import json,sys; print(sum(1 for pv in json.load(sys.stdin)["items"] if pv["spec"].get("storageClassName")=="ebs-gp3"))')
             test "$volumes" = 0 || { echo '::error::ebs-gp3 has the reserved tag but PersistentVolumes already use it; stop for M1 review.'; exit 1; }
-            if grep -q -e 'kubernetes.io/' -e '\${' deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl; then
+            if grep -q -F -e 'kubernetes.io/' -e "\${" deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl; then
               echo '::error::The reviewed ebs-gp3 template still has a reserved tag or an unrendered variable.'; exit 1
             fi
             echo '::notice::Recreating ebs-gp3 without the reserved kubernetes.io tag; no PersistentVolume uses it.'
