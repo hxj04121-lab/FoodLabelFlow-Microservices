@@ -22,9 +22,10 @@ class OperatorInstallWorkflowTest(unittest.TestCase):
         self.assertIn("id-token: write", self.workflow)
 
     def test_dedicated_identity_budget_and_exact_cluster_are_required(self):
-        self.assertIn("AWS_RABBITMQ_OPERATOR_INSTALL_ROLE_ARN", self.workflow)
+        self.assertIn("AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}", self.workflow)
+        self.assertNotIn("AWS_RABBITMQ_OPERATOR_INSTALL_ROLE_ARN", self.workflow)
+        self.assertIn("test \"$AWS_ROLE_ARN\" = arn:aws:iam::679857346122:role/FoodLabelFlowStagingDeploy", self.workflow)
         self.assertIn("test \"$AWS_ROLE_ARN\" != \"$AWS_PLAN_ROLE_ARN\"", self.workflow)
-        self.assertIn("test \"$AWS_ROLE_ARN\" != \"$AWS_DEPLOY_ROLE_ARN\"", self.workflow)
         self.assertIn("test \"$AWS_ACCOUNT_ID\" = 679857346122", self.workflow)
         self.assertIn("test \"$AWS_REGION\" = ap-southeast-1", self.workflow)
         self.assertIn("test \"$EKS_CLUSTER_NAME\" = spectrace-staging", self.workflow)

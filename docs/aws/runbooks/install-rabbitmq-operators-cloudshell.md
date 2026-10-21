@@ -209,4 +209,4 @@ done
 
 Record the lock file, its checksum, the manifest digests verified by the script, the AWS identity ARN/account, cluster ARN/status, context, CRD Established conditions, Deployment Available status, timestamps, approval reference, and any deviation. Never include Secret values or bearer tokens. Keep the evidence for the protected RabbitMQ deployment review.
 
-This document alone does not authorize an installation. The GitHub workflow remains gated by the protected staging Environment, the dedicated Operator install role, the staging-vpc runner, and M1's approved window. CloudShell use needs a separate M1 decision and approval.
+This document alone does not authorize an installation. The GitHub workflow remains gated by the protected staging Environment, the existing `AWS_DEPLOY_ROLE_ARN` (`FoodLabelFlowStagingDeploy`, whose window-scoped cluster-admin association M1 accepted on #102 and removes at teardown), the staging-vpc runner, and M1's approved window. CloudShell use needs a separate M1 decision and approval.

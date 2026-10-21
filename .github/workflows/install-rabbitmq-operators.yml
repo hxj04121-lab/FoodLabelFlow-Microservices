@@ -34,9 +34,8 @@ jobs:
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
-      AWS_ROLE_ARN: ${{ vars.AWS_RABBITMQ_OPERATOR_INSTALL_ROLE_ARN }}
+      AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
-      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
       APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
     steps:
@@ -55,9 +54,10 @@ jobs:
           test "$AWS_REGION" = ap-southeast-1
           test "$EKS_CLUSTER_NAME" = spectrace-staging
           test -n "$AWS_ROLE_ARN"
-          case "$AWS_ROLE_ARN" in arn:aws:iam::679857346122:role/*) ;; *) echo '::error::Unexpected Operator install role ARN.'; exit 1 ;; esac
+          # M1 decision (21 Oct, #103): install with the existing deploy role, which already holds the
+          # window-scoped cluster-admin association accepted on #102; no second cluster-admin principal.
+          test "$AWS_ROLE_ARN" = arn:aws:iam::679857346122:role/FoodLabelFlowStagingDeploy
           test "$AWS_ROLE_ARN" != "$AWS_PLAN_ROLE_ARN"
-          test "$AWS_ROLE_ARN" != "$AWS_DEPLOY_ROLE_ARN"
           KUBECONFIG="$RUNNER_TEMP/rabbitmq-operator-kubeconfig-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           printf 'KUBECONFIG=%s\n' "$KUBECONFIG" >> "$GITHUB_ENV"
           python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
