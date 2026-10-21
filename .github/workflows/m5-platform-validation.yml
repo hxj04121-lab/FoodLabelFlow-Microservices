@@ -18,6 +18,9 @@ on:
       - 'tests/test_helm_release_inventory.py'
       - 'tests/test_staging_rds_values.py'
       - 'tests/test_staging_service_digests.py'
+      - 'tests/test_operator_install_workflow.py'
+      - 'tests/test_operator_install_ownership.py'
+      - 'tests/test_operator_manifest_lock.py'
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
@@ -41,6 +44,9 @@ on:
       - 'tests/test_helm_release_inventory.py'
       - 'tests/test_staging_rds_values.py'
       - 'tests/test_staging_service_digests.py'
+      - 'tests/test_operator_install_workflow.py'
+      - 'tests/test_operator_install_ownership.py'
+      - 'tests/test_operator_manifest_lock.py'
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
@@ -96,6 +102,9 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_helm_release_inventory.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_rds_values.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_service_digests.py' -v
+          python3 -m unittest discover -s tests -p 'test_operator_install_workflow.py' -v
+          python3 -m unittest discover -s tests -p 'test_operator_install_ownership.py' -v
+          python3 -m unittest discover -s tests -p 'test_operator_manifest_lock.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_window.py' -v
           bash tests/test-runtime-secrets.sh
           bash tests/test_mysql_bootstrap_workflow_guard.sh
