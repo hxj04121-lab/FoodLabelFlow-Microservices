@@ -24,6 +24,9 @@ class StagingTerraformApplyWorkflowTest(unittest.TestCase):
 
     def test_uses_a_separate_apply_identity_and_fails_closed_on_target_mismatch(self):
         self.assertIn("vars.AWS_APPLY_ROLE_ARN", self.apply)
+        self.assertIn('test "$AWS_ROLE_ARN" = arn:aws:iam::679857346122:role/spectrace-staging-github-apply', self.apply)
+        self.assertNotIn("arn:aws:iam::679857346122:role/*)", self.apply)
+        self.assertIn('assert c["resourcesVpcConfig"]["endpointPublicAccess"] is False', self.apply)
         self.assertIn("test \"$AWS_ROLE_ARN\" != \"$AWS_PLAN_ROLE_ARN\"", self.apply)
         self.assertIn("test \"$AWS_ROLE_ARN\" != \"$AWS_DEPLOY_ROLE_ARN\"", self.apply)
         self.assertIn("test \"$AWS_ACCOUNT_ID\" = 679857346122", self.apply)

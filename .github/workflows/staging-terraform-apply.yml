@@ -102,7 +102,8 @@ jobs:
           test "$TF_STATE_KEY" = terraform.tfstate
           test "$STAGING_TF_WORKSPACE" = staging
           test -n "$AWS_ROLE_ARN" && test -n "$TF_PLAN_ENCRYPTION_KEY"
-          case "$AWS_ROLE_ARN" in arn:aws:iam::679857346122:role/*) ;; *) echo '::error::Unexpected Terraform Apply role ARN.'; exit 1 ;; esac
+          # M1-approved dedicated Apply role; any other role in the account is rejected.
+          test "$AWS_ROLE_ARN" = arn:aws:iam::679857346122:role/spectrace-staging-github-apply || { echo '::error::Unexpected Terraform Apply role ARN.'; exit 1; }
           test "$AWS_ROLE_ARN" != "$AWS_PLAN_ROLE_ARN"
           test "$AWS_ROLE_ARN" != "$AWS_DEPLOY_ROLE_ARN"
           umask 077
@@ -204,7 +205,7 @@ jobs:
           expected_role=${AWS_ROLE_ARN##*/}
           case "$actual_arn" in "arn:aws:sts::$AWS_ACCOUNT_ID:assumed-role/$expected_role/"*) ;; *) echo '::error::AWS session is not the approved Apply role.'; exit 1 ;; esac
           cluster=$(aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --output json)
-          printf '%s' "$cluster" | python3 -c 'import json,sys; c=json.load(sys.stdin)["cluster"]; assert c["status"] == "ACTIVE"; assert c["arn"] == "arn:aws:eks:ap-southeast-1:679857346122:cluster/spectrace-staging"; assert c["resourcesVpcConfig"]["endpointPrivateAccess"] is True'
+          printf '%s' "$cluster" | python3 -c 'import json,sys; c=json.load(sys.stdin)["cluster"]; assert c["status"] == "ACTIVE"; assert c["arn"] == "arn:aws:eks:ap-southeast-1:679857346122:cluster/spectrace-staging"; assert c["resourcesVpcConfig"]["endpointPrivateAccess"] is True; assert c["resourcesVpcConfig"]["endpointPublicAccess"] is False'
           state_head=$(aws s3api head-object --bucket "$TF_STATE_BUCKET" --key spectrace/staging/terraform.tfstate --query VersionId --output text)
           test "$state_head" = "$APPROVED_STATE_VERSION_ID"
           aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --kubeconfig "$KUBECONFIG" --alias "$EKS_CLUSTER_NAME" >/dev/null

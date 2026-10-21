@@ -1,0 +1,207 @@
+name: Bootstrap Terraform Plan read-only Kubernetes RBAC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-plan-readonly-rbac
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, staging-vpc]
+    environment: staging
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      RBAC_TEMP_PREFIX: plan-rbac-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.1
+      - name: Initialize a per-run temporary kubeconfig
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RUNNER_TEMP"
+          echo "KUBECONFIG=$RUNNER_TEMP/$RBAC_TEMP_PREFIX-kubeconfig" >> "$GITHUB_ENV"
+      - name: Validate main, protected inputs, and the reviewed manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$AWS_ACCOUNT_ID" = 679857346122
+          test "$AWS_REGION" = ap-southeast-1
+          test "$EKS_CLUSTER_NAME" = spectrace-staging
+          test "$AWS_DEPLOY_ROLE_ARN" = arn:aws:iam::679857346122:role/FoodLabelFlowStagingDeploy
+          manifest="$GITHUB_WORKSPACE/infra/terraform/manual/plan-readonly-rbac.yaml"
+          test -f "$manifest"
+          expected_sha256=1733291f9f42f2dd242f7de91ce564c7e381d93a0b39570e16694d326aad12b3
+          actual_sha256=$(sha256sum "$manifest" | cut -d' ' -f1)
+          test "$actual_sha256" = "$expected_sha256"
+          echo '::notice::The fixed Plan RBAC manifest matches the reviewed SHA-256.'
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: plan-rbac-${{ github.run_id }}
+      - name: Verify AWS identity, private EKS cluster, and Kubernetes context
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '::warning::FoodLabelFlowStagingDeploy currently has cluster-scope AmazonEKSClusterAdminPolicy. This run is limited by this workflow to the fixed four-object Plan RBAC manifest; M1 must approve this existing privilege risk before dispatch.'
+          identity=$(aws sts get-caller-identity --query Arn --output text)
+          aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" > "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-cluster.json"
+          cluster_arn=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cluster"]["arn"])' "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-cluster.json")
+          python3 - "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-cluster.json" <<'PY'
+          import json, sys
+          cluster = json.load(open(sys.argv[1]))["cluster"]
+          config = cluster.get("resourcesVpcConfig", {})
+          if cluster.get("name") != "spectrace-staging" or cluster.get("status") != "ACTIVE":
+              raise SystemExit("The target EKS cluster name or status is unexpected.")
+          if config.get("endpointPrivateAccess") is not True or config.get("endpointPublicAccess") is not False:
+              raise SystemExit("The target cluster is not private-only as expected.")
+          print("Verified active private-only spectrace-staging.")
+          PY
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --kubeconfig "$KUBECONFIG" >/dev/null
+          cluster_context=$(kubectl config current-context)
+          python3 platform/gateway/validate-deploy-target.py --account-id "$AWS_ACCOUNT_ID" \
+            --role-arn "$AWS_DEPLOY_ROLE_ARN" --caller-arn "$identity" --region "$AWS_REGION" \
+            --cluster "$EKS_CLUSTER_NAME" --cluster-arn "$cluster_arn" --context "$cluster_context"
+          kubectl cluster-info >/dev/null
+          kubectl auth whoami -o json > "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-kubernetes-identity.json"
+          python3 - "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-kubernetes-identity.json" <<'PY'
+          import json, sys
+          doc = json.load(open(sys.argv[1]))
+          username = doc.get("status", {}).get("userInfo", {}).get("username", "")
+          if "assumed-role/FoodLabelFlowStagingDeploy/" not in username:
+              raise SystemExit("Kubernetes context did not authenticate as FoodLabelFlowStagingDeploy.")
+          print("Verified Kubernetes identity is FoodLabelFlowStagingDeploy; identity token details were not logged.")
+          PY
+      - name: Check for RBAC conflicts and create only the fixed reviewed objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest="$GITHUB_WORKSPACE/infra/terraform/manual/plan-readonly-rbac.yaml"
+          objects=(
+            'clusterrole|spectrace-staging-plan-readonly|'
+            'clusterrolebinding|spectrace-staging-plan-readonly|'
+            'role|spectrace-staging-plan-lbc-deployment-reader|kube-system'
+            'rolebinding|spectrace-staging-plan-lbc-deployment-reader|kube-system'
+          )
+          for required in 'create clusterroles' 'create clusterrolebindings' 'create roles' 'create rolebindings'; do
+            read -r verb resource <<< "$required"
+            args=(auth can-i "$verb" "$resource")
+            if [[ "$resource" == roles || "$resource" == rolebindings ]]; then args+=(--namespace kube-system); fi
+            test "$(kubectl "${args[@]}")" = yes
+          done
+          existing=()
+          for object in "${objects[@]}"; do
+            IFS='|' read -r kind name namespace <<< "$object"
+            args=(get "$kind" "$name" --ignore-not-found -o name)
+            if [[ -n "$namespace" ]]; then args+=(--namespace "$namespace"); fi
+            found=$(kubectl "${args[@]}")
+            if [[ -n "$found" ]]; then existing+=("$found"); fi
+          done
+          if (( ${#existing[@]} > 0 )); then
+            echo '::error::At least one target RBAC object already exists. No object was changed; M1 must review ownership and drift.'
+            printf 'Existing object: %s\n' "${existing[@]}"
+            exit 1
+          fi
+          kubectl create --field-manager=foodlabelflow-plan-rbac-bootstrap -f "$manifest" > "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-created-rbac.txt"
+          echo 'Created only the four objects in the fixed, SHA-pinned manifest.'
+      - name: Verify exact RBAC rules and Plan Role read-only authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl get clusterrole spectrace-staging-plan-readonly -o json > "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-plan-clusterrole.json"
+          kubectl get clusterrolebinding spectrace-staging-plan-readonly -o json > "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-plan-clusterrolebinding.json"
+          kubectl get role spectrace-staging-plan-lbc-deployment-reader --namespace kube-system -o json > "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-plan-lbc-role.json"
+          kubectl get rolebinding spectrace-staging-plan-lbc-deployment-reader --namespace kube-system -o json > "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-plan-lbc-rolebinding.json"
+          python3 - "$RUNNER_TEMP/$RBAC_TEMP_PREFIX" <<'PY'
+          import json, pathlib, sys
+          prefix_path = pathlib.Path(sys.argv[1])
+          root = prefix_path.parent
+          prefix = prefix_path.name
+          expected_group = "spectrace-staging-github-plan-readonly"
+          read = ["get", "list", "watch"]
+          expected_cluster_rules = [
+              {"apiGroups": [""], "resources": ["namespaces"], "verbs": read},
+              {"apiGroups": ["storage.k8s.io"], "resources": ["storageclasses"], "verbs": read},
+              {"apiGroups": ["apiextensions.k8s.io"], "resources": ["customresourcedefinitions"], "verbs": read},
+              {"apiGroups": ["networking.k8s.io"], "resources": ["networkpolicies"], "verbs": read},
+              {"apiGroups": ["rbac.authorization.k8s.io"], "resources": ["roles", "rolebindings", "clusterroles", "clusterrolebindings"], "verbs": read},
+          ]
+          def rules(doc):
+              return [{key: rule[key] for key in ("apiGroups", "resources", "verbs", "resourceNames") if key in rule}
+                      for rule in doc.get("rules", [])]
+          cluster_role = json.load(open(root / f"{prefix}-plan-clusterrole.json"))
+          if cluster_role.get("metadata", {}).get("name") != "spectrace-staging-plan-readonly" or rules(cluster_role) != expected_cluster_rules:
+              raise SystemExit("ClusterRole does not exactly match the reviewed read-only rules.")
+          role = json.load(open(root / f"{prefix}-plan-lbc-role.json"))
+          if role.get("metadata", {}).get("namespace") != "kube-system" or role.get("metadata", {}).get("name") != "spectrace-staging-plan-lbc-deployment-reader" or rules(role) != [{"apiGroups": ["apps"], "resources": ["deployments"], "verbs": ["get"], "resourceNames": ["aws-load-balancer-controller"]}]:
+              raise SystemExit("kube-system access is not limited to get on the aws-load-balancer-controller Deployment.")
+          cluster_binding = json.load(open(root / f"{prefix}-plan-clusterrolebinding.json"))
+          if cluster_binding.get("roleRef") != {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "spectrace-staging-plan-readonly"} or cluster_binding.get("subjects") != [{"kind": "Group", "name": expected_group, "apiGroup": "rbac.authorization.k8s.io"}]:
+              raise SystemExit("ClusterRoleBinding does not bind only the Plan Role group.")
+          role_binding = json.load(open(root / f"{prefix}-plan-lbc-rolebinding.json"))
+          if role_binding.get("metadata", {}).get("namespace") != "kube-system" or role_binding.get("roleRef") != {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": "spectrace-staging-plan-lbc-deployment-reader"} or role_binding.get("subjects") != [{"kind": "Group", "name": expected_group, "apiGroup": "rbac.authorization.k8s.io"}]:
+              raise SystemExit("RoleBinding does not bind only the Plan Role group in kube-system.")
+          print("Verified all four RBAC object names, namespaces, bindings, and exact read-only rules.")
+          PY
+          plan_user=spectrace-staging-github-plan-rbac-verification
+          plan_group=spectrace-staging-github-plan-readonly
+          check() {
+            local expected="$1" verb="$2" resource="$3" namespace="$4"
+            args=(auth can-i "$verb" "$resource" --as="$plan_user" --as-group="$plan_group")
+            if [[ -n "$namespace" ]]; then args+=(--namespace "$namespace"); fi
+            actual=$(kubectl "${args[@]}")
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::Expected Plan Role authorization '$expected' for $verb $resource${namespace:+ in $namespace}; received '$actual'."
+              exit 1
+            fi
+          }
+          for resource in namespaces storageclasses.storage.k8s.io customresourcedefinitions.apiextensions.k8s.io clusterroles.rbac.authorization.k8s.io clusterrolebindings.rbac.authorization.k8s.io; do
+            for verb in get list watch; do check yes "$verb" "$resource" ""; done
+          done
+          for resource in networkpolicies.networking.k8s.io roles.rbac.authorization.k8s.io rolebindings.rbac.authorization.k8s.io; do
+            for verb in get list watch; do check yes "$verb" "$resource" default; done
+          done
+          check yes get deployments.apps/aws-load-balancer-controller kube-system
+          check no list deployments.apps kube-system
+          check no get deployments.apps/coredns kube-system
+          for verb in get list watch; do check no "$verb" secrets kube-system; done
+          for verb in get list watch; do check no "$verb" secrets default; done
+          check no create clusterroles ""
+          check no delete networkpolicies.networking.k8s.io default
+          echo 'Verified Plan Role reads and the expected write, Secret, and namespace denials; no Secret contents were read.'
+          printf 'Verified resource metadata: ClusterRole/spectrace-staging-plan-readonly rv=%s; ClusterRoleBinding/spectrace-staging-plan-readonly rv=%s; Role/kube-system/spectrace-staging-plan-lbc-deployment-reader rv=%s; RoleBinding/kube-system/spectrace-staging-plan-lbc-deployment-reader rv=%s\n' \
+            "$(kubectl get clusterrole spectrace-staging-plan-readonly -o jsonpath='{.metadata.resourceVersion}')" \
+            "$(kubectl get clusterrolebinding spectrace-staging-plan-readonly -o jsonpath='{.metadata.resourceVersion}')" \
+            "$(kubectl get role spectrace-staging-plan-lbc-deployment-reader --namespace kube-system -o jsonpath='{.metadata.resourceVersion}')" \
+            "$(kubectl get rolebinding spectrace-staging-plan-lbc-deployment-reader --namespace kube-system -o jsonpath='{.metadata.resourceVersion}')"
+      - name: Remove temporary kubeconfig
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${KUBECONFIG:-}" ]]; then rm -f "$KUBECONFIG"; fi
+          rm -f "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-cluster.json" \
+            "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-kubernetes-identity.json" \
+            "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-created-rbac.txt" \
+            "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-plan-clusterrole.json" \
+            "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-plan-clusterrolebinding.json" \
+            "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-plan-lbc-role.json" \
+            "$RUNNER_TEMP/$RBAC_TEMP_PREFIX-plan-lbc-rolebinding.json"
