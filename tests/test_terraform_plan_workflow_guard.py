@@ -57,16 +57,24 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
             workflow.index('python3 "$GITHUB_WORKSPACE/scripts/staging/guard_staging_ownership.py"'),
             workflow.index("terraform plan -input=false"),
         )
-        self.assertIn("get secrets -n kube-system -l owner=helm,name=aws-load-balancer-controller", workflow)
-        self.assertIn("--server-print=true --no-headers", workflow)
-        self.assertNotRegex(workflow, r"get secrets[^\n]*(?:-o\s*(?:json|yaml)|-ojson|-oyaml)")
-        self.assertNotIn(".data", workflow)
+        self.assertIn("get deployment aws-load-balancer-controller -n kube-system", workflow)
+        self.assertIn("meta.helm.sh/release-name", workflow)
+        self.assertNotIn("get secrets", workflow)
+        self.assertNotIn("helm-metadata", workflow)
         self.assertIn("aws iam get-role --role-name", workflow)
         self.assertIn("aws iam get-policy --policy-arn", workflow)
         self.assertNotIn("AssumeRolePolicyDocument", workflow)
         self.assertNotIn("terraform apply", workflow)
         self.assertNotIn("terraform workspace new", workflow)
         self.assertNotIn("terraform import", workflow)
+
+    def test_plan_rbac_manifest_has_no_secret_read_and_only_reads_the_named_lbc_deployment(self):
+        manifest = (Path(__file__).resolve().parents[1] / "infra/terraform/manual/plan-readonly-rbac.yaml").read_text()
+        self.assertNotIn("resources: [secrets]", manifest)
+        self.assertIn("resources: [deployments]", manifest)
+        self.assertIn("resourceNames: [aws-load-balancer-controller]", manifest)
+        self.assertEqual(manifest.count("namespace: kube-system"), 2)
+        self.assertIn("verbs: [get]", manifest)
 
     def test_plan_pins_state_version_workspace_and_existing_ownership(self):
         workflow = WORKFLOW.read_text()
@@ -152,7 +160,7 @@ class TerraformPlanWorkflowGuardTest(unittest.TestCase):
             "iam-attachment-name.txt",
             "platform-resources.txt",
             "platform-read-error.txt",
-            "lbc-helm-metadata-names.txt",
+            "lbc-helm-owner.txt",
             "ebs-addon-name.txt",
         ):
             self.assertIn(f'$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/{filename}', workflow)

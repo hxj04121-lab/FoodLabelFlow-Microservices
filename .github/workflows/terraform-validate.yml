@@ -227,9 +227,10 @@ jobs:
             get namespaces --server-print=true --no-headers \
             > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/namespace-names.txt"
           kubectl --kubeconfig "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/kubeconfig" \
-            get secrets -n kube-system -l owner=helm,name=aws-load-balancer-controller \
-            --server-print=true --no-headers \
-            > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/lbc-helm-metadata-names.txt"
+            get deployment aws-load-balancer-controller -n kube-system \
+            -o json \
+            | python3 -c 'import json,sys; m=json.load(sys.stdin)["metadata"]; print("\t".join((m.get("labels",{}).get("app.kubernetes.io/managed-by",""),m.get("annotations",{}).get("meta.helm.sh/release-name",""),m.get("annotations",{}).get("meta.helm.sh/release-namespace",""))))' \
+            > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/lbc-helm-owner.txt"
           rbac_inventory="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/managed-rbac-resources.txt"
           : > "$rbac_inventory"
           record_namespaced_rbac() {
@@ -312,7 +313,7 @@ jobs:
             --iam-resources "$iam_inventory" \
             --rbac-resources "$rbac_inventory" \
             --platform-resources "$platform_inventory" \
-            --helm-metadata "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/lbc-helm-metadata-names.txt" \
+            --lbc-helm-owner "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/lbc-helm-owner.txt" \
             --allowlist "$GITHUB_WORKSPACE/scripts/staging/staging-ownership-allowlist.json" \
             --aws-account-id "$AWS_ACCOUNT_ID" \
             --cluster-name "$STAGING_CLUSTER_NAME" \
