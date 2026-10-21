@@ -161,3 +161,16 @@ class ReviewedCreateBeforeDestroyTest(unittest.TestCase):
         self.assertEqual(summarize(self.change(self.RULE, ["delete", "create"])).returncode, 1)
         self.assertEqual(summarize(self.change(self.RULE, ["delete"])).returncode, 1)
         self.assertEqual(summarize(self.change("module.eks[0].aws_security_group_rule.nodes_self_dns_udp", ["create", "delete"])).returncode, 1)
+
+
+class FieldDetailTest(unittest.TestCase):
+    def test_update_lists_field_and_tag_key_names_without_values(self):
+        result = summarize([{
+            "address": "module.network.aws_vpc.this", "mode": "managed", "type": "aws_vpc",
+            "change": {"actions": ["update"],
+                       "before": {"cidr_block": "10.40.0.0/16", "tags": {"Owner": "old-secret"}, "tags_all": {"Owner": "old-secret"}},
+                       "after": {"cidr_block": "10.40.0.0/16", "tags": {"Owner": "new-secret"}, "tags_all": {"Owner": "new-secret"}},
+                       "after_unknown": {"region": True}},
+        }])
+        self.assertIn("[fields: region; tags[Owner]; tags_all[Owner]]", result.stdout)
+        self.assertNotIn("secret", result.stdout)
