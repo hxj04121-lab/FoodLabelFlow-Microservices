@@ -9,6 +9,7 @@ on:
       - '.github/workflows/service-cicd-reusable.yml'
       - '.github/workflows/compliance-kind-ci.yml'
       - '.github/workflows/deploy-business-services.yml'
+      - '.github/workflows/deploy-rabbitmq.yml'
       - '.github/workflows/deploy-frontend.yml'
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
@@ -20,6 +21,8 @@ on:
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
+      - 'tests/test_rabbitmq_*.py'
+      - 'docs/aws/runbooks/install-rabbitmq-operators-cloudshell.md'
   push:
     branches: [main]
     paths:
@@ -29,6 +32,7 @@ on:
       - '.github/workflows/service-cicd-reusable.yml'
       - '.github/workflows/compliance-kind-ci.yml'
       - '.github/workflows/deploy-business-services.yml'
+      - '.github/workflows/deploy-rabbitmq.yml'
       - '.github/workflows/deploy-frontend.yml'
       - '.github/workflows/stcn-15-runtime-secrets.yml'
       - 'scripts/check_m5_platform.py'
@@ -40,6 +44,8 @@ on:
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
       - 'tests/test_staging_window.py'
+      - 'tests/test_rabbitmq_*.py'
+      - 'docs/aws/runbooks/install-rabbitmq-operators-cloudshell.md'
 
 permissions:
   contents: read
@@ -52,6 +58,29 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: python -m pip install PyYAML==6.0.3
+      - name: Validate protected RabbitMQ workflows with pinned actionlint
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=1.7.12
+          checksums="$RUNNER_TEMP/actionlint_${version}_checksums.txt"
+          archive="$RUNNER_TEMP/actionlint_${version}_linux_amd64.tar.gz"
+          trap 'rm -f "$checksums" "$archive" "$RUNNER_TEMP/actionlint"' EXIT
+          curl --fail --location --silent --show-error \
+            "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_checksums.txt" \
+            --output "$checksums"
+          printf '%s  %s\n' \
+            433028cf0ba3c42163ea1a668dedce30fcdbe84fe912b1a5e288c006eab8a4f5 "$checksums" \
+            | sha256sum --check --status
+          asset_sha=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          grep -F "  actionlint_${version}_linux_amd64.tar.gz" "$checksums" \
+            | grep -F "$asset_sha"
+          curl --fail --location --silent --show-error \
+            "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz" \
+            --output "$archive"
+          printf '%s  %s\n' "$asset_sha" "$archive" | sha256sum --check --status
+          tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" .github/workflows/deploy-rabbitmq.yml .github/workflows/m5-platform-validation.yml
       - uses: hashicorp/setup-terraform@v3
         with: {terraform_version: 1.15.8}
       - run: terraform fmt -check -recursive
@@ -74,8 +103,33 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_alloy_dlq_scrape.py' -v
       - run: bash -n scripts/verify_eks_addons.sh
       - uses: azure/setup-kubectl@v4
+        with: {version: v1.36.1}
       - run: kubectl kustomize deploy/operators >/dev/null
-      - run: kubectl kustomize deploy/operators/rabbitmq >/dev/null
+      - run: kubectl kustomize deploy/operators/rabbitmq --load-restrictor LoadRestrictionsNone >/dev/null
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm ci
+        working-directory: deploy/helm
+      - run: npm test
+        working-directory: deploy/helm
+      - name: Verify RabbitMQ deploy boundary and immutable operator locks
+        run: |
+          REQUIRE_KUBECTL_V136=1 python3 -m unittest discover -s tests -p 'test_rabbitmq_*.py' -v
+          set -euo pipefail
+          manifest_dir="$RUNNER_TEMP/rabbitmq-operator-manifests"
+          mkdir -m 700 "$manifest_dir"
+          lock_rows="$RUNNER_TEMP/rabbitmq-manifest-lock.tsv"
+          python3 - <<'PY' > "$lock_rows"
+          import json
+          for row in json.load(open('deploy/operators/rabbitmq/operator-manifests.lock'))['manifests']:
+              print(f"{row['file']}\t{row['url']}")
+          PY
+          trap 'rm -f "$manifest_dir"/*.yaml "$lock_rows"; rmdir "$manifest_dir"' EXIT
+          while IFS=$'\t' read -r filename url; do
+            curl --fail --location --silent --show-error "$url" --output "$manifest_dir/$filename"
+          done < "$lock_rows"
+          python3 scripts/staging/verify_operator_manifest_lock.py --manifest-dir "$manifest_dir"
+          python3 scripts/staging/verify_mto_permission_schema.py "$manifest_dir/messaging-topology-operator.yaml"
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs

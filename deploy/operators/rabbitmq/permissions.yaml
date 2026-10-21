@@ -1,0 +1,54 @@
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: specification-rabbitmq
+  namespace: specification
+spec:
+  vhost: /
+  userReference: {name: specification-rabbitmq}
+  permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^$"}
+  rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: formulation-rabbitmq
+  namespace: formulation
+spec:
+  vhost: /
+  userReference: {name: formulation-rabbitmq}
+  permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^formulation\\.specification-published$"}
+  rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: compliance-rabbitmq
+  namespace: compliance
+spec:
+  vhost: /
+  userReference: {name: compliance-rabbitmq}
+  permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^compliance\\.(specification-published|formula-published|label-published)$"}
+  rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: label-workflow-rabbitmq
+  namespace: label-workflow
+spec:
+  vhost: /
+  userReference: {name: label-workflow-rabbitmq}
+  permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^label-workflow\\.(formula-published|impact-finding)$"}
+  rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: staging-smoke
+  namespace: rabbitmq
+spec:
+  vhost: /
+  userReference: {name: staging-smoke}
+  permissions: {configure: "^$", write: "^spectrace\\.events$", read: "^staging-smoke\\.smoke$"}
+  rabbitmqClusterReference: {name: spectrace, namespace: rabbitmq}

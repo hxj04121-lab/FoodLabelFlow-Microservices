@@ -1,0 +1,34 @@
+{{- range $consumer := .Values.consumers }}
+{{- $service := $consumer.service }}
+{{- $namespace := $consumer.namespace }}
+{{- range $queue := $consumer.queues }}
+{{- $queueName := printf "%s.%s" $service $queue.name }}
+{{- $routingKeys := $queue.routingKeys | default (list $queue.routingKey) }}
+{{- range $index, $key := $routingKeys }}
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Binding
+metadata:
+  name: {{ printf "%s-%s-event-%d" $service $queue.name $index }}
+  namespace: {{ $namespace }}
+spec:
+  source: {{ $.Values.rabbitmq.exchange | quote }}
+  destination: {{ $queueName | quote }}
+  destinationType: queue
+  routingKey: {{ $key | quote }}
+  rabbitmqClusterReference: {name: {{ $.Values.rabbitmq.name }}, namespace: {{ $.Values.rabbitmq.namespace }}}
+{{- end }}
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Binding
+metadata:
+  name: {{ printf "%s-%s-dead-letter" $service $queue.name }}
+  namespace: {{ $namespace }}
+spec:
+  source: {{ $.Values.rabbitmq.deadLetterExchange | quote }}
+  destination: {{ printf "%s.dlq" $queueName | quote }}
+  destinationType: queue
+  routingKey: {{ $queueName | quote }}
+  rabbitmqClusterReference: {name: {{ $.Values.rabbitmq.name }}, namespace: {{ $.Values.rabbitmq.namespace }}}
+{{- end }}
+{{- end }}

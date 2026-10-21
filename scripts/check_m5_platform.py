@@ -26,15 +26,19 @@ expected = {
     "formulation": {"specification-published"},
     "label-workflow": {"formula-published", "impact-finding"},
 }
-assert len(queues) == 12, "each of six consumer queues needs one durable queue and one DLQ"
-assert len(bindings) == 13 and len(policies) == 6, \
-    "six queues need six event and six DLQ bindings, plus the second LabelPublished routing key"
+assert len(queues) == 14, "the six service queues plus the isolated smoke queue each need a durable queue and one DLQ"
+assert len(bindings) == 15 and len(policies) == 7, \
+    "seven queues need seven event and seven DLQ bindings, plus the second LabelPublished routing key"
 assert not users and not permissions, "service users are owned by deploy/operators/rabbitmq/users.yaml"
+resource_ids = [(x["apiVersion"], x["kind"], x["metadata"].get("namespace", ""), x["metadata"]["name"]) for x in resources]
+assert len(set(resource_ids)) == len(resource_ids), "each topology resource must have one rendered authority"
 assert {x["metadata"]["name"] for x in policies} == {
     f"{service}-{queue}-delivery-policy" for service, names in expected.items() for queue in names
-}
-for service, names in expected.items():
-    entries = [q for q in queues if q["metadata"]["namespace"] == service]
+} | {"staging-smoke-smoke-delivery-policy"}
+for service, namespace, names in [
+    (service, service, names) for service, names in expected.items()
+] + [("staging-smoke", "rabbitmq", {"smoke"})]:
+    entries = [q for q in queues if q["metadata"]["namespace"] == namespace]
     assert {q["spec"]["name"].split(".", 1)[1].removesuffix(".dlq") for q in entries} == names
 
 label_bindings = [item["spec"] for item in bindings
@@ -58,26 +62,44 @@ assert len(impact_bindings) == 1
 assert impact_bindings[0]["routingKey"] == "impact.finding.v1", \
     "ImpactFinding.v1 must bind to canonical impact.finding.v1, not the hyphenated queue name"
 
-user_resources = list(yaml.safe_load_all((ROOT / "deploy/operators/rabbitmq/users.yaml").read_text()))
-user_resources = [item for item in user_resources if item]
-users = [item for item in user_resources if item["kind"] == "User"]
-permissions = [item for item in user_resources if item["kind"] == "Permission"]
-assert len(users) == len(permissions) == 4
-for service in ("specification", *expected):
-    user = next(item for item in permissions if item["spec"]["user"] == f"{service}-rabbitmq")
-    assert user["metadata"]["namespace"] == service
-    assert user["spec"]["permissions"]["write"] == "^spectrace\\.events$"
-    read = user["spec"]["permissions"]["read"]
+users = [item for item in yaml.safe_load_all((ROOT / "deploy/operators/rabbitmq/users.yaml").read_text()) if item]
+permissions = [item for item in yaml.safe_load_all((ROOT / "deploy/operators/rabbitmq/permissions.yaml").read_text()) if item]
+assert len(users) == len(permissions) == 5
+assert all(item["kind"] == "User" for item in users)
+assert all(item["kind"] == "Permission" for item in permissions)
+smoke_user = next(item for item in users if item["metadata"]["name"] == "staging-smoke")
+assert smoke_user["spec"]["tags"] == ["management"], "Only the HTTP API smoke user needs the Management tag."
+assert all(item["spec"]["tags"] == [] for item in users if item is not smoke_user), \
+    "Business service users must keep the default least-privilege tags."
+assert all("importCredentialsSecret" not in item["spec"] for item in users)
+for service in ("specification", "formulation", "compliance", "label-workflow"):
+    permission = next(item for item in permissions if item["metadata"]["name"] == f"{service}-rabbitmq")
+    assert permission["metadata"]["namespace"] == service
+    assert permission["spec"]["userReference"] == {"name": f"{service}-rabbitmq"}
+    matching_user = next(item for item in users if item["metadata"]["namespace"] == service
+                         and item["metadata"]["name"] == f"{service}-rabbitmq")
+    assert "importCredentialsSecret" not in matching_user["spec"]
+    assert permission["spec"]["permissions"]["write"] == "^spectrace\\.events$"
+    read = permission["spec"]["permissions"]["read"]
     if service == "specification":
         assert read == "^$"
     else:
         assert read.startswith(f"^{service}\\.") and read.count("|") + 1 == len(expected[service])
-assert next(item for item in permissions if item["spec"]["user"] == "specification-rabbitmq")["spec"]["permissions"]["read"] == "^$"
+assert next(item for item in permissions if item["metadata"]["name"] == "specification-rabbitmq")["spec"]["permissions"]["read"] == "^$"
+smoke_permission = next(item for item in permissions if item["metadata"]["name"] == "staging-smoke")
+assert smoke_permission["metadata"]["namespace"] == "rabbitmq"
+assert smoke_permission["spec"]["userReference"] == {"name": "staging-smoke"}
+assert smoke_permission["spec"]["permissions"] == {
+    "configure": "^$", "write": "^spectrace\\.events$", "read": "^staging-smoke\\.smoke$"
+}
 
 cluster = yaml.safe_load((ROOT / "deploy/operators/rabbitmq/rabbitmq-cluster.yaml").read_text())
 assert cluster["spec"]["replicas"] == 3
 assert cluster["spec"]["persistence"] == {"storageClassName": "ebs-gp3", "storage": "8Gi"}
 assert "default_queue_type = quorum" in cluster["spec"]["rabbitmq"]["additionalConfig"]
+assert cluster["spec"]["override"]["statefulSet"]["spec"]["persistentVolumeClaimRetentionPolicy"] == {
+    "whenDeleted": "Retain", "whenScaled": "Retain"
+}
 
 network = list(yaml.safe_load_all(render("deploy/helm/platform-network-policies")))
 names = {item["metadata"]["name"] for item in network if item}
