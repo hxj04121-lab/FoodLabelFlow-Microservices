@@ -171,8 +171,11 @@ jobs:
           zones={n.get('metadata',{}).get('labels',{}).get('topology.kubernetes.io/zone') for n in ready}
           group=json.load(open(sys.argv[2]))['nodegroup']
           scale=group.get('scalingConfig',{})
-          if group.get('status')!='ACTIVE' or scale.get('desiredSize',0)<3 or group.get('health',{}).get('issues') or len(ready)<3 or len(hosts)<3 or len(zones)<2 or None in hosts or None in zones:
-              raise SystemExit('RabbitMQ requires at least three Ready general nodes across at least two AZs and an ACTIVE general node group.')
+          print(f"general node group: status={group.get('status')} desired={scale.get('desiredSize')} max={scale.get('maxSize')} ready={len(ready)} zones={len(zones)}")
+          # Cluster Autoscaler may scale idle general nodes down; it scales back up for the three Pending brokers.
+          # Three distinct Ready nodes across two AZs are verified after the brokers become Ready.
+          if group.get('status')!='ACTIVE' or scale.get('maxSize',0)<3 or group.get('health',{}).get('issues') or len(ready)<1 or None in hosts or None in zones:
+              raise SystemExit('RabbitMQ requires an ACTIVE, healthy general node group that can scale to three nodes.')
           print(f'General node pool: {len(ready)} Ready nodes across {len(zones)} AZs.')
           PY
 
@@ -191,6 +194,22 @@ jobs:
           done
           test "$(kubectl auth can-i create pods --subresource=portforward --namespace rabbitmq)" = yes
           test "$(kubectl auth can-i get secrets/staging-smoke-user-credentials --namespace rabbitmq)" = yes
+      - name: Repair the ebs-gp3 StorageClass reserved tag before any volume uses it
+        shell: bash
+        run: |
+          set -euo pipefail
+          # EBS CSI rejects user tags under the reserved kubernetes.io prefix, and StorageClass parameters are
+          # immutable. Recreate the class from the reviewed template only while no PersistentVolume uses it.
+          if kubectl get storageclass ebs-gp3 -o json | python3 -c 'import json,sys; p=json.load(sys.stdin).get("parameters",{}); sys.exit(0 if any(k.startswith("tagSpecification") and v.startswith("kubernetes.io/") for k,v in p.items()) else 1)'; then
+            volumes=$(kubectl get persistentvolumes -o json | python3 -c 'import json,sys; print(sum(1 for pv in json.load(sys.stdin)["items"] if pv["spec"].get("storageClassName")=="ebs-gp3"))')
+            test "$volumes" = 0 || { echo '::error::ebs-gp3 has the reserved tag but PersistentVolumes already use it; stop for M1 review.'; exit 1; }
+            if grep -q -F -e 'kubernetes.io/' -e "\${" deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl; then
+              echo '::error::The reviewed ebs-gp3 template still has a reserved tag or an unrendered variable.'; exit 1
+            fi
+            echo '::notice::Recreating ebs-gp3 without the reserved kubernetes.io tag; no PersistentVolume uses it.'
+            kubectl delete storageclass ebs-gp3 --wait=true
+            kubectl create --field-manager=foodlabelflow-rabbitmq-staging -f deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl
+          fi
       - name: Create or verify the owned RabbitMQ Cluster and retained storage
         shell: bash
         run: |
@@ -199,8 +218,21 @@ jobs:
             existing_broker_data=$(kubectl get statefulsets,pods,persistentvolumeclaims --namespace rabbitmq -o name)
             test -z "$existing_broker_data" || { echo '::error::RabbitMQ data or workload objects exist without the expected Cluster; refusing adoption.'; exit 1; }
           fi
+          if [[ -n "$(kubectl get rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq --ignore-not-found -o name)" ]] \
+            && [[ -z "$(kubectl get persistentvolumeclaims --namespace rabbitmq -o jsonpath='{range .items[?(@.status.phase=="Bound")]}{.metadata.name}{"\n"}{end}')" ]]; then
+            # With no Bound PVC the brokers never stored data; recreate the Cluster from the reviewed manifest.
+            # Unbound PVCs are kept and reused by the new StatefulSet.
+            echo '::notice::RabbitmqCluster has no Bound PVC (no broker data); deleting it so the reviewed manifest can be created.'
+            kubectl delete rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq --wait=true --timeout=5m
+          fi
           python3 scripts/staging/apply_rabbitmq_owned.py deploy/operators/rabbitmq/rabbitmq-cluster.yaml
           python3 scripts/staging/apply_rabbitmq_owned.py deploy/kubernetes/staging/rabbitmq/rabbitmq-pdb.yaml
+          # kubectl wait fails at once if the Operator has not created the pods yet; wait for all three to exist first.
+          for _ in $(seq 1 60); do
+            count=$(kubectl get pods --namespace rabbitmq --selector app.kubernetes.io/name=spectrace -o name | wc -l | tr -d ' ')
+            [[ "$count" -ge 3 ]] && break
+            sleep 10
+          done
           kubectl wait --for=condition=Ready pods --namespace rabbitmq --selector app.kubernetes.io/name=spectrace --timeout=15m
           kubectl get pods --namespace rabbitmq --selector app.kubernetes.io/name=spectrace -o json > "$RUNNER_TEMP/rabbitmq-pods.json"
           kubectl get pvc --namespace rabbitmq -o json > "$RUNNER_TEMP/rabbitmq-pvcs.json"
@@ -324,6 +356,25 @@ jobs:
           if not any(message.get("payload") == os.environ["RABBITMQ_SMOKE_PAYLOAD"] for message in messages):
               raise SystemExit("Smoke message was not consumed from the isolated queue.")
           PY
+      - name: Print RabbitMQ and Operator diagnostics on failure (no Secret data)
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          echo '### RabbitmqCluster status'
+          kubectl get rabbitmqclusters.rabbitmq.com --namespace rabbitmq -o wide
+          kubectl get rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq \
+            -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}: {.message}{"\n"}{end}'
+          echo '### Workloads, storage and events in rabbitmq'
+          kubectl get statefulsets,pods,pvc,services --namespace rabbitmq -o wide
+          kubectl get events --namespace rabbitmq --sort-by=.lastTimestamp | tail -n 30
+          echo '### Operators in rabbitmq-system'
+          kubectl get deployments,pods --namespace rabbitmq-system -o wide
+          kubectl get events --namespace rabbitmq-system --sort-by=.lastTimestamp | tail -n 20
+          kubectl logs deployment/rabbitmq-cluster-operator --namespace rabbitmq-system --tail=40
+          echo '### NetworkPolicies'
+          kubectl get networkpolicies --namespace rabbitmq -o name
+          kubectl get networkpolicies --namespace rabbitmq-system -o name
       - name: Remove temporary kubeconfig and staging diagnostics
         if: always()
         shell: bash

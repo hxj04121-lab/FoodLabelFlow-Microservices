@@ -60,9 +60,33 @@ def review_note(item):
     return ""
 
 
+def changed_tag_keys(item, field):
+    before, after = item.get("change", {}).get("before"), item.get("change", {}).get("after")
+    old = (before or {}).get(field) if isinstance(before, dict) else None
+    new = (after or {}).get(field) if isinstance(after, dict) else None
+    old, new = old if isinstance(old, dict) else {}, new if isinstance(new, dict) else {}
+    return sorted(key for key in old.keys() | new.keys() if old.get(key) != new.get(key))
+
+
+def field_detail(item):
+    """Names of changed attributes (and changed tag keys) for an in-place update; never values."""
+    change = item.get("change", {})
+    if change.get("actions") != ["update"] or item["type"] == "aws_eks_node_group":
+        return ""
+    unknown = change.get("after_unknown") if isinstance(change.get("after_unknown"), dict) else {}
+    fields = sorted(set(changed_fields(item)) | {key for key, value in unknown.items() if value is True})
+    if not fields:
+        return ""
+    parts = []
+    for field in fields:
+        keys = changed_tag_keys(item, field) if field in {"tags", "tags_all"} else []
+        parts.append("%s[%s]" % (field, ", ".join(keys)) if keys else field)
+    return " [fields: %s]" % "; ".join(parts)
+
+
 def format_change(item):
-    return "`%s` — `%s`%s" % (
-        item["address"], action_label(item["change"]["actions"]), review_note(item)
+    return "`%s` — `%s`%s%s" % (
+        item["address"], action_label(item["change"]["actions"]), review_note(item), field_detail(item)
     )
 
 

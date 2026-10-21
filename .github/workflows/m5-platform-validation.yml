@@ -29,6 +29,8 @@ on:
       - 'tests/test_operator_script_entrypoints.py'
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
+      - 'tests/test_mysql_execute_sql.py'
+      - 'deploy/mysql/**'
       - 'tests/test_staging_window.py'
       - 'tests/test_staging_plan_rbac_workflow.py'
       - 'tests/test_rabbitmq_*.py'
@@ -62,6 +64,8 @@ on:
       - 'tests/test_operator_script_entrypoints.py'
       - 'tests/test-runtime-secrets.sh'
       - 'tests/test_mysql_bootstrap_workflow_guard.sh'
+      - 'tests/test_mysql_execute_sql.py'
+      - 'deploy/mysql/**'
       - 'tests/test_staging_window.py'
       - 'tests/test_staging_plan_rbac_workflow.py'
       - 'tests/test_rabbitmq_*.py'
@@ -139,6 +143,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_staging_window.py' -v
           bash tests/test-runtime-secrets.sh
           bash tests/test_mysql_bootstrap_workflow_guard.sh
+          python3 -m unittest tests/test_mysql_execute_sql.py -v
       - name: Verify RabbitMQ per-queue DLQ scrape target
         run: python3 -m unittest discover -s tests -p 'test_alloy_dlq_scrape.py' -v
       - run: bash -n scripts/verify_eks_addons.sh
