@@ -194,6 +194,22 @@ jobs:
           done
           test "$(kubectl auth can-i create pods --subresource=portforward --namespace rabbitmq)" = yes
           test "$(kubectl auth can-i get secrets/staging-smoke-user-credentials --namespace rabbitmq)" = yes
+      - name: Repair the ebs-gp3 StorageClass reserved tag before any volume uses it
+        shell: bash
+        run: |
+          set -euo pipefail
+          # EBS CSI rejects user tags under the reserved kubernetes.io prefix, and StorageClass parameters are
+          # immutable. Recreate the class from the reviewed template only while no PersistentVolume uses it.
+          if kubectl get storageclass ebs-gp3 -o json | python3 -c 'import json,sys; p=json.load(sys.stdin).get("parameters",{}); sys.exit(0 if any(k.startswith("tagSpecification") and v.startswith("kubernetes.io/") for k,v in p.items()) else 1)'; then
+            volumes=$(kubectl get persistentvolumes -o json | python3 -c 'import json,sys; print(sum(1 for pv in json.load(sys.stdin)["items"] if pv["spec"].get("storageClassName")=="ebs-gp3"))')
+            test "$volumes" = 0 || { echo '::error::ebs-gp3 has the reserved tag but PersistentVolumes already use it; stop for M1 review.'; exit 1; }
+            if grep -q -F -e 'kubernetes.io/' -e "\${" deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl; then
+              echo '::error::The reviewed ebs-gp3 template still has a reserved tag or an unrendered variable.'; exit 1
+            fi
+            echo '::notice::Recreating ebs-gp3 without the reserved kubernetes.io tag; no PersistentVolume uses it.'
+            kubectl delete storageclass ebs-gp3 --wait=true
+            kubectl create --field-manager=foodlabelflow-rabbitmq-staging -f deploy/kubernetes/staging/ebs-gp3-storageclass.yaml.tmpl
+          fi
       - name: Create or verify the owned RabbitMQ Cluster and retained storage
         shell: bash
         run: |
@@ -203,9 +219,10 @@ jobs:
             test -z "$existing_broker_data" || { echo '::error::RabbitMQ data or workload objects exist without the expected Cluster; refusing adoption.'; exit 1; }
           fi
           if [[ -n "$(kubectl get rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq --ignore-not-found -o name)" ]] \
-            && [[ -z "$(kubectl get statefulsets,pods,persistentvolumeclaims --namespace rabbitmq -o name)" ]]; then
-            # A Cluster that never created a StatefulSet, Pod or PVC holds no data; recreate it from the reviewed manifest.
-            echo '::notice::RabbitmqCluster exists without any StatefulSet, Pod or PVC; deleting it so the reviewed manifest can be created.'
+            && [[ -z "$(kubectl get persistentvolumeclaims --namespace rabbitmq -o jsonpath='{range .items[?(@.status.phase=="Bound")]}{.metadata.name}{"\n"}{end}')" ]]; then
+            # With no Bound PVC the brokers never stored data; recreate the Cluster from the reviewed manifest.
+            # Unbound PVCs are kept and reused by the new StatefulSet.
+            echo '::notice::RabbitmqCluster has no Bound PVC (no broker data); deleting it so the reviewed manifest can be created.'
             kubectl delete rabbitmqclusters.rabbitmq.com spectrace --namespace rabbitmq --wait=true --timeout=5m
           fi
           python3 scripts/staging/apply_rabbitmq_owned.py deploy/operators/rabbitmq/rabbitmq-cluster.yaml
