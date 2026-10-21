@@ -10,7 +10,7 @@ REPO = Path(__file__).resolve().parents[1]
 ALLOWLIST = REPO / "scripts/staging/staging-ownership-allowlist.json"
 ROLE_ARN = "arn:aws:iam::679857346122:role/spectrace-staging-aws_load_balancer_controller"
 POLICY_ARN = "arn:aws:iam::679857346122:policy/spectrace-staging-aws-load-balancer-controller"
-LBC_SECRET = "sh.helm.release.v1.aws-load-balancer-controller.v4 Opaque 1 1d\n"
+LBC_HELM_OWNER = "Helm\taws-load-balancer-controller\tkube-system\n"
 
 
 class StagingOwnershipGuardTest(unittest.TestCase):
@@ -24,7 +24,7 @@ class StagingOwnershipGuardTest(unittest.TestCase):
         iam=None,
         rbac="",
         platform="",
-        helm=LBC_SECRET,
+        helm_owner=LBC_HELM_OWNER,
         account="679857346122",
         cluster="spectrace-staging",
         manage_lbc=False,
@@ -32,7 +32,7 @@ class StagingOwnershipGuardTest(unittest.TestCase):
     ):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            files = {name: root / name for name in ("state", "deployments", "policies", "namespaces", "iam", "rbac", "platform", "helm", "allowlist")}
+            files = {name: root / name for name in ("state", "deployments", "policies", "namespaces", "iam", "rbac", "platform", "helm-owner", "allowlist")}
             values = {
                 "state": state,
                 "deployments": deployments,
@@ -45,7 +45,7 @@ class StagingOwnershipGuardTest(unittest.TestCase):
                 ),
                 "rbac": rbac,
                 "platform": platform,
-                "helm": helm,
+                "helm-owner": helm_owner,
                 "allowlist": json.dumps(allowlist) if allowlist is not None else ALLOWLIST.read_text(),
             }
             for name, value in values.items():
@@ -58,7 +58,7 @@ class StagingOwnershipGuardTest(unittest.TestCase):
                 files["iam"],
                 files["rbac"],
                 files["platform"],
-                files["helm"],
+                files["helm-owner"],
                 files["allowlist"],
                 account,
                 cluster,
@@ -134,11 +134,13 @@ class StagingOwnershipGuardTest(unittest.TestCase):
         issues = self.run_guard(rbac="ClusterRole\tspectrace-staging-node-reader\tcluster\n")
         self.assertTrue(any("staging_deployer_node_reader" in issue for issue in issues))
 
-    def test_missing_or_unexpected_helm_metadata_fails_closed(self):
-        with self.assertRaisesRegex(ValueError, "Secret is missing"):
-            self.run_guard(helm="")
-        with self.assertRaisesRegex(ValueError, "outside the reviewed release name pattern"):
-            self.run_guard(helm="sh.helm.release.v1.other-release.v1 Opaque 1 1d\n")
+    def test_missing_or_unexpected_helm_owner_metadata_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "Helm ownership metadata is missing"):
+            self.run_guard(helm_owner="")
+        with self.assertRaisesRegex(ValueError, "does not match the reviewed release"):
+            self.run_guard(helm_owner="Helm\tother-release\tkube-system\n")
+        with self.assertRaisesRegex(ValueError, "exactly one row"):
+            self.run_guard(helm_owner=LBC_HELM_OWNER + LBC_HELM_OWNER)
 
     def test_account_cluster_and_management_mode_are_pinned(self):
         with self.assertRaisesRegex(ValueError, "AWS identity"):

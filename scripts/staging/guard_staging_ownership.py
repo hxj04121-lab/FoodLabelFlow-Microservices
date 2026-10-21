@@ -103,21 +103,25 @@ def read_deployments(path: Path) -> dict[str, str | None]:
     return deployments
 
 
-def read_helm_secret_names(path: Path, pattern: str) -> set[str]:
+def read_lbc_helm_owner(path: Path, expected: dict) -> None:
     if not path.is_file():
-        raise ValueError(f"Helm release metadata inventory is missing: {path}")
-    names = set()
-    for line in path.read_text().splitlines():
-        fields = line.split()
-        if not fields:
-            continue
-        name = fields[0]
-        if not re.fullmatch(pattern, name):
-            raise ValueError("Helm metadata inventory contains a Secret outside the reviewed release name pattern")
-        names.add(name)
-    if not names:
-        raise ValueError("Helm release metadata Secret is missing for the reviewed controller")
-    return names
+        raise ValueError(f"LBC Deployment Helm ownership metadata is missing: {path}")
+    content = path.read_text()
+    if not content.strip():
+        raise ValueError("LBC Deployment Helm ownership metadata is missing")
+    lines = [line for line in content.splitlines() if line]
+    if len(lines) != 1:
+        raise ValueError("LBC Deployment Helm ownership metadata must contain exactly one row")
+    fields = lines[0].split("\t")
+    if len(fields) != 3 or not all(fields):
+        raise ValueError("LBC Deployment Helm ownership metadata is malformed")
+    managed_by, release_name, release_namespace = fields
+    if (
+        managed_by != expected["helm_managed_by_label"]
+        or release_name != expected["release_name"]
+        or release_namespace != expected["namespace"]
+    ):
+        raise ValueError("LBC Deployment Helm ownership metadata does not match the reviewed release")
 
 
 def load_allowlist(path: Path, aws_account_id: str, cluster_name: str, manage_lbc: bool) -> dict:
@@ -163,7 +167,7 @@ def load_allowlist(path: Path, aws_account_id: str, cluster_name: str, manage_lb
         "iam_role_arn": "arn:aws:iam::679857346122:role/spectrace-staging-aws_load_balancer_controller",
         "iam_policy_name": "spectrace-staging-aws-load-balancer-controller",
         "iam_policy_arn": "arn:aws:iam::679857346122:policy/spectrace-staging-aws-load-balancer-controller",
-        "helm_metadata_secret_name_pattern": r"sh\.helm\.release\.v1\.aws-load-balancer-controller\.v[1-9][0-9]*",
+        "helm_managed_by_label": "Helm",
     }
     if controller != expected_controller:
         raise ValueError("LBC allowlist must contain only the exact reviewed release and IAM identities")
@@ -180,7 +184,7 @@ def check_ownership(
     iam_resource_path: Path,
     rbac_resource_path: Path,
     platform_resource_path: Path,
-    helm_metadata_path: Path,
+    lbc_helm_owner_path: Path,
     allowlist_path: Path,
     aws_account_id: str,
     cluster_name: str,
@@ -193,9 +197,8 @@ def check_ownership(
     deployments = read_deployments(deployment_path)
     network_policies = read_names(network_policy_path)
     namespaces = read_names(namespace_path)
-    helm_metadata_names = read_helm_secret_names(
-        helm_metadata_path, allowlist["load_balancer_controller"]["helm_metadata_secret_name_pattern"]
-    )
+    controller = allowlist["load_balancer_controller"]
+    read_lbc_helm_owner(lbc_helm_owner_path, controller)
 
     if not iam_resource_path.is_file() or not rbac_resource_path.is_file() or not platform_resource_path.is_file():
         raise ValueError("IAM, Kubernetes RBAC, or platform resource inventory is missing")
@@ -231,7 +234,6 @@ def check_ownership(
         elif namespace in namespaces and address not in state:
             problems.append(f"namespace {namespace}: live namespace exists but Terraform State lacks {address}; stop for ownership review.")
 
-    controller = allowlist["load_balancer_controller"]
     live_lbc = "aws-load-balancer-controller" in deployments
     lbc_addresses_in_state = [address for address in LBC_STATE_ADDRESSES if address in state]
     if lbc_addresses_in_state:
@@ -277,8 +279,6 @@ def check_ownership(
         address = MANAGED_PLATFORM_RESOURCES[(kind, name)]
         if address not in state:
             problems.append(f"live {kind} {name} exists but Terraform State lacks {address}; stop for ownership review.")
-    if not helm_metadata_names:
-        problems.append("LBC Helm metadata evidence is missing.")
     return problems
 
 
@@ -291,7 +291,7 @@ def main() -> int:
     parser.add_argument("--iam-resources", type=Path, required=True)
     parser.add_argument("--rbac-resources", type=Path, required=True)
     parser.add_argument("--platform-resources", type=Path, required=True)
-    parser.add_argument("--helm-metadata", type=Path, required=True)
+    parser.add_argument("--lbc-helm-owner", type=Path, required=True)
     parser.add_argument("--allowlist", type=Path, required=True)
     parser.add_argument("--aws-account-id", required=True)
     parser.add_argument("--cluster-name", required=True)
@@ -308,17 +308,13 @@ def main() -> int:
             args.iam_resources,
             args.rbac_resources,
             args.platform_resources,
-            args.helm_metadata,
+            args.lbc_helm_owner,
             args.allowlist,
             args.aws_account_id,
             args.cluster_name,
             manage_lbc,
         )
         allowlist = load_allowlist(args.allowlist, args.aws_account_id, args.cluster_name, manage_lbc)
-        helm_names = read_helm_secret_names(
-            args.helm_metadata,
-            allowlist["load_balancer_controller"]["helm_metadata_secret_name_pattern"],
-        )
     except (OSError, ValueError) as exc:
         print(f"Ownership guard failed closed: {exc}", file=sys.stderr)
         return 2
@@ -329,7 +325,7 @@ def main() -> int:
         return 1
 
     print("Reviewed independent LBC ownership and exact live namespace inventory verified; other State ownership conflicts are absent.")
-    print("Observed Helm metadata Secret names (metadata only): " + ", ".join(sorted(helm_names)))
+    print("Verified the LBC Deployment Helm ownership labels and annotations without reading Secret objects.")
     return 0
 
 
