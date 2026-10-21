@@ -44,7 +44,12 @@ for i in "${!services[@]}"; do
 done
 printf 'FLUSH PRIVILEGES;\n' >> "$sql_file"
 
-MYSQL_PWD="$MYSQL_ADMIN_PASSWORD" mysql \
-  --host="$MYSQL_HOST" --user="$MYSQL_ADMIN_USER" --protocol=TCP \
-  --ssl-mode=REQUIRED < "$sql_file"
+if command -v mysql >/dev/null 2>&1; then
+  MYSQL_PWD="$MYSQL_ADMIN_PASSWORD" mysql \
+    --host="$MYSQL_HOST" --user="$MYSQL_ADMIN_USER" --protocol=TCP \
+    --ssl-mode=REQUIRED < "$sql_file"
+else
+  # The self-hosted staging runner has no mysql CLI; run the same statements over TLS with PyMySQL.
+  python3 "$(dirname "${BASH_SOURCE[0]}")/execute_sql.py" "$sql_file"
+fi
 echo "Created the service and Keycloak databases and restricted each account to its own database."
