@@ -62,6 +62,10 @@ class StagingPlanActionGuardTest(unittest.TestCase):
         ]
         self.assertEqual(check_plan(plan(*changes)), [])
 
+    def test_additive_frontend_target_group_create_is_allowed(self):
+        change = resource("aws_lb_target_group.frontend[0]", ["create"], "aws_lb_target_group")
+        self.assertEqual(check_plan(plan(change)), [])
+
     def test_unrelated_infrastructure_creates_are_not_blocked(self):
         changes = [
             resource("module.eks[0].aws_eks_node_group.compliance", ["create"], "aws_eks_node_group"),
