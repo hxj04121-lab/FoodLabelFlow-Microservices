@@ -23,6 +23,7 @@
   "existing_namespaces": [
     "gateway",
     "keycloak",
-    "keycloak-system"
+    "keycloak-system",
+    "rabbitmq-system"
   ]
 }

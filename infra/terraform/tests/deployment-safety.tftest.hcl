@@ -107,7 +107,7 @@ run "staging_preserves_out_of_band_lbc_and_existing_namespaces" {
     database_subnet_cidrs           = ["10.0.64.0/20", "10.0.80.0/20"]
     node_groups                     = { general = { asg_name = "test-asg", min_size = 1, max_size = 3 } }
     manage_load_balancer_controller = false
-    existing_namespaces             = ["gateway", "keycloak", "keycloak-system"]
+    existing_namespaces             = ["gateway", "keycloak", "keycloak-system", "rabbitmq-system"]
     workload_namespaces = {
       gateway        = "gateway"
       keycloak       = "keycloak"
@@ -127,7 +127,7 @@ run "staging_preserves_out_of_band_lbc_and_existing_namespaces" {
     error_message = "Staging preserves the live LBC release, IRSA role, policy, and attachment outside Terraform management."
   }
   assert {
-    condition     = toset([for namespace in kubernetes_manifest.workload_namespace : namespace.manifest.metadata.name]) == toset(["rabbitmq", "observability", "specification", "formulation", "compliance", "label-workflow", "frontend", "rabbitmq-system"])
+    condition     = toset([for namespace in kubernetes_manifest.workload_namespace : namespace.manifest.metadata.name]) == toset(["rabbitmq", "observability", "specification", "formulation", "compliance", "label-workflow", "frontend"])
     error_message = "Only genuinely missing workload and operator namespaces may be created in staging."
   }
   assert {

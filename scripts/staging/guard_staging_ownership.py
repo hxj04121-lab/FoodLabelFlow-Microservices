@@ -171,8 +171,8 @@ def load_allowlist(path: Path, aws_account_id: str, cluster_name: str, manage_lb
     }
     if controller != expected_controller:
         raise ValueError("LBC allowlist must contain only the exact reviewed release and IAM identities")
-    if allowlist.get("existing_namespaces") != ["gateway", "keycloak", "keycloak-system"]:
-        raise ValueError("existing_namespaces must match the three reviewed live namespaces")
+    if allowlist.get("existing_namespaces") != ["gateway", "keycloak", "keycloak-system", "rabbitmq-system"]:
+        raise ValueError("existing_namespaces must match the four reviewed live namespaces")
     return allowlist
 
 
