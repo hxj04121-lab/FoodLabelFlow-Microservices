@@ -201,6 +201,12 @@ jobs:
           fi
           python3 scripts/staging/apply_rabbitmq_owned.py deploy/operators/rabbitmq/rabbitmq-cluster.yaml
           python3 scripts/staging/apply_rabbitmq_owned.py deploy/kubernetes/staging/rabbitmq/rabbitmq-pdb.yaml
+          # kubectl wait fails at once if the Operator has not created the pods yet; wait for all three to exist first.
+          for _ in $(seq 1 60); do
+            count=$(kubectl get pods --namespace rabbitmq --selector app.kubernetes.io/name=spectrace -o name | wc -l | tr -d ' ')
+            [[ "$count" -ge 3 ]] && break
+            sleep 10
+          done
           kubectl wait --for=condition=Ready pods --namespace rabbitmq --selector app.kubernetes.io/name=spectrace --timeout=15m
           kubectl get pods --namespace rabbitmq --selector app.kubernetes.io/name=spectrace -o json > "$RUNNER_TEMP/rabbitmq-pods.json"
           kubectl get pvc --namespace rabbitmq -o json > "$RUNNER_TEMP/rabbitmq-pvcs.json"
