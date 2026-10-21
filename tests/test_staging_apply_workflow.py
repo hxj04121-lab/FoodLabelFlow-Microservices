@@ -156,7 +156,7 @@ class ApplyFailureSummaryTest(unittest.TestCase):
 
         self.assertEqual(summary["exit_code"], 37)
         self.assertEqual(summary["failure_type"], "terraform_apply_failed")
-        self.assertEqual(summary["completed_resources"]["resource_count"], 0)
+        self.assertEqual(summary["completed_resource_events"]["event_count"], 0)
         for marker in markers:
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, output)
@@ -224,7 +224,7 @@ class ApplyFailureSummaryTest(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, result.stdout + result.stderr)
 
-    def test_completed_resources_emit_only_allowlisted_type_action_counts(self):
+    def test_completion_events_emit_only_allowlisted_type_action_counts(self):
         markers = (
             "SYNTHETIC_NODEGROUP_NAME_CANARY",
             "SYNTHETIC_RDS_ADDRESS_CANARY",
@@ -243,20 +243,84 @@ class ApplyFailureSummaryTest(unittest.TestCase):
         output = json.dumps(summary, sort_keys=True)
 
         self.assertEqual(
-            summary["completed_resources"],
+            summary["completed_resource_events"],
             {
-                "resource_count": 3,
+                "count_scope": "best_effort_bounded_log_completion_events",
+                "event_count": 3,
                 "by_type_and_action": [
                     {"type": "aws_db_instance", "action": "delete", "count": 1},
                     {"type": "aws_eks_node_group", "action": "create", "count": 1},
                     {"type": "kubernetes_manifest", "action": "update", "count": 1},
                 ],
+                "unrecognized_address_event_count": 1,
             },
         )
         for marker in markers:
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, output)
         self.assertNotIn("keycloak_role", output)
+        self.assertNotIn("custom_sensitive_resource", output)
+
+    def test_completion_address_parser_respects_quoted_keys_and_module_indexes(self):
+        log_text = "\n".join(
+            (
+                'aws_db_instance.db["prod.us"]: Creation complete after 1s',
+                r'aws_db_instance.db["prod\".aws_eks_cluster.us"]: Creation complete after 1s',
+                'aws_db_instance.db["prod.aws_eks_cluster.us"]: Creation complete after 1s',
+                "module.eks[0].aws_eks_node_group.nodes[0]: Creation complete after 1s",
+                'module.network[0].module.subnets["use1.az1"].aws_subnet.private["a.b"]: Creation complete after 1s',
+            )
+        )
+        summary = summarize_failure(log_text, exit_code=17)
+        output = json.dumps(summary, sort_keys=True)
+
+        self.assertEqual(
+            summary["completed_resource_events"]["by_type_and_action"],
+            [
+                {"type": "aws_db_instance", "action": "create", "count": 3},
+                {"type": "aws_eks_node_group", "action": "create", "count": 1},
+                {"type": "aws_subnet", "action": "create", "count": 1},
+            ],
+        )
+        self.assertEqual(summary["completed_resource_events"]["event_count"], 5)
+        self.assertEqual(
+            summary["completed_resource_events"]["unrecognized_address_event_count"], 0
+        )
+        for key_fragment in ("prod.us", "aws_eks_cluster.us", "use1.az1", "a.b"):
+            with self.subTest(key_fragment=key_fragment):
+                self.assertNotIn(key_fragment, output)
+        self.assertNotIn('"type": "aws_eks_cluster"', output)
+
+    def test_duplicate_completion_lines_count_events_without_claiming_unique_resources(self):
+        completion = 'aws_db_instance.db["same.key"]: Creation complete after 1s'
+        summary = summarize_failure("\n".join((completion, completion)), exit_code=17)
+
+        events = summary["completed_resource_events"]
+        self.assertEqual(events["count_scope"], "best_effort_bounded_log_completion_events")
+        self.assertEqual(events["event_count"], 2)
+        self.assertEqual(
+            events["by_type_and_action"],
+            [{"type": "aws_db_instance", "action": "create", "count": 2}],
+        )
+
+    def test_invalid_or_unknown_addresses_are_ignored_with_fixed_flag(self):
+        log_text = "\n".join(
+            (
+                'aws_db_instance.SYNTHETIC_INVALID_ADDRESS_CANARY["unfinished: Creation complete after 1s',
+                "custom_sensitive_resource.SYNTHETIC_UNKNOWN_TYPE_CANARY: Creation complete after 1s",
+            )
+        )
+        summary = summarize_failure(log_text, exit_code=17)
+        output = json.dumps(summary, sort_keys=True)
+
+        self.assertEqual(
+            summary["completed_resource_events"]["event_count"], 0
+        )
+        self.assertEqual(
+            summary["completed_resource_events"]["unrecognized_address_event_count"], 2
+        )
+        self.assertNotIn("SYNTHETIC_INVALID_ADDRESS_CANARY", output)
+        self.assertNotIn("SYNTHETIC_UNKNOWN_TYPE_CANARY", output)
         self.assertNotIn("custom_sensitive_resource", output)
 
     def test_missing_log_path_is_not_printed_and_workflow_preserves_apply_exit_code(self):

@@ -58,7 +58,10 @@ SAFE_RESOURCE_TYPES = frozenset(
 
 ANSI_ESCAPE_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 COMPLETION_RE = re.compile(
-    r"^(?P<address>.+?): (?P<verb>Creation|Modifications|Destruction) complete after(?:\s|$)"
+    r"^(?P<address>.+): (?P<verb>Creation|Modifications|Destruction) complete after(?:\s|$)"
+)
+ADDRESS_SEGMENT_RE = re.compile(
+    r'(?P<label>[A-Za-z_][A-Za-z0-9_-]*)(?P<index>\[(?:[0-9]+|"(?:[^"\\]|\\.)*")\])?'
 )
 SAFE_ACTIONS = {
     "Creation": "create",
@@ -81,20 +84,102 @@ def read_log_tail(path: Path) -> tuple[str | None, bool]:
     return content.decode("utf-8", errors="replace"), truncated
 
 
-def _safe_resource_type(address: str) -> str | None:
-    segments = address.rsplit(".", 2)
-    if len(segments) < 2:
+def _split_address_segments(address: str) -> list[str] | None:
+    """Split Terraform address dots while respecting quoted instance keys."""
+    if not address:
         return None
-    resource_type = segments[-2]
-    return resource_type if resource_type in SAFE_RESOURCE_TYPES else None
+
+    segments: list[str] = []
+    segment_start = 0
+    in_index = False
+    in_string = False
+    escaped = False
+
+    for position, character in enumerate(address):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            elif character in "\r\n":
+                return None
+            continue
+
+        if character == "." and not in_index:
+            segments.append(address[segment_start:position])
+            segment_start = position + 1
+        elif character == "[":
+            if in_index:
+                return None
+            in_index = True
+        elif character == "]":
+            if not in_index:
+                return None
+            in_index = False
+        elif character == '"':
+            if not in_index:
+                return None
+            in_string = True
+
+    if in_index or in_string or escaped:
+        return None
+    segments.append(address[segment_start:])
+    if any(not segment for segment in segments):
+        return None
+    return segments
 
 
-def completed_resource_counts(log_text: str | None) -> dict[str, object]:
-    """Return counts by allowlisted type/action; never return an address or ID."""
+def _parse_address_segment(segment: str) -> tuple[str, bool] | None:
+    match = ADDRESS_SEGMENT_RE.fullmatch(segment)
+    if match is None:
+        return None
+    return match.group("label"), match.group("index") is not None
+
+
+def _safe_resource_type(address: str) -> str | None:
+    """Parse an address structurally; dots inside quoted keys are not separators."""
+    segments = _split_address_segments(address)
+    if segments is None:
+        return None
+
+    position = 0
+    while position < len(segments) and segments[position] == "module":
+        if position + 1 >= len(segments):
+            return None
+        module = _parse_address_segment(segments[position + 1])
+        if module is None:
+            return None
+        position += 2
+
+    if position < len(segments) and segments[position] in {"data", "ephemeral"}:
+        position += 1
+
+    if len(segments) - position != 2:
+        return None
+
+    resource_type = _parse_address_segment(segments[position])
+    resource_name = _parse_address_segment(segments[position + 1])
+    if resource_type is None or resource_name is None:
+        return None
+    if resource_type[1] or resource_type[0] not in SAFE_RESOURCE_TYPES:
+        return None
+    return resource_type[0]
+
+
+def completed_resource_event_counts(log_text: str | None) -> dict[str, object]:
+    """Count matching completion events by allowlisted type/action, not unique resources."""
     if not log_text:
-        return {"resource_count": 0, "by_type_and_action": []}
+        return {
+            "count_scope": "best_effort_bounded_log_completion_events",
+            "event_count": 0,
+            "by_type_and_action": [],
+            "unrecognized_address_event_count": 0,
+        }
 
     counts: Counter[tuple[str, str]] = Counter()
+    unrecognized_address_count = 0
     normalized = ANSI_ESCAPE_RE.sub("", log_text)
     for line in normalized.splitlines():
         match = COMPLETION_RE.match(line)
@@ -104,12 +189,19 @@ def completed_resource_counts(log_text: str | None) -> dict[str, object]:
         action = SAFE_ACTIONS[match.group("verb")]
         if resource_type is not None:
             counts[(resource_type, action)] += 1
+        else:
+            unrecognized_address_count += 1
 
     entries = [
         {"type": resource_type, "action": action, "count": count}
         for (resource_type, action), count in sorted(counts.items())
     ]
-    return {"resource_count": sum(counts.values()), "by_type_and_action": entries}
+    return {
+        "count_scope": "best_effort_bounded_log_completion_events",
+        "event_count": sum(counts.values()),
+        "by_type_and_action": entries,
+        "unrecognized_address_event_count": unrecognized_address_count,
+    }
 
 
 def summarize_failure(
@@ -125,7 +217,7 @@ def summarize_failure(
         "exit_code": exit_code,
         "log_available": log_text is not None,
         "log_truncated": bool(log_truncated),
-        "completed_resources": completed_resource_counts(log_text),
+        "completed_resource_events": completed_resource_event_counts(log_text),
     }
 
 
