@@ -37,6 +37,16 @@ def is_protected_alb_type(resource_type: str) -> bool:
     return resource_type in PROTECTED_ALB_RESOURCE_TYPES or resource_type.startswith("aws_acm_")
 
 
+def changed_attribute_names(change: dict) -> list[str]:
+    """Top-level attribute names whose planned value differs; values are never returned."""
+    before = change.get("before") if isinstance(change.get("before"), dict) else {}
+    after = change.get("after") if isinstance(change.get("after"), dict) else {}
+    unknown = change.get("after_unknown") if isinstance(change.get("after_unknown"), dict) else {}
+    names = {key for key in set(before) | set(after) if before.get(key) != after.get(key)}
+    names |= {key for key, value in unknown.items() if value}
+    return sorted(names)
+
+
 def check_plan(plan: dict) -> list[str]:
     format_version = plan.get("format_version") if isinstance(plan, dict) else None
     format_major, separator, format_minor = format_version.partition(".") if isinstance(format_version, str) else ("", "", "")
@@ -79,7 +89,10 @@ def check_plan(plan: dict) -> list[str]:
             PROTECTED_MUTATING_ACTIONS.intersection(actions)
             or set(actions) == {"create", "delete"}
         ):
-            violations.append(f"{address} ({resource_type}): planned actions {actions} are forbidden for protected ALB/ACM resources")
+            violations.append(
+                f"{address} ({resource_type}): planned actions {actions} are forbidden for protected ALB/ACM resources; "
+                f"changed attributes (names only): {', '.join(changed_attribute_names(change)) or 'none reported'}"
+            )
     return violations
 
 

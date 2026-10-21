@@ -93,3 +93,17 @@ class StagingPlanActionGuardTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChangedAttributeNamesTest(unittest.TestCase):
+    def test_alb_violation_lists_changed_attribute_names_without_values(self):
+        change = resource("module.edge[0].aws_lb.this", ["update"], resource_type="aws_lb")
+        change["change"].update({
+            "before": {"name": "spectrace-staging-alb", "tags": {"Owner": "secret-owner"}, "idle_timeout": 60},
+            "after": {"name": "spectrace-staging-alb", "tags": {"Owner": "new-owner"}, "idle_timeout": 60},
+            "after_unknown": {"tags_all": True},
+        })
+        [violation] = check_plan(plan(change))
+        self.assertIn("changed attributes (names only): tags, tags_all", violation)
+        self.assertNotIn("secret-owner", violation)
+        self.assertNotIn("new-owner", violation)
