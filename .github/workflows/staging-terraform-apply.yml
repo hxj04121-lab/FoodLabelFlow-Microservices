@@ -1,0 +1,279 @@
+name: Protected staging Terraform Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      plan_run_id:
+        description: Successful main Terraform Plan run ID with the encrypted saved plan artifact
+        required: true
+        type: string
+      approved_commit_sha:
+        description: Exact main commit reviewed with the Plan
+        required: true
+        type: string
+      approved_plan_sha256:
+        description: Exact plaintext Terraform Plan SHA-256 approved by M1
+        required: true
+        type: string
+      approved_state_version_id:
+        description: State VersionId recorded by the approved Plan
+        required: true
+        type: string
+      staging_window_hours:
+        description: Owner-approved deployment duration in hours
+        required: true
+        type: number
+      experiment_hours:
+        description: Approved compliance scale-out duration in hours
+        required: true
+        type: number
+      k6_hours:
+        description: Approved k6 duration in hours
+        required: true
+        type: number
+      staging_window_end_sgt:
+        description: Owner-confirmed shutdown time in Asia/Singapore (YYYY-MM-DD HH:MM)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-terraform-apply
+  cancel-in-progress: false
+
+jobs:
+  reject-non-main:
+    if: ${{ github.ref != 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo '::error::Terraform Apply may only run from main.' && exit 1
+
+  apply:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: [self-hosted, linux, staging-vpc]
+    environment: staging
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      AWS_ROLE_ARN: ${{ vars.AWS_APPLY_ROLE_ARN }}
+      AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
+      # Not TF_WORKSPACE: that env var overrides workspaces and makes `terraform workspace select` fail.
+      STAGING_TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
+      TF_PLAN_ENCRYPTION_KEY: ${{ secrets.TF_PLAN_ENCRYPTION_KEY }}
+      APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}
+      PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+      APPROVED_COMMIT_SHA: ${{ inputs.approved_commit_sha }}
+      APPROVED_PLAN_SHA256: ${{ inputs.approved_plan_sha256 }}
+      APPROVED_STATE_VERSION_ID: ${{ inputs.approved_state_version_id }}
+      STAGING_WINDOW_HOURS: ${{ inputs.staging_window_hours }}
+      EXPERIMENT_HOURS: ${{ inputs.experiment_hours }}
+      K6_HOURS: ${{ inputs.k6_hours }}
+      STAGING_WINDOW_END_SGT: ${{ inputs.staging_window_end_sgt }}
+      APPLY_TEMP_SUFFIX: foodlabelflow-m5-apply-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require a complete approved Plan reference and budget window
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$PLAN_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$APPROVED_COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$APPROVED_PLAN_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          test -n "$APPROVED_STATE_VERSION_ID" && test -n "$STAGING_WINDOW_END_SGT"
+          test -n "$STAGING_WINDOW_HOURS" && test -n "$EXPERIMENT_HOURS" && test -n "$K6_HOURS"
+          test "$AWS_ACCOUNT_ID" = 679857346122
+          test "$AWS_REGION" = ap-southeast-1
+          test "$EKS_CLUSTER_NAME" = spectrace-staging
+          test "$TF_STATE_BUCKET" = foodlabelflow-staging-tfstate-679857346122-ap-southeast-1
+          test "$TF_STATE_KEY" = terraform.tfstate
+          test "$STAGING_TF_WORKSPACE" = staging
+          test -n "$AWS_ROLE_ARN" && test -n "$TF_PLAN_ENCRYPTION_KEY"
+          # M1-approved dedicated Apply role; any other role in the account is rejected.
+          test "$AWS_ROLE_ARN" = arn:aws:iam::679857346122:role/spectrace-staging-github-apply || { echo '::error::Unexpected Terraform Apply role ARN.'; exit 1; }
+          test "$AWS_ROLE_ARN" != "$AWS_PLAN_ROLE_ARN"
+          test "$AWS_ROLE_ARN" != "$AWS_DEPLOY_ROLE_ARN"
+          umask 077
+          APPLY_TEMP_DIR="$RUNNER_TEMP/$APPLY_TEMP_SUFFIX"
+          KUBECONFIG="$RUNNER_TEMP/staging-apply-kubeconfig-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          printf 'APPLY_TEMP_DIR=%s\nKUBECONFIG=%s\n' "$APPLY_TEMP_DIR" "$KUBECONFIG" >> "$GITHUB_ENV"
+          mkdir -m 700 "$APPLY_TEMP_DIR"
+          python3 platform/staging/validate_window.py "$STAGING_WINDOW_HOURS" "$STAGING_WINDOW_END_SGT" > "$APPLY_TEMP_DIR/staging-window.json"
+          if ! env -u AVAILABLE_CREDIT_USD python3 scripts/aws_staging_budget.py --require-gate \
+            --hours "$STAGING_WINDOW_HOURS" --experiment-hours "$EXPERIMENT_HOURS" --k6-hours "$K6_HOURS" \
+            > "$APPLY_TEMP_DIR/staging-budget-gate.log" 2>&1; then
+            echo '::error::The protected staging funding/pricing gate did not pass; no Apply was attempted.'
+            exit 1
+          fi
+      - name: Verify the source run is a successful main Terraform Plan
+        uses: actions/github-script@v7
+        env:
+          PLAN_RUN_ID: ${{ env.PLAN_RUN_ID }}
+          APPROVED_COMMIT_SHA: ${{ env.APPROVED_COMMIT_SHA }}
+        with:
+          script: |
+            const id = Number(process.env.PLAN_RUN_ID)
+            if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Invalid Plan workflow run ID.')
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: id,
+            })
+            if (run.path !== '.github/workflows/terraform-validate.yml' || run.event !== 'workflow_dispatch' ||
+                run.head_branch !== 'main' || run.head_sha !== process.env.APPROVED_COMMIT_SHA ||
+                run.status !== 'completed' || run.conclusion !== 'success') {
+              throw new Error('Source run must be a successful workflow_dispatch Plan from the approved main commit.')
+            }
+            const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: id,
+              per_page: 100,
+            })
+            if (!jobs.jobs.some((job) => job.name === 'plan' && job.conclusion === 'success')) {
+              throw new Error('The source workflow run did not complete its protected Plan job successfully.')
+            }
+            const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: id,
+            })
+            const artifact = artifacts.artifacts.find((item) => item.name === `terraform-staging-plan-${id}`)
+            if (!artifact || artifact.expired) throw new Error('The encrypted saved Plan artifact is missing or expired.')
+            core.info(`Verified successful main Plan run ${id} at ${run.head_sha}.`)
+      - name: Download the encrypted Plan artifact from the verified run
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-staging-plan-${{ inputs.plan_run_id }}
+          run-id: ${{ inputs.plan_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/approved-staging-plan
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.approved_commit_sha }}
+          path: plan-source
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+      - name: Pin the provider lockfile used by the saved Plan
+        id: provider-lock
+        run: echo "sha256=$(sha256sum plan-source/infra/terraform/.terraform.lock.hcl | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Decrypt and verify Plan bytes and approvals
+        env:
+          TF_PLAN_ENCRYPTED_FILE: ${{ runner.temp }}/approved-staging-plan/staging.tfplan.enc
+          TF_PLAN_METADATA_FILE: ${{ runner.temp }}/approved-staging-plan/staging-plan-metadata.json
+          TF_PLAN_FILE: ${{ runner.temp }}/foodlabelflow-m5-apply-${{ github.run_id }}-${{ github.run_attempt }}/approved.tfplan
+          EXPECTED_PLAN_SHA256: ${{ inputs.approved_plan_sha256 }}
+          EXPECTED_COMMIT_SHA: ${{ inputs.approved_commit_sha }}
+          EXPECTED_STATE_VERSION_ID: ${{ inputs.approved_state_version_id }}
+          EXPECTED_TERRAFORM_VERSION: 1.15.8
+          EXPECTED_PROVIDER_LOCK_SHA256: ${{ steps.provider-lock.outputs.sha256 }}
+          EXPECTED_STATE_OBJECT_KEY: spectrace/staging/terraform.tfstate
+          EXPECTED_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          EXPECTED_TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          EXPECTED_AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          set -euo pipefail
+          test ! -L "$TF_PLAN_ENCRYPTED_FILE" && test ! -L "$TF_PLAN_METADATA_FILE"
+          test "$(find "$RUNNER_TEMP/approved-staging-plan" -maxdepth 1 -type f | wc -l | tr -d ' ')" = 2
+          test "$(sha256sum plan-source/infra/terraform/.terraform.lock.hcl | cut -d ' ' -f 1)" = "$EXPECTED_PROVIDER_LOCK_SHA256"
+          node "$GITHUB_WORKSPACE/scripts/staging/secure_tfplan.mjs" decrypt
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify Apply identity, private cluster, and unchanged approved State
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
+          actual_arn="$(aws sts get-caller-identity --query Arn --output text)"
+          expected_role=${AWS_ROLE_ARN##*/}
+          case "$actual_arn" in "arn:aws:sts::$AWS_ACCOUNT_ID:assumed-role/$expected_role/"*) ;; *) echo '::error::AWS session is not the approved Apply role.'; exit 1 ;; esac
+          cluster=$(aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --output json)
+          printf '%s' "$cluster" | python3 -c 'import json,sys; c=json.load(sys.stdin)["cluster"]; assert c["status"] == "ACTIVE"; assert c["arn"] == "arn:aws:eks:ap-southeast-1:679857346122:cluster/spectrace-staging"; assert c["resourcesVpcConfig"]["endpointPrivateAccess"] is True; assert c["resourcesVpcConfig"]["endpointPublicAccess"] is False'
+          state_head=$(aws s3api head-object --bucket "$TF_STATE_BUCKET" --key spectrace/staging/terraform.tfstate --query VersionId --output text)
+          test "$state_head" = "$APPROVED_STATE_VERSION_ID"
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --kubeconfig "$KUBECONFIG" --alias "$EKS_CLUSTER_NAME" >/dev/null
+          test "$(kubectl config current-context)" = "$EKS_CLUSTER_NAME"
+          whoami=$(kubectl auth whoami -o json)
+          printf '%s' "$whoami" | python3 -c 'import json,sys; user=json.load(sys.stdin)["status"]["userInfo"]["username"]; assert "/assumed-role/" in user; print("Kubernetes identity:", user)'
+      - name: Initialize only the approved source commit and staging workspace
+        working-directory: plan-source/infra/terraform
+        run: |
+          set -euo pipefail
+          terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=$TF_STATE_KEY" -backend-config="region=$AWS_REGION" \
+            -backend-config="workspace_key_prefix=spectrace" -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true" > "$APPLY_TEMP_DIR/terraform-init.log" 2>&1 \
+            || { echo "::error::terraform init failed; last log lines follow (backend/provider output only)."; tail -n 30 "$APPLY_TEMP_DIR/terraform-init.log"; exit 1; }
+          terraform workspace select "$STAGING_TF_WORKSPACE" > "$APPLY_TEMP_DIR/terraform-workspace.log" 2>&1 \
+            || { echo "::error::terraform workspace select failed; last log lines follow (backend/provider output only)."; tail -n 30 "$APPLY_TEMP_DIR/terraform-workspace.log"; exit 1; }
+          test "$(terraform workspace show)" = "$STAGING_TF_WORKSPACE"
+      - name: Re-run protected resource action guard against the approved Plan
+        working-directory: plan-source/infra/terraform
+        env:
+          TF_PLAN_FILE: ${{ runner.temp }}/foodlabelflow-m5-apply-${{ github.run_id }}-${{ github.run_attempt }}/approved.tfplan
+        run: |
+          set -euo pipefail
+          if ! terraform show -json "$TF_PLAN_FILE" | python3 "$GITHUB_WORKSPACE/scripts/staging/guard_staging_plan_actions.py" >> "$GITHUB_STEP_SUMMARY"; then
+            echo '::error::The approved Plan contains a protected ALB/ACM/LBC/namespace action or invalid JSON; Apply is blocked.'
+            exit 1
+          fi
+      - name: Apply only the exact reviewed saved Plan
+        working-directory: plan-source/infra/terraform
+        env:
+          TF_PLAN_FILE: ${{ runner.temp }}/foodlabelflow-m5-apply-${{ github.run_id }}-${{ github.run_attempt }}/approved.tfplan
+        run: |
+          set -euo pipefail
+          if ! terraform apply -input=false -no-color "$TF_PLAN_FILE" > "$APPLY_TEMP_DIR/terraform-apply.log" 2>&1; then
+            echo '::error::Terraform Apply failed. The protected runner log remains private; do not rerun without reviewing State and resources.'
+            exit 1
+          fi
+          new_state_version=$(aws s3api head-object --bucket "$TF_STATE_BUCKET" --key spectrace/staging/terraform.tfstate --query VersionId --output text)
+          test -n "$new_state_version" && test "$new_state_version" != None
+          {
+            echo '### Protected Terraform Apply completed'
+            echo "- Plan run: $PLAN_RUN_ID"
+            echo "- Approved source commit: $APPROVED_COMMIT_SHA"
+            echo "- Approved Plan SHA-256: $APPROVED_PLAN_SHA256"
+            echo "- State VersionId before Apply: $APPROVED_STATE_VERSION_ID"
+            echo "- State VersionId after Apply: $new_state_version"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove decrypted Plan and private Apply files
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          python3 - "$RUNNER_TEMP" "$GITHUB_WORKSPACE" "$APPLY_TEMP_DIR" "$RUNNER_TEMP/approved-staging-plan" "$KUBECONFIG" "$GITHUB_WORKSPACE/plan-source" <<'PY'
+          from pathlib import Path
+          import shutil
+          import sys
+
+          runner_temp = Path(sys.argv[1]).resolve()
+          workspace = Path(sys.argv[2]).resolve()
+          for raw_path in sys.argv[3:]:
+              path = Path(raw_path)
+              if path.is_symlink():
+                  path.unlink()
+              elif path.is_dir() and path.resolve().parent == runner_temp:
+                  shutil.rmtree(path)
+              elif path.is_file() and path.resolve().parent == runner_temp:
+                  path.unlink()
+              elif path == workspace / "plan-source" and path.is_dir():
+                  shutil.rmtree(path)
+          PY
