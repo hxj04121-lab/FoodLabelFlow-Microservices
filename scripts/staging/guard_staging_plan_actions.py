@@ -17,7 +17,7 @@ PROTECTED_ADDRESSES = {
     "module.eks_addons[0].aws_iam_role_policy_attachment.load_balancer_controller[0]",
     *{
         f'module.eks_addons[0].kubernetes_manifest.workload_namespace["{namespace}"]'
-        for namespace in ("gateway", "keycloak", "keycloak-system")
+        for namespace in ("gateway", "keycloak", "keycloak-system", "rabbitmq-system")
     },
 }
 PROTECTED_ALB_RESOURCE_TYPES = {
