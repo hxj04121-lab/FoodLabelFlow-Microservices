@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject any non-no-op action against the independent LBC or existing namespaces."""
+"""Reject unapproved actions against independently owned staging resources."""
 
 from __future__ import annotations
 
@@ -20,9 +20,37 @@ PROTECTED_ADDRESSES = {
         for namespace in ("gateway", "keycloak", "keycloak-system")
     },
 }
+PROTECTED_ALB_RESOURCE_TYPES = {
+    "aws_lb",
+    "aws_lb_listener",
+    "aws_lb_listener_rule",
+    "aws_lb_listener_certificate",
+    "aws_lb_target_group",
+    "aws_lb_target_group_attachment",
+}
+PROTECTED_MUTATING_ACTIONS = {"update", "delete", "forget"}
+VALID_ACTIONS = {"no-op", "create", "read", "update", "delete", "forget"}
+VALID_ACTION_LISTS = [[action] for action in VALID_ACTIONS] + [["delete", "create"], ["create", "delete"]]
+
+
+def is_protected_alb_type(resource_type: str) -> bool:
+    return resource_type in PROTECTED_ALB_RESOURCE_TYPES or resource_type.startswith("aws_acm_")
 
 
 def check_plan(plan: dict) -> list[str]:
+    format_version = plan.get("format_version") if isinstance(plan, dict) else None
+    format_major, separator, format_minor = format_version.partition(".") if isinstance(format_version, str) else ("", "", "")
+    if (
+        not isinstance(plan, dict)
+        or not separator
+        or not format_major.isdigit()
+        or not format_minor.isdigit()
+        or format_major != "1"
+        or not isinstance(plan.get("terraform_version"), str)
+        or not plan["terraform_version"]
+        or not isinstance(plan.get("planned_values"), dict)
+    ):
+        raise ValueError("Terraform plan JSON has an unknown format or is missing required top-level fields")
     changes = plan.get("resource_changes")
     if not isinstance(changes, list):
         raise ValueError("Terraform plan JSON has no resource_changes array")
@@ -31,12 +59,27 @@ def check_plan(plan: dict) -> list[str]:
         if not isinstance(resource, dict):
             raise ValueError("Terraform plan JSON contains a malformed resource change")
         address = resource.get("address")
+        resource_type = resource.get("type")
+        mode = resource.get("mode")
         change = resource.get("change")
         actions = change.get("actions") if isinstance(change, dict) else None
-        if not isinstance(address, str) or not isinstance(actions, list) or not all(isinstance(a, str) for a in actions):
-            raise ValueError("Terraform plan JSON contains a malformed address or action list")
+        if (
+            not isinstance(address, str)
+            or not isinstance(resource_type, str)
+            or not isinstance(mode, str)
+            or mode not in {"managed", "data"}
+            or not isinstance(actions, list)
+            or actions not in VALID_ACTION_LISTS
+        ):
+            raise ValueError("Terraform plan JSON contains an incomplete resource type, mode, address, or action list")
+
         if address in PROTECTED_ADDRESSES and actions != ["no-op"]:
             violations.append(f"{address}: planned actions {actions} are forbidden for this approved independent owner")
+        if is_protected_alb_type(resource_type) and (
+            PROTECTED_MUTATING_ACTIONS.intersection(actions)
+            or set(actions) == {"create", "delete"}
+        ):
+            violations.append(f"{address} ({resource_type}): planned actions {actions} are forbidden for protected ALB/ACM resources")
     return violations
 
 
