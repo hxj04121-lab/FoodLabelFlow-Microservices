@@ -135,6 +135,10 @@ run "staging_preserves_out_of_band_lbc_and_existing_namespaces" {
     error_message = "Disabling LBC must preserve the missing add-ons, NetworkPolicies, and EBS CSI management declarations."
   }
   assert {
+    condition     = toset(keys(yamldecode(helm_release.network_policies.values[0]).namespaces)) == toset(["gateway", "keycloak", "rabbitmq", "observability", "specification", "formulation", "compliance", "label-workflow"])
+    error_message = "The platform NetworkPolicy chart accepts exactly its eight workload namespaces; frontend must not be passed."
+  }
+  assert {
     condition = alltrue([for namespace, role in kubernetes_manifest.deployer_custom_resource_role : (
       length(role.manifest.rules) == (namespace == "frontend" ? 4 : 2) &&
       role.manifest.metadata.namespace == var.workload_namespaces[namespace] &&
