@@ -15,7 +15,7 @@ grep -Fq 'platform/staging/validate_window.py "$STAGING_WINDOW_HOURS" "$STAGING_
 grep -Fqx '      AWS_REGION: ${{ vars.AWS_REGION }}' "$workflow"
 grep -Fq '      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}' "$workflow"
 grep -Fq '      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}' "$workflow"
-grep -Fq 'role/spectrace-staging-github-deploy' "$workflow"
+grep -Fq 'role/FoodLabelFlowStagingDeploy' "$workflow"
 ! grep -q 'vars.AWS_PLAN_ROLE_ARN' "$workflow"
 grep -Fq '          APPROVED_STAGING_SPEND_USD: ${{ secrets.APPROVED_STAGING_SPEND_USD }}' "$workflow"
 grep -Fq -- '--approved-spend-usd "$APPROVED_STAGING_SPEND_USD"' "$workflow"
