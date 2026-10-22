@@ -207,7 +207,8 @@ jobs:
             kubectl get secret "${service}-rabbitmq-user-credentials" --namespace "$service" -o name >/dev/null
             kubectl get secret "${service}-runtime" --namespace "$service" -o json | python3 -c 'import json,sys; keys=set(json.load(sys.stdin).get("data",{})); expected={"SPRING_DATASOURCE_URL","SPRING_DATASOURCE_USERNAME","SPRING_DATASOURCE_PASSWORD","SPECTRACE_SECURITY_ISSUERURI","SPECTRACE_SECURITY_JWKSETURI","SPECTRACE_SECURITY_AUDIENCE"}; assert expected <= keys, "runtime Secret is missing required configuration keys"'
             kubectl get secret "${service}-rabbitmq-user-credentials" --namespace "$service" -o json | python3 -c 'import json,sys; keys=set(json.load(sys.stdin).get("data",{})); assert {"username","password"} <= keys, "RabbitMQ Operator Secret is missing required keys"'
-            helm list --namespace "$service" --all --output json > "$RUNNER_TEMP/${service}-release.json"
+            # Helm 4 removed `helm list --all`; derive every release status from Helm storage Secret labels.
+            kubectl get secrets --namespace "$service" -l owner=helm -o json | python3 scripts/staging/helm_releases.py > "$RUNNER_TEMP/${service}-release.json"
             kubectl get deployments,statefulsets,daemonsets,replicasets,replicationcontrollers,jobs,cronjobs,pods,services,networkpolicies,serviceaccounts,horizontalpodautoscalers,endpointslices \
               --namespace "$service" -o json > "$RUNNER_TEMP/${service}-inventory.json"
             python3 scripts/staging/validate_helm_release.py \
