@@ -3,13 +3,20 @@ name: CI
 on:
   push:
     branches: [main, "chore/**", "feature/**"]
+  # Service pipelines accept every PR target and wait for this complete analysis.
   pull_request:
-    branches: [main, 'codex/aws-eks-full-deployment-readiness', XFY, 'codex/stcn-27-*', 'codex/stcn-26-*', 'codex/stcn-28-*', 'feature/stcn-1-g0-m1-contracts', 'g0-m4-label-workflow-contracts', 'feature/stcn-45-outbox-consumer', 'feature/stcn-64-*', 'feature/g3-m2-mainline', 'feature/g3-m2-experiments']
 
 permissions:
   contents: read
 
 jobs:
+  quality-gate-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify complete coverage authority and exact-revision service gating
+        run: python3 -m unittest discover -s tests -p 'test_sonar_ci_gate.py' -v
+
   database-privileges:
     runs-on: ubuntu-latest
     steps:

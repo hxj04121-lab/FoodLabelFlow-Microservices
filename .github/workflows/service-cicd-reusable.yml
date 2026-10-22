@@ -16,7 +16,6 @@ on:
       kind_node_taints: {type: string, required: false, default: ''}
       namespace: {type: string, required: true}
     secrets:
-      SONAR_TOKEN: {required: true}
       STAGING_SMOKE_JWT: {required: false}
     outputs:
       image:
@@ -28,6 +27,10 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - name: Validate service inputs
@@ -101,13 +104,12 @@ jobs:
       - name: Reject unsupported service layout
         if: ${{ hashFiles(format('{0}/pom.xml', inputs.service_path)) == '' && hashFiles(format('{0}/package.json', inputs.service_path)) == '' }}
         run: echo "Service must contain pom.xml or package.json" >&2; exit 1
-      - name: Sonar quality gate
-        uses: SonarSource/sonarqube-scan-action@v7
+      # ci.yml combines every JaCoCo report and frontend LCOV before its only Sonar upload.
+      # A partial service scan would overwrite that PR analysis with missing coverage.
+      - name: Await complete repository Sonar quality gate
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-        with:
-          args: -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/wait_for_sonar.py
 
   security:
     runs-on: ubuntu-latest
