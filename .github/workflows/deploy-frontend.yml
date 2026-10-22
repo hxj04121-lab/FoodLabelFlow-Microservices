@@ -155,7 +155,7 @@ jobs:
           python3 - <<'PY'
           import json, urllib.parse, urllib.request
           repository='hxj04121-lab/foodlabelflow-microservices/frontend'
-          expected='sha256:0cdc79235d96e0992d8aacbf048d08c9ce3d73ee68b4f5eba9179da35ae7aa29'
+          expected='sha256:adeecae3e33265c6171c09f2e8d551ad21d26a62b31beae299297c6c653f6c77'
           token_url='https://ghcr.io/token?'+urllib.parse.urlencode({'scope':f'repository:{repository}:pull','service':'ghcr.io'})
           token=json.load(urllib.request.urlopen(token_url,timeout=20))['token']
           headers={'Authorization':'Bearer '+token,'Accept':', '.join(['application/vnd.oci.image.index.v1+json','application/vnd.docker.distribution.manifest.list.v2+json','application/vnd.oci.image.manifest.v1+json','application/vnd.docker.distribution.manifest.v2+json'])}
@@ -178,7 +178,7 @@ jobs:
           helm template frontend deploy/helm/spectrace-service --namespace frontend \
             --values deploy/helm/values/frontend.yaml --values "$RUNNER_TEMP/frontend-runtime-values.json" \
             > "$RUNNER_TEMP/frontend-rendered.yaml"
-          grep -Fq 'ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:0cdc79235d96e0992d8aacbf048d08c9ce3d73ee68b4f5eba9179da35ae7aa29' "$RUNNER_TEMP/frontend-rendered.yaml"
+          grep -Fq 'ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:adeecae3e33265c6171c09f2e8d551ad21d26a62b31beae299297c6c653f6c77' "$RUNNER_TEMP/frontend-rendered.yaml"
       - name: Check namespace, capacity and authorization before deployment
         run: |
           set -euo pipefail
@@ -247,7 +247,7 @@ jobs:
           assert len(pods)==1, f'expected one Frontend Pod, found {len(pods)}'
           pod=pods[0]
           statuses=pod['status'].get('containerStatuses',[])
-          digest='sha256:0cdc79235d96e0992d8aacbf048d08c9ce3d73ee68b4f5eba9179da35ae7aa29'
+          digest='sha256:adeecae3e33265c6171c09f2e8d551ad21d26a62b31beae299297c6c653f6c77'
           assert pod['status'].get('phase')=='Running'
           assert len(statuses)==1 and statuses[0].get('ready') is True and statuses[0].get('restartCount')==0
           assert statuses[0].get('imageID','').endswith('@'+digest)
@@ -491,7 +491,7 @@ jobs:
           import json, os, sys
           result={
               'commit':os.environ['GITHUB_SHA'],
-              'requestedFrontendImage':'ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:0cdc79235d96e0992d8aacbf048d08c9ce3d73ee68b4f5eba9179da35ae7aa29',
+              'requestedFrontendImage':'ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:adeecae3e33265c6171c09f2e8d551ad21d26a62b31beae299297c6c653f6c77',
               'frontendPodEvidenceAvailable':os.path.exists(os.path.join(os.environ['RUNNER_TEMP'],'frontend-pods.json')),
               'namespace':'frontend',
               'release':'frontend',
