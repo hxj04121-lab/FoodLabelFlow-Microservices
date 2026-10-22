@@ -12,7 +12,11 @@ import { HealthPage } from '@/pages/HealthPage'
 import { Labels } from '@/pages/Labels'
 import { Materials } from '@/pages/Materials'
 import { Overview } from '@/pages/Overview'
-import { Upcoming } from '@/pages/Upcoming'
+import { WorkspaceOverview } from '@/auth/WorkspaceOverview'
+import { signOut, type Identity } from '@/auth/session'
+import { ImpactInbox } from '@/features/impact/ImpactInbox'
+import { LabelWorkspace } from '@/features/labels/LabelWorkspace'
+import { GatewayProducts, GatewaySuppliers, GatewayMaterials } from '@/features/catalog/GatewayCatalog'
 import {
   Activity,
   Box,
@@ -50,7 +54,7 @@ const navigation = [
   { path: '/reviews', label: 'Review workspace', icon: ClipboardCheck },
 ]
 import { CatalogConnection } from '@/components/CatalogConnection'
-export function Shell() {
+export function Shell({ identity }: { identity?: Identity }) {
   const [mobile, setMobile] = useState(false)
   const [help, setHelp] = useState(false)
   const location = useLocation()
@@ -59,6 +63,9 @@ export function Shell() {
     setMobile(false)
   }, [location.pathname])
   const active = navigation.find((n) => n.path === location.pathname)
+  const scope = `${identity?.subject}:${identity?.organisationId}:${location.pathname}:${location.search}`
+  const labelId = new URLSearchParams(location.search).get('label') || ''
+  const needsSignIn = <Panel><h1>Sign in required</h1><p>Use the authenticated workspace to access impact, review and publication workflows.</p></Panel>
   return (
     <div className="app-shell">
       <a href="#main" className="skip-link">
@@ -74,13 +81,13 @@ export function Shell() {
         <div className="topbar-right">
           <span className="environment">
             <span />
-            Local workspace
+            {identity ? 'Authenticated workspace' : 'Local workspace'}
           </span>
           <button aria-label="Help" onClick={() => setHelp(true)}>
             <CircleHelp size={19} />
           </button>
           <span className="topbar-divider" />
-          <span className="avatar">XF</span>
+          {identity ? <Button className="session-signout" variant="outline" onClick={() => void signOut()}>Sign out</Button> : <span className="avatar">XF</span>}
         </div>
       </header>
       {mobile && (
@@ -123,7 +130,6 @@ export function Shell() {
               </span>
               <n.icon size={18} />
               <span>{n.label}</span>
-              {i > 4 && <span className="nav-dot" />}
             </NavLink>
           ))}
         </nav>
@@ -151,10 +157,10 @@ export function Shell() {
             <span>User guide</span>
           </button>
           <div className="user-card">
-            <span className="avatar">XF</span>
+            <span className="avatar">{identity ? <ShieldCheck size={20} aria-hidden="true" /> : 'XF'}</span>
             <div>
-              <strong>Xu Feiyang</strong>
-              <small>M3 · Preview profile</small>
+              <strong>{identity ? 'Signed-in account' : 'Xu Feiyang'}</strong>
+              <small title={identity?.subject}>{identity ? `${identity.organisationType} · ${identity.subject.slice(0, 8)}…` : 'M3 · Preview profile'}</small>
             </div>
           </div>
         </div>
@@ -187,15 +193,15 @@ export function Shell() {
         </div>
         <main id="main" tabIndex={-1}>
           <Routes>
-            <Route path="/" element={<CatalogConnection><Overview /></CatalogConnection>} />
-            <Route path="/products" element={<CatalogConnection><Catalog /></CatalogConnection>} />
-            <Route path="/formulas" element={<CatalogConnection><Catalog formulas /></CatalogConnection>} />
-            <Route path="/suppliers" element={<CatalogConnection><Materials suppliers /></CatalogConnection>} />
-            <Route path="/materials" element={<CatalogConnection><Materials /></CatalogConnection>} />
-            <Route path="/labels" element={<CatalogConnection><Labels /></CatalogConnection>} />
-            <Route path="/impact" element={<Upcoming kind="impact" />} />
-            <Route path="/reviews" element={<Upcoming kind="reviews" />} />
-            <Route path="/health" element={<HealthPage />} />
+            <Route path="/" element={identity ? <WorkspaceOverview key={scope} identity={identity} /> : <CatalogConnection><Overview /></CatalogConnection>} />
+            <Route path="/products" element={identity ? <GatewayProducts key={scope} identity={identity} /> : <CatalogConnection><Catalog /></CatalogConnection>} />
+            <Route path="/formulas" element={identity ? <GatewayProducts key={scope} identity={identity} formulas /> : <CatalogConnection><Catalog formulas /></CatalogConnection>} />
+            <Route path="/suppliers" element={identity ? <GatewaySuppliers key={scope} identity={identity} /> : <CatalogConnection><Materials suppliers /></CatalogConnection>} />
+            <Route path="/materials" element={identity ? <GatewayMaterials key={scope} identity={identity} /> : <CatalogConnection><Materials /></CatalogConnection>} />
+            <Route path="/labels" element={identity ? <LabelWorkspace key={scope} identity={identity} initialLabelId={labelId} /> : <CatalogConnection><Labels /></CatalogConnection>} />
+            <Route path="/impact" element={identity ? <ImpactInbox key={scope} identity={identity} openLabel={id => navigate(`/reviews?label=${encodeURIComponent(id)}`)} /> : needsSignIn} />
+            <Route path="/reviews" element={identity ? <LabelWorkspace key={scope} identity={identity} initialLabelId={labelId} reviewOnly /> : needsSignIn} />
+            <Route path="/health" element={identity ? <WorkspaceOverview key={scope} identity={identity} statusOnly /> : <HealthPage />} />
             <Route
               path="*"
               element={
@@ -208,7 +214,7 @@ export function Shell() {
           </Routes>
           <footer className="page-footer">
             <span>SpecTrace · Food label change control</span>
-            <span>Local workspace / Single-market MVP</span>
+            <span>{identity ? 'Authenticated workspace' : 'Local workspace'} / Single-market MVP</span>
           </footer>
         </main>
       </div>
@@ -224,8 +230,8 @@ export function Shell() {
             <li>Search by product name, brand or ID, then select a product to view its formula.</li>
             <li>Use the detail tabs to view formula items, version history and sources.</li>
             <li>Browse suppliers and materials to inspect specifications and components.</li>
-            <li>Catalog pages read from the M1 API. Refresh to reload; failed requests never fall back to offline data.</li>
-            <li>The preview profile is not a signed-in account. On localhost, the formula editor can explicitly enable the course demo identity for saving and publishing. Label approvals remain a separate workflow.</li>
+            <li>{identity ? 'Catalog pages use your signed-in organisation and the public Gateway. Failed requests do not fall back to preview data.' : 'Catalog pages read from the local M1 API. Failed requests never fall back to offline data.'}</li>
+            <li>{identity ? 'Use Change impact to inspect findings. Open an exact label version in Review workspace to approve, request changes, reject or publish according to your roles.' : 'Local preview is not a signed-in account. Production workflows require the authenticated workspace.'}</li>
           </ol>
         </DialogContent>
       </Dialog>

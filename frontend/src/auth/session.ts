@@ -12,7 +12,7 @@ export function matchesCaller(value: CallerIdentity, identity: Identity | undefi
   const expected = new Set(identity.roles)
   return actual.size === expected.size && [...actual].every(role => expected.has(role))
 }
-type Session = { status: 'loading' | 'signedOut' | 'signedIn' | 'error'; identity?: Identity; message?: string }
+type Session = { status: 'loading' | 'signedOut' | 'signedIn' | 'error'; identity?: Identity; message?: string; returnTo?: string }
 let session: Session = { status: 'loading' }
 let manager: UserManager | undefined
 let user: User | undefined
@@ -37,6 +37,7 @@ function secureUrl(value: string | undefined): URL {
 }
 
 function createManager() {
+  if (!authEnabled) throw new Error('Sign-in is not enabled for this site. Ask the workspace administrator to configure authentication.')
   authority = secureUrl(import.meta.env.VITE_OIDC_AUTHORITY).href.replace(/\/$/, '')
   const api = secureUrl(import.meta.env.VITE_GATEWAY_ORIGIN === '/' ? window.location.origin : import.meta.env.VITE_GATEWAY_ORIGIN)
   if (api.pathname !== '/') throw new Error('The gateway address must be an origin without a path.')
@@ -74,7 +75,7 @@ function accept(result: User) {
     || claims.roles.some(r => typeof r !== 'string' || !r.trim() || r.length > 128)))) throw new Error('INVALID_TOKEN')
   // These claims drive presentation; the Gateway and every service independently verify the JWT.
   user = result
-  publish({ status: 'signedIn', identity: {
+  publish({ status: 'signedIn', returnTo: safeReturnPath((result.state as { returnTo?: unknown } | undefined)?.returnTo), identity: {
     subject: claims.sub, organisationId: claims.org_id, organisationType: String(claims.org_type), roles: (claims.roles ?? []) as string[],
   } })
 }
@@ -99,7 +100,7 @@ export function startSession(): Promise<void> {
         'Sign-in could not be verified. Try again; if the problem continues, contact your workspace administrator.' })
     } finally {
       if (callback) {
-        window.history.replaceState(null, '', new URL(import.meta.env.BASE_URL, window.location.origin).pathname)
+        window.history.replaceState(window.history.state, '', new URL(import.meta.env.BASE_URL, window.location.origin).pathname)
         const store = manager?.settings.stateStore
         if (store) for (const key of await store.getAllKeys()) await store.remove(key)
       }
@@ -108,10 +109,21 @@ export function startSession(): Promise<void> {
   return startup
 }
 
-export async function signIn() {
+function safeReturnPath(value: unknown): string {
+  if (typeof value !== 'string') return '/'
+  const [pathname, search = ''] = value.split('?')
+  if (!['/', '/products', '/formulas', '/suppliers', '/materials', '/labels', '/impact', '/reviews', '/health'].includes(pathname)) return '/'
+  const params = new URLSearchParams(search), kept = new URLSearchParams()
+  const name = pathname === '/labels' || pathname === '/reviews' ? 'label' : pathname === '/materials' ? 'supplier' : ''
+  const id = name ? params.get(name) : null
+  if (id && /^\S{1,128}$/.test(id)) kept.set(name, id)
+  return pathname + (kept.size ? '?' + kept : '')
+}
+
+export async function signIn(returnTo?: string) {
   if (!manager || session.status === 'loading') return
   publish({ status: 'loading' })
-  try { await manager.signinRedirect({ nonce: crypto.randomUUID() }) }
+  try { await manager.signinRedirect({ nonce: crypto.randomUUID(), state: { returnTo: safeReturnPath(returnTo) } }) }
   catch { publish({ status: 'error', message: 'The sign-in service is unavailable. Please try again.' }) }
 }
 

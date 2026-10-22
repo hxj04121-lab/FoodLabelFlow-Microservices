@@ -1,4 +1,13 @@
+import { authEnabled } from '@/auth/session'
+
+export function requireLocalCatalog() {
+  if (authEnabled || !['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)) {
+    throw new Error('The legacy catalog is available only in the local preview. Use the authenticated Gateway workspace.')
+  }
+}
+
 export async function catalogGet(path: string, signal?: AbortSignal): Promise<unknown> {
+  requireLocalCatalog()
   const response = await fetch(`/api/catalog${path}`, { signal })
   let body: unknown
   try { body = await response.json() } catch { throw new Error(`The API returned invalid JSON (${response.status})`) }

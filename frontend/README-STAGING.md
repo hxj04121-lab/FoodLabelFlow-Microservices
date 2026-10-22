@@ -1,12 +1,36 @@
 # Root-hosted staging frontend handoff
 
-This deploys the existing authenticated Workspace / Labels / Impact inbox at `/`.
-It does not merge the separate legacy Catalog UI. The old `Dockerfile` and
-`nginx.conf` remain for the local baseline; use **Dockerfile.staging** for EKS.
+The production entry is one authenticated Dashboard at `/`. Its sidebar opens
+Products, Formula versions, Suppliers, Materials & specs, Labels, Change impact
+and Review workspace. All production Catalog requests use the existing PKCE
+session and the public Gateway's Specification/Formulation contracts.
+The old `Dockerfile` and `nginx.conf` remain for the localhost baseline;
+use **Dockerfile.staging** for EKS.
 
-## Verified image refresh — 18 October 2026
+## Unified workspace — 22 October 2026
 
-The current deployment candidate includes accepted main PR #74 and the optional-font
+- Sign in once; the shared shell shows the actual organisation and account. Opening
+  a protected route before login returns to that route after PKCE, on root or Pages.
+- Change impact reuses the existing finding filters, pagination and version evidence;
+  its label link opens the exact version in Review workspace. Review exposes the
+  existing approve/request-changes/reject/publish actions according to the account's
+  roles. The service enforces maker/checker separation. There is no invented task-list API.
+- Catalog reads suppliers, materials, released specs, organisation products, formula
+  history and trace through `/api/specifications/**` and `/api/formulations/**`.
+  A manufacturer with `ADMIN_DATA_MAINTENANCE` can create a draft from released specs
+  and explicitly release it with the expected current formula version.
+- Unknown write outcomes stay locked; stale releases need a fresh read and explicit
+  confirmation. Empty/error states never substitute local seed data or fabricated totals.
+- Legacy `/api/catalog` and development identity headers are restricted to explicitly
+  unauthenticated localhost preview. A remote host cannot fall back to that mode.
+
+Browser fixtures prove navigation and contract handling, not AWS acceptance. M5 must
+deploy the reviewed image, then M3 must verify the live PKCE/identity/API/logout flow
+and business scenarios with valid accounts and actual Spec/Form/Label/Compliance data.
+
+## Previous verified image — 18 October 2026
+
+This earlier image includes accepted main PR #74 and the optional-font
 loading fix. Image source: `ff58f59b366fed4368d183d55cf8bc93d8ea2580`.
 
 ```text

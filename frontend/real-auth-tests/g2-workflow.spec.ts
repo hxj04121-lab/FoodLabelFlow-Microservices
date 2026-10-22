@@ -96,7 +96,7 @@ test('real G2 browser workflow validates, resubmits, approves, publishes and rea
     // Wait for the real consumer-owned projection, not a guessed sleep or injected database row.
     // Only an explicit 409 LABEL conflict (before insert) is retried; accepted/uncertain writes are never retried.
     let label: { labelVersionId: string; formulaVersionId: string; ruleSetVersionId: string } | undefined
-    await maker.getByRole('button', { name: 'Labels', exact: true }).click()
+    await maker.getByRole('link', { name: 'Labels', exact: true }).click()
     await maker.getByLabel('Product ID', { exact: true }).fill(productId)
     await maker.getByLabel('Jurisdiction code', { exact: true }).fill('US')
     await expect.poll(async () => {
@@ -115,7 +115,7 @@ test('real G2 browser workflow validates, resubmits, approves, publishes and rea
     await expect(maker.getByRole('button', { name: 'Submit for review', exact: true })).toBeEnabled()
     await labelAction(maker, 'Submit for review', '/submit', 200)
     await expect(maker.getByRole('button', { name: 'Approve version', exact: true })).toHaveCount(0)
-    await checker.getByRole('button', { name: 'Labels', exact: true }).click()
+    await checker.getByRole('link', { name: 'Labels', exact: true }).click()
     await checker.getByLabel('Label version ID', { exact: true }).fill(label!.labelVersionId)
     await checker.getByRole('button', { name: 'Open label', exact: true }).click()
     await labelAction(checker, 'Request changes', '/decisions', 201)

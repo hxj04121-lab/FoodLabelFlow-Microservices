@@ -9,7 +9,7 @@ type WorkspaceAction = LabelAction | 'open' | 'current' | 'saveDeclarations'
 const declarationSources: DeclarationSource[] = ['MIGRATED_PUBLIC_LABEL', 'FORMULA_DERIVED', 'SYSTEM_PROPOSED', 'USER_ENTERED']
 const emptyDeclaration = (): LabelDeclaration => ({ allergenId: '', declarationType: 'CONTAINS', declarationSource: 'USER_ENTERED', displayText: null })
 
-export function LabelWorkspace({ identity, initialLabelId = '' }: { identity: Identity; initialLabelId?: string }) {
+export function LabelWorkspace({ identity, initialLabelId = '', reviewOnly = false }: { identity: Identity; initialLabelId?: string; reviewOnly?: boolean }) {
   const [productId, setProductId] = useState('')
   const [jurisdiction, setJurisdiction] = useState('')
   const [currentProductId, setCurrentProductId] = useState('')
@@ -135,10 +135,10 @@ export function LabelWorkspace({ identity, initialLabelId = '' }: { identity: Id
     && new Set(declarations.map(declaration => declaration.allergenId.trim())).size === declarations.length
 
   return <section className="g2-label-workspace" aria-labelledby="labels-title">
-    <h2 id="labels-title">Labels</h2>
-    <p>Prepare a draft, submit it for review, and publish an approved version.</p>
+    <h1 id="labels-title">{reviewOnly ? 'Review workspace' : 'Labels'}</h1>
+    <p>{reviewOnly ? 'Open a label version to review its declarations and record a decision. Publication requires an approved version and the publisher role.' : 'Prepare a draft, submit it for review, and publish an approved version.'}</p>
     <div className="g2-label-entry-grid">
-      {writable ? <form onSubmit={create} aria-labelledby="create-g2-label-title">
+      {writable && !reviewOnly ? <form onSubmit={create} aria-labelledby="create-g2-label-title">
         <fieldset disabled={!!busy}><legend id="create-g2-label-title">Create a draft</legend>
           <label htmlFor="g2-label-product">Product ID</label>
           <input id="g2-label-product" required value={productId} onChange={event => setProductId(event.target.value)} autoComplete="off" />

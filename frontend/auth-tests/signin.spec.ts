@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http'
 import { createHash, generateKeyPairSync, sign, randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
+import { gatewayCatalogFixture } from './gateway-catalog-fixture'
 
 // Protocol fixture only: no real user, password, Keycloak, or business service is simulated as deployed.
 const origin = 'http://127.0.0.1:8191'
@@ -207,6 +208,14 @@ async function login(page: Page) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Continue with Keycloak', exact: true }).click()
 }
+const workspaceLink = (name: string) => ({ Workspace: 'Overview', Labels: 'Labels', 'Impact inbox': 'Change impact' }[name] || name)
+async function workspaceSection(page: Page, name: string) {
+  await expect(page.getByRole('navigation', { name: 'Main navigation', includeHidden: true })).toBeAttached()
+  if (!await page.getByRole('navigation', { name: 'Main navigation' }).isVisible()) {
+    await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
+  }
+  await page.getByRole('link', { name: workspaceLink(name), exact: true }).click()
+}
 async function capture(page: Page, path: string) {
   await page.evaluate(() => {
     window.scrollTo(0, 0)
@@ -214,6 +223,175 @@ async function capture(page: Page, path: string) {
   })
   await page.screenshot({ path, fullPage: true })
 }
+test('unified Dashboard routes use authenticated Catalog, Impact and Review workspaces', async ({ page }) => {
+  actorRoles = ['ADMIN_DATA_MAINTENANCE', 'CHANGE_MANAGER', 'LABEL_OFFICER', 'APPROVER', 'PUBLISHER']
+  const requests = await gatewayCatalogFixture(page, () => sentToken)
+  await login(page)
+  await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible()
+  await page.getByRole('link', { name: 'Products', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Open product North cocoa', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Next page', exact: true }).click()
+  await expect(page.getByText('North bread', { exact: true })).toBeVisible()
+  expect(requests.some(r => r.path.includes('cursor=opaque+%2B%26next%3D'))).toBe(true)
+  await page.getByRole('link', { name: 'Formula versions', exact: true }).click()
+  await page.getByRole('button', { name: 'Open product North cocoa', exact: true }).click()
+  await expect(page.getByText('formula-one', { exact: true }).first()).toBeVisible()
+  await page.getByRole('button', { name: 'View trace formula-one', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Formula trace' })).toContainText('supplier-one')
+  await capture(page, 'test-results/ui-polish/auth-catalog-1440.png')
+  await page.getByRole('link', { name: 'Suppliers', exact: true }).click()
+  await expect(page.getByText('Beta supplier', { exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Materials & specs', exact: true }).click()
+  await page.getByRole('button', { name: 'View specifications Cocoa base', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Released specifications' })).toContainText('Cocoa')
+  await page.getByRole('link', { name: 'Change impact', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Refresh inbox', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Review workspace', exact: true }).click()
+  await expect(page.getByLabel('Label version ID', { exact: true })).toBeVisible()
+  await expect(page.getByText('This workflow is not connected yet')).toHaveCount(0)
+})
+
+for (const scenario of ['ok', 'long-subject'] as const) {
+test(`unified Catalog creates and releases a formula through native public contracts (${scenario})`, async ({ page }) => {
+  actorRoles = ['ADMIN_DATA_MAINTENANCE']
+  if (scenario === 'long-subject') actorSubject = 's'.repeat(129)
+  const requests = await gatewayCatalogFixture(page, () => sentToken, scenario)
+  await login(page)
+  await page.getByRole('link', { name: 'Formula versions', exact: true }).click()
+  await page.getByRole('button', { name: 'Open product North cocoa', exact: true }).click()
+  await page.getByRole('button', { name: 'Create formula', exact: true }).click()
+  await page.getByLabel('Provenance ID', { exact: true }).fill('prov-one')
+  await page.getByLabel('Released specification 1', { exact: true }).selectOption('spec-one')
+  await page.getByLabel('Quantity 1', { exact: true }).fill('1')
+  await page.getByLabel('Unit 1', { exact: true }).fill('kg')
+  await page.getByRole('button', { name: 'Save formula draft', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('Draft version 2 saved')
+  await page.getByRole('button', { name: 'Release formula', exact: true }).click()
+  await page.getByRole('button', { name: 'Confirm release', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('Formula version 2 released')
+  expect(requests.filter(r => r.method === 'POST')).toHaveLength(2)
+})
+}
+
+test('unified Catalog rejects foreign products and clears protected routes on 401', async ({ page }) => {
+  await gatewayCatalogFixture(page, () => sentToken, 'foreign')
+  await login(page)
+  await page.getByRole('link', { name: 'Products', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('unreadable')
+  await expect(page.getByText('North cocoa', { exact: true })).toHaveCount(0)
+  await gatewayCatalogFixture(page, () => sentToken, 'unauthorized')
+  await page.getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Continue with Keycloak', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Main navigation' })).toHaveCount(0)
+})
+
+async function nativeFormulaInputs(page: Page) {
+  await login(page)
+  await page.getByRole('link', { name: 'Formula versions', exact: true }).click()
+  await page.getByRole('button', { name: 'Open product North cocoa', exact: true }).click()
+  await page.getByRole('button', { name: 'Create formula', exact: true }).click()
+  await page.getByLabel('Provenance ID', { exact: true }).fill('prov-one')
+  await page.getByLabel('Released specification 1', { exact: true }).selectOption('spec-one')
+  await page.getByLabel('Quantity 1', { exact: true }).fill('1')
+  await page.getByLabel('Unit 1', { exact: true }).fill('kg')
+}
+test('unified Catalog mobile navigation preserves unsaved inputs until explicitly discarded', async ({ page }) => {
+  actorRoles = ['ADMIN_DATA_MAINTENANCE']
+  await gatewayCatalogFixture(page, () => sentToken)
+  await page.setViewportSize({ width: 390, height: 1000 })
+  await login(page)
+  await workspaceSection(page, 'Formula versions')
+  await page.getByRole('button', { name: 'Open product North cocoa', exact: true }).click()
+  await expect(page.getByText('formula-one', { exact: true }).first()).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+  await capture(page, 'test-results/ui-polish/auth-catalog-390.png')
+  await page.getByRole('button', { name: 'Create formula', exact: true }).click()
+  await page.getByLabel('Provenance ID', { exact: true }).fill('prov-one')
+  await page.getByLabel('Released specification 1', { exact: true }).selectOption('spec-one')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+  await capture(page, 'test-results/ui-polish/auth-formula-create-390.png')
+  await workspaceSection(page, 'Review workspace')
+  await expect(page.getByRole('alertdialog')).toBeVisible()
+  await page.getByRole('button', { name: 'Keep editing', exact: true }).click()
+  await expect(page.getByLabel('Provenance ID', { exact: true })).toHaveValue('prov-one')
+  await workspaceSection(page, 'Review workspace')
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Review workspace', exact: true })).toBeVisible()
+})
+for (const scenario of ['wrong-draft', 'wrong-release', 'wrong-current', 'uncertain'] as const) {
+  test(`unified Catalog ${scenario} never confirms or repeats a write`, async ({ page }) => {
+    actorRoles = ['ADMIN_DATA_MAINTENANCE']
+    const requests = await gatewayCatalogFixture(page, () => sentToken, scenario)
+    await nativeFormulaInputs(page)
+    await page.getByRole('button', { name: 'Save formula draft', exact: true }).click()
+    const releaseAttempt = scenario === 'wrong-release' || scenario === 'wrong-current'
+    if (releaseAttempt) {
+      await expect(page.getByRole('status')).toContainText('Draft version 2 saved')
+      await page.getByRole('button', { name: 'Release formula', exact: true }).click()
+      await page.getByRole('button', { name: 'Confirm release', exact: true }).click()
+    }
+    await expect(page.getByRole('alert')).toContainText('unconfirmed')
+    await expect(page.getByRole('button', { name: releaseAttempt ? 'Release formula' : 'Save formula draft', exact: true })).toBeDisabled()
+    // A dropped connection can be replayed by the browser transport; every application fetch
+    // receives a fresh correlation ID, so this asserts no application-level retry.
+    expect(new Set(requests.filter(r => r.method === 'POST').map(r => r.correlation)).size).toBe(releaseAttempt ? 2 : 1)
+    await expect(page.getByText(/Formula version 2 released/)).toHaveCount(0)
+  })
+}
+
+test('unified Catalog stale release requires refresh and a new explicit confirmation', async ({ page }) => {
+  actorRoles = ['ADMIN_DATA_MAINTENANCE']
+  const requests = await gatewayCatalogFixture(page, () => sentToken, 'conflict')
+  await nativeFormulaInputs(page)
+  await page.getByRole('button', { name: 'Save formula draft', exact: true }).click()
+  await page.getByRole('button', { name: 'Release formula', exact: true }).click()
+  await page.getByRole('button', { name: 'Confirm release', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('changed')
+  await expect(page.getByRole('button', { name: 'Release formula', exact: true })).toBeDisabled()
+  expect(requests.filter(r => r.method === 'POST')).toHaveLength(2)
+  await page.getByRole('button', { name: 'Refresh current version', exact: true }).click()
+  await expect(page.getByText('formula-concurrent', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Release formula', exact: true }).click()
+  await page.getByRole('button', { name: 'Confirm release', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('Formula version 3 released')
+  expect(requests.filter(r => r.method === 'POST')).toHaveLength(3)
+})
+
+test('unified Catalog supplier and non-maintainer roles cannot issue formula writes', async ({ page }) => {
+  actorType = 'SUPPLIER'; actorRoles = ['ADMIN_DATA_MAINTENANCE']
+  const requests = await gatewayCatalogFixture(page, () => sentToken)
+  await login(page)
+  await page.getByRole('link', { name: 'Formula versions', exact: true }).click()
+  await expect(page.getByText('Product and formula access requires a manufacturer account.')).toBeVisible()
+  expect(requests).toHaveLength(0)
+  actorType = 'MANUFACTURER'; actorRoles = ['LABEL_OFFICER']
+  await login(page)
+  await page.getByRole('link', { name: 'Formula versions', exact: true }).click()
+  await page.getByRole('button', { name: 'Open product North cocoa', exact: true }).click()
+  await expect(page.getByText('Creating or releasing formulas requires ADMIN_DATA_MAINTENANCE.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Create formula', exact: true })).toHaveCount(0)
+  expect(requests.every(r => r.method === 'GET')).toBe(true)
+})
+
+test('unified Catalog refuses repeated cursors instead of displaying a partial next page', async ({ page }) => {
+  await gatewayCatalogFixture(page, () => sentToken, 'repeat-cursor')
+  await login(page)
+  await page.getByRole('link', { name: 'Products', exact: true }).click()
+  await page.getByRole('button', { name: 'Next page', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('unreadable')
+  await expect(page.getByText('North bread', { exact: true })).toHaveCount(0)
+})
+
+test('unified PKCE restores a protected review deep link without restoring auth query parameters', async ({ page }) => {
+  await page.goto('/reviews?label=label-one')
+  await page.getByRole('button', { name: 'Continue with Keycloak', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Review workspace', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Label version ID', { exact: true })).toHaveValue('label-one')
+  expect(new URL(page.url()).search).toBe('?label=label-one')
+  await page.getByRole('button', { name: 'Open label', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Label version 1', exact: true })).toBeVisible()
+})
+
 test('PKCE round trip displays token organisation and roles, forwards bearer, and signs out', async ({ page }) => {
   await login(page)
   await expect(page.getByRole('heading', { name: 'Your organisation’s workspace' })).toBeVisible()
@@ -299,13 +477,13 @@ test('expiry requires a new sign-in; reload never restores a stored token', asyn
 
 async function labels(page: Page) {
   await login(page)
-  await page.getByRole('button', { name: 'Labels', exact: true }).click()
+  await workspaceSection(page, 'Labels')
 }
 
 async function inbox(page: Page) {
   actorRoles = ['CHANGE_MANAGER', 'LABEL_OFFICER']
   await login(page)
-  await page.getByRole('button', { name: 'Impact inbox', exact: true }).click()
+  await workspaceSection(page, 'Impact inbox')
   await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click()
 }
 
@@ -410,20 +588,20 @@ test('STCN-101 a read 401 ends the session and removes all evidence', async ({ p
 })
 test('STCN-101 supplier and roleless users cannot issue inbox reads', async ({ page }) => {
   actorRoles = ['CHANGE_MANAGER']; actorType = 'SUPPLIER'; await login(page)
-  await page.getByRole('button', { name: 'Impact inbox', exact: true }).click()
+  await workspaceSection(page, 'Impact inbox')
   await expect(page.getByRole('status')).toContainText('require a manufacturer account')
   await expect(page.getByRole('button', { name: 'Refresh inbox', exact: true })).toHaveCount(0)
   expect(impactRequests).toHaveLength(0)
   actorType = 'MANUFACTURER'; actorRoles = []; await login(page)
-  await page.getByRole('button', { name: 'Impact inbox', exact: true }).click()
+  await workspaceSection(page, 'Impact inbox')
   await expect(page.getByRole('status')).toContainText('CHANGE_MANAGER')
   expect(impactRequests).toHaveLength(0)
 })
 test('STCN-101 leaving during a read never restores evidence to another workspace view', async ({ page }) => {
   impactScenario = 'delay'; await inbox(page)
-  await page.getByRole('button', { name: 'Labels', exact: true }).click()
+  await workspaceSection(page, 'Labels')
   await expect(page.getByRole('heading', { name: 'Labels', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Impact inbox', exact: true }).click()
+  await workspaceSection(page, 'Impact inbox')
   await expect(page.getByRole('button', { name: 'View finding finding_002', exact: true })).toHaveCount(0)
 })
 async function createDraft(page: Page) {
@@ -586,8 +764,8 @@ test('STCN-77 concurrent clicks and navigation cannot leave late label state', a
   await expect(page.getByRole('heading', { name: 'Label version 1', exact: true })).toBeVisible()
   expect(labelRequests.filter(request => request.method === 'POST')).toHaveLength(1)
   await page.getByRole('button', { name: 'Validate draft', exact: true }).click()
-  await page.getByRole('button', { name: 'Workspace', exact: true }).click()
-  await page.getByRole('button', { name: 'Labels', exact: true }).click()
+  await workspaceSection(page, 'Workspace')
+  await workspaceSection(page, 'Labels')
   await expect(page.getByRole('heading', { name: 'Label version 1', exact: true })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Validation passed', exact: true })).toHaveCount(0)
 })
@@ -597,7 +775,7 @@ test('STCN-77 a write 401 clears the identity and label screen', async ({ page }
   await page.getByLabel('Product ID', { exact: true }).fill('product-one'); await page.getByLabel('Jurisdiction code', { exact: true }).fill('SG')
   await page.getByRole('button', { name: 'Create draft', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('session is no longer accepted')
-  await expect(page.getByRole('button', { name: 'Labels', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Labels', exact: true })).toHaveCount(0)
 })
 
 test('STCN-77 public write helper refuses foreign, private and ambiguous routes', async ({ page }) => {
@@ -747,7 +925,7 @@ for (const width of [1440, 900, 390]) {
     await page.getByRole('button', { name: 'Load products' }).click()
     await expect(page.getByText('Organisation product', { exact: true })).toBeVisible()
     for (const view of ['Workspace', 'Labels', 'Impact inbox']) {
-      await page.getByRole('button', { name: view, exact: true }).click()
+      await workspaceSection(page, view)
       if (view === 'Labels') await createDraft(page)
       if (view === 'Impact inbox') {
         await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click()
@@ -755,7 +933,7 @@ for (const width of [1440, 900, 390]) {
         await expect(page.getByRole('heading', { name: 'Finding finding_002', exact: true })).toBeVisible()
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-      await expect(page.getByRole('button', { name: view, exact: true })).toHaveAttribute('aria-current', 'page')
+      await expect(page.locator('nav[aria-label="Main navigation"] a[aria-current="page"]')).toContainText(workspaceLink(view))
       await capture(page, `test-results/ui-polish/auth-${view.replaceAll(' ', '-').toLowerCase()}-${width}.png`)
     }
   })
