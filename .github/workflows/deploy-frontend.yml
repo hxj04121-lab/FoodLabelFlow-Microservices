@@ -191,7 +191,8 @@ jobs:
           if not ready:
               raise SystemExit('No Ready general node is available; node-group scale changes are not permitted by this workflow.')
           PY
-          helm list --namespace frontend --all --output json > "$RUNNER_TEMP/frontend-release.json"
+          # Helm 4 removed `helm list --all`; derive every release status from Helm storage Secret labels.
+          kubectl get secrets --namespace frontend -l owner=helm -o json | python3 scripts/staging/helm_releases.py > "$RUNNER_TEMP/frontend-release.json"
           kubectl get deployments,statefulsets,daemonsets,replicasets,replicationcontrollers,jobs,cronjobs,pods,services,networkpolicies,serviceaccounts,horizontalpodautoscalers,endpointslices,targetgroupbindings.elbv2.k8s.aws \
             --namespace frontend -o json > "$RUNNER_TEMP/frontend-inventory.json"
           python3 scripts/staging/validate_helm_release.py \

@@ -132,6 +132,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p 'test_staging_plan_rbac_workflow.py' -v
           python3 -m unittest discover -s tests -p 'test_helm_release_inventory.py' -v
+          python3 -m unittest discover -s tests -p 'test_helm_releases.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_rds_values.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_service_digests.py' -v
           python3 -m unittest discover -s tests -p 'test_staging_apply_workflow.py' -v
