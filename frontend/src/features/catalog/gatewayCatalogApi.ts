@@ -10,12 +10,14 @@ export type FormulaRecord = { formulaVersionId: string; organisationId: string; 
 export type SupplierRecord = { supplierId: string; organisationId: string; supplierCode: string; supplierName: string }
 export type MaterialRecord = { materialId: string; organisationId: string; supplierId: string; materialCode: string; materialName: string; description: string | null; provenanceId: string }
 export type SpecificationRecord = { specificationVersionId: string; organisationId: string; materialId: string; versionNumber: number;
-  lifecycleStatus: 'RELEASED'; effectiveDate: string; provenanceId: string;
+  lifecycleStatus: 'DRAFT' | 'RELEASED'; effectiveDate: string; provenanceId: string; createdBySubject: string | null;
   components: Array<{ specComponentId: string; sequenceNo: number; ingredientId: string; ingredientName: string; rawPhrase: string; matchStatus: string }> }
 export type ReleasedSpec = { specificationVersion: VersionRef; materialId: string; supplierId: string; supplierOrganisationId: string; effectiveDate: string }
 export type FormulaTrace = { formulaVersion: VersionRef; productId: string; items: Array<{ formulaItemId: string; sequenceNo: number;
   materialId: string; specificationVersion: VersionRef; supplierId: string; supplierOrganisationId: string; effectiveDate: string }> }
 export type CatalogPage<T> = { items: T[]; nextCursor: string | null }
+export type IngredientRecord = { ingredientId: string; canonicalName: string; ingredientKind: string }
+export type SpecificationInput = { materialId: string; effectiveDate: string; provenanceId: string; components: Array<{ ingredientId: string; rawPhrase: string; matchRule: string }> }
 export type FormulaInput = { productId: string; provenanceId: string; items: Array<{ materialId: string; specificationVersionId: string; quantity: number | null; unit: string | null }> }
 
 const unreadable = () => new Error('The service returned unreadable or unrelated catalog information. Refresh and check the reference.')
@@ -30,6 +32,9 @@ function ref(value: unknown): VersionRef { const v = object(value); return { id:
 function rows<T>(value: unknown, read: (row: unknown) => T): T[] { if (!Array.isArray(value)) throw unreadable(); return value.map(read) }
 export const canReadProducts = (identity: Identity) => identity.organisationType === 'MANUFACTURER'
 export const canWriteFormulas = (identity: Identity) => canReadProducts(identity) && identity.roles.includes('ADMIN_DATA_MAINTENANCE')
+// BR-11: only the supplier organisation that owns the material may create and release its specifications.
+export const canWriteSpecifications = (identity: Identity, material: MaterialRecord) => identity.organisationType === 'SUPPLIER'
+  && identity.roles.includes('ADMIN_DATA_MAINTENANCE') && material.organisationId === identity.organisationId
 
 export function readProduct(value: unknown, identity: Identity, expectedId?: string): ProductRecord {
   const p = object(value)
@@ -61,13 +66,17 @@ export function readMaterial(value: unknown): MaterialRecord {
   const m = object(value); return { materialId: id(m.materialId), organisationId: id(m.organisationId), supplierId: id(m.supplierId),
     materialCode: text(m.materialCode), materialName: text(m.materialName), description: nullableText(m.description), provenanceId: id(m.provenanceId) }
 }
-export function readSpecification(value: unknown, materialId: string): SpecificationRecord {
+export function readSpecification(value: unknown, materialId: string, status: SpecificationRecord['lifecycleStatus'] = 'RELEASED'): SpecificationRecord {
   const s = object(value)
-  if (s.materialId !== materialId || s.lifecycleStatus !== 'RELEASED') throw unreadable()
+  if (s.materialId !== materialId || s.lifecycleStatus !== status) throw unreadable()
   return { specificationVersionId: id(s.specificationVersionId), organisationId: id(s.organisationId), materialId: id(s.materialId),
-    versionNumber: integer(s.versionNumber), lifecycleStatus: 'RELEASED', effectiveDate: date(s.effectiveDate), provenanceId: id(s.provenanceId),
+    versionNumber: integer(s.versionNumber), lifecycleStatus: status, effectiveDate: date(s.effectiveDate), provenanceId: id(s.provenanceId),
+    createdBySubject: s.createdBySubject == null ? null : subject(s.createdBySubject),
     components: rows(s.components, value => { const c = object(value); return { specComponentId: id(c.specComponentId), sequenceNo: integer(c.sequenceNo),
       ingredientId: id(c.ingredientId), ingredientName: text(c.ingredientName), rawPhrase: text(c.rawPhrase), matchStatus: text(c.matchStatus) } }) }
+}
+export function readIngredient(value: unknown): IngredientRecord {
+  const i = object(value); return { ingredientId: id(i.ingredientId), canonicalName: text(i.canonicalName), ingredientKind: text(i.ingredientKind) }
 }
 export function readReleasedSpec(value: unknown): ReleasedSpec {
   const s = object(value); return { specificationVersion: ref(s.specificationVersion), materialId: id(s.materialId), supplierId: id(s.supplierId),
@@ -117,10 +126,36 @@ export async function releaseGatewayFormula(formula: FormulaRecord, expected: st
     return f }
   catch { throw new PublicApiError('The release result could not be confirmed. Check server history before another write.', 200, 'INVALID_RESPONSE', null, true) }
 }
+function sameComponents(spec: SpecificationRecord, components: SpecificationInput['components']) {
+  const rows = [...spec.components].sort((a, b) => a.sequenceNo - b.sequenceNo)
+  return rows.length === components.length && rows.every((c, index) => c.sequenceNo === index + 1
+    && c.ingredientId === components[index].ingredientId && c.rawPhrase === components[index].rawPhrase)
+}
+export async function createGatewaySpecification(input: SpecificationInput, identity: Identity, signal: AbortSignal) {
+  const value = await publicApiPost<unknown>('/api/specifications/versions', input, signal)
+  try {
+    const s = readSpecification(value, input.materialId, 'DRAFT')
+    if (s.organisationId !== identity.organisationId || s.provenanceId !== input.provenanceId || s.effectiveDate !== input.effectiveDate
+      || s.createdBySubject !== identity.subject || !sameComponents(s, input.components)) throw unreadable()
+    return s
+  }
+  catch { throw new PublicApiError('The draft result could not be confirmed. Check server history before another write.', 201, 'INVALID_RESPONSE', null, true) }
+}
+export async function releaseGatewaySpecification(spec: SpecificationRecord, identity: Identity, signal: AbortSignal) {
+  const value = await publicApiPost<unknown>(`/api/specifications/versions/${encodeURIComponent(spec.specificationVersionId)}/release`, undefined, signal)
+  try {
+    const s = readSpecification(value, spec.materialId)
+    if (s.specificationVersionId !== spec.specificationVersionId || s.organisationId !== identity.organisationId || s.versionNumber !== spec.versionNumber
+      || s.provenanceId !== spec.provenanceId || s.effectiveDate !== spec.effectiveDate
+      || !sameComponents(s, spec.components.map(c => ({ ingredientId: c.ingredientId, rawPhrase: c.rawPhrase, matchRule: '' })))) throw unreadable()
+    return s
+  }
+  catch { throw new PublicApiError('The release result could not be confirmed. Check server history before another write.', 200, 'INVALID_RESPONSE', null, true) }
+}
 export function catalogError(error: unknown): string {
   if (!(error instanceof PublicApiError)) return error instanceof Error ? error.message : 'The catalog request could not be completed.'
   const messages: Record<number, string> = { 400: 'Check the catalog entries and try again.', 403: 'You do not have permission to view or change this resource.',
-    404: 'This catalog resource was not found. Check the reference.', 409: 'The formula or current version has changed. Refresh before another action.',
+    404: 'This catalog resource was not found. Check the reference.', 409: 'The formula, specification or current version has changed. Refresh before another action.',
     422: 'Required specification data is not ready. Refresh after the service has processed it.', 429: 'Too many requests. Wait before trying again.' }
   const message = error.outcomeUnknown ? 'The write result is unconfirmed. Check server history; do not repeat the write.' : messages[error.status] || 'The catalog service is unavailable. Try again later.'
   return message + (error.traceId ? ` Reference: ${error.traceId}` : '')
