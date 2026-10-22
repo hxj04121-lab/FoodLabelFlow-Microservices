@@ -210,8 +210,11 @@ async function login(page: Page) {
 }
 const workspaceLink = (name: string) => ({ Workspace: 'Overview', Labels: 'Labels', 'Impact inbox': 'Change impact' }[name] || name)
 async function workspaceSection(page: Page, name: string) {
-  await expect(page.getByRole('navigation', { name: 'Main navigation', includeHidden: true })).toBeAttached()
-  if (!await page.getByRole('navigation', { name: 'Main navigation' }).isVisible()) {
+  // Modal teardown may briefly aria-hide the already-open sidebar. Check its CSS
+  // visibility, then let the destination link wait until the modal releases it.
+  const navigation = page.getByRole('navigation', { name: 'Main navigation', includeHidden: true })
+  await expect(navigation).toBeAttached()
+  if (!await navigation.isVisible()) {
     await page.getByRole('button', { name: 'Open navigation', exact: true }).click()
   }
   await page.getByRole('link', { name: workspaceLink(name), exact: true }).click()
