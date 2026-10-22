@@ -219,7 +219,8 @@ jobs:
         run: |
           set -euo pipefail
           kubectl get serviceaccount default --namespace frontend >/dev/null
-          kubectl apply --dry-run=server -f "$RUNNER_TEMP/frontend-rendered.yaml" >/dev/null
+          # helm template omits metadata.namespace; without --namespace kubectl validates against "default".
+          kubectl apply --dry-run=server --namespace frontend -f "$RUNNER_TEMP/frontend-rendered.yaml" >/dev/null
       - name: Install or upgrade Frontend and verify service endpoints
         run: |
           set -euo pipefail

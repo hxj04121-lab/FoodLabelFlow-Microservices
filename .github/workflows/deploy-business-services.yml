@@ -217,7 +217,8 @@ jobs:
             helm template "$service" deploy/helm/spectrace-service --namespace "$service" \
               --values "deploy/helm/values/${service}.yaml" --values "$RUNNER_TEMP/rds-network-values.json" \
               > "$RUNNER_TEMP/${service}-rendered.yaml"
-            kubectl apply --dry-run=server -f "$RUNNER_TEMP/${service}-rendered.yaml" >/dev/null
+            # helm template omits metadata.namespace; without --namespace kubectl validates against "default".
+            kubectl apply --dry-run=server --namespace "$service" -f "$RUNNER_TEMP/${service}-rendered.yaml" >/dev/null
           done
       - name: Install or upgrade the four digest-pinned Helm releases
         run: |
