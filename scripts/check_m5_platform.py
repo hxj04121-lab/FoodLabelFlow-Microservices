@@ -177,7 +177,7 @@ assert "-var=manage_vpc_cni=false" in (ROOT / ".github/workflows/terraform-valid
 
 compliance_caller = yaml.load((ROOT / ".github/workflows/compliance-kind-ci.yml").read_text(), Loader=yaml.BaseLoader)
 assert compliance_caller["jobs"]["compliance"]["permissions"] == {
-    "contents": "read", "packages": "write", "id-token": "write"
+    "contents": "read", "actions": "read", "packages": "write", "id-token": "write"
 }
 compliance_inputs = compliance_caller["jobs"]["compliance"]["with"]
 assert compliance_inputs["build_context"] == "."

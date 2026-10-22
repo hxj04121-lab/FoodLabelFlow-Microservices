@@ -1,12 +1,49 @@
 # Root-hosted staging frontend handoff
 
-This deploys the existing authenticated Workspace / Labels / Impact inbox at `/`.
-It does not merge the separate legacy Catalog UI. The old `Dockerfile` and
-`nginx.conf` remain for the local baseline; use **Dockerfile.staging** for EKS.
+The production entry is one authenticated Dashboard at `/`. Its sidebar opens
+Products, Formula versions, Suppliers, Materials & specs, Labels, Change impact
+and Review workspace. All production Catalog requests use the existing PKCE
+session and the public Gateway's Specification/Formulation contracts.
+The old `Dockerfile` and `nginx.conf` remain for the localhost baseline;
+use **Dockerfile.staging** for EKS.
 
-## Verified image refresh — 18 October 2026
+## Unified workspace — 22 October 2026
 
-The current deployment candidate includes accepted main PR #74 and the optional-font
+- Sign in once; the shared shell shows the actual organisation and account. Opening
+  a protected route before login returns to that route after PKCE, on root or Pages.
+- Change impact reuses the existing finding filters, pagination and version evidence;
+  its label link opens the exact version in Review workspace. Review exposes the
+  existing approve/request-changes/reject/publish actions according to the account's
+  roles. The service enforces maker/checker separation. There is no invented task-list API.
+- Catalog reads suppliers, materials, released specs, organisation products, formula
+  history and trace through `/api/specifications/**` and `/api/formulations/**`.
+  A manufacturer with `ADMIN_DATA_MAINTENANCE` can create a draft from released specs
+  and explicitly release it with the expected current formula version.
+- Unknown write outcomes stay locked; stale releases need a fresh read and explicit
+  confirmation. Empty/error states never substitute local seed data or fabricated totals.
+- Legacy `/api/catalog` and development identity headers are restricted to explicitly
+  unauthenticated localhost preview. A remote host cannot fall back to that mode.
+
+Browser fixtures prove navigation and contract handling, not AWS acceptance. M5 must
+deploy the reviewed image, then M3 must verify the live PKCE/identity/API/logout flow
+and business scenarios with valid accounts and actual Spec/Form/Label/Compliance data.
+
+The unified workspace image is published from source
+`cc990e22f46e8c083b8764a5ca0e8f913d9ebe16`:
+
+```text
+ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:0cdc79235d96e0992d8aacbf048d08c9ce3d73ee68b4f5eba9179da35ae7aa29
+```
+
+Helm and all four protected-release digest checks pin this image. It still uses
+port **8080**, static **GET `/healthz` -> 200 `ok`**, root SPA, same-origin API,
+and the existing public `spectrace-web` PKCE client. See the
+[22 October delivery and acceptance boundary](../docs/swe5001/evidence/G1-M3-unified-frontend-20261022.md)
+and [verified image receipt](../docs/swe5001/evidence/G1-M3-frontend-release-20261022.json).
+
+## Previous verified image — 18 October 2026
+
+This earlier image includes accepted main PR #74 and the optional-font
 loading fix. Image source: `ff58f59b366fed4368d183d55cf8bc93d8ea2580`.
 
 ```text
@@ -14,9 +51,7 @@ ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:51cec191cc08899
 ```
 
 The matching SHA tag is `ff58f59b366fed4368d183d55cf8bc93d8ea2580`.
-Both the Helm values and all four protected-release digest guards now use this
-verified image. Port **8080**, static health **GET `/healthz` -> 200 `ok`**,
-root SPA, same-origin API and PKCE client configuration are unchanged.
+This historical image has been superseded by the unified workspace image above.
 
 See the [18 October delivery and remaining acceptance steps](../docs/swe5001/evidence/G1-M3-frontend-refresh-20261018.md)
 and its [machine-readable receipt](../docs/swe5001/evidence/G1-M3-frontend-release-20261018.json).

@@ -72,8 +72,8 @@ test('all routes, material details and honest unavailable states', async ({
     ['/materials', 'Materials & specs'],
     ['/formulas', 'Formula versions'],
     ['/labels', 'Labels'],
-    ['/impact', 'Change impact'],
-    ['/reviews', 'Review workspace'],
+    ['/impact', 'Sign in required'],
+    ['/reviews', 'Sign in required'],
   ]) {
     await page.goto(route)
     await expect(

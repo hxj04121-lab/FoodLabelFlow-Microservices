@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/compliance-kind-ci.yml'
       - '.github/workflows/service-cicd-reusable.yml'
+      - 'scripts/ci/wait_for_sonar.py'
+      - 'tests/test_sonar_ci_gate.py'
       - 'contracts/**'
       - 'deploy/helm/**'
       - 'deploy/kind/**'
@@ -22,6 +24,7 @@ jobs:
     # own contents:read permissions and never inherit a write-capable token.
     permissions:
       contents: read
+      actions: read
       packages: write
       id-token: write
     uses: ./.github/workflows/service-cicd-reusable.yml

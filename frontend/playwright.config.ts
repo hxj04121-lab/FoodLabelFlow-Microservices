@@ -11,5 +11,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   reporter: 'list',
-  webServer: externalBaseUrl ? undefined : { command: `npm run dev -- --host 127.0.0.1 --port ${localPort} --strictPort`, url: `http://127.0.0.1:${localPort}`, reuseExistingServer: !process.env.PLAYWRIGHT_PORT },
+  // Fixture runs must not reuse a developer's authenticated Vite session.
+  webServer: externalBaseUrl ? undefined : { command: `npm run dev -- --host 127.0.0.1 --port ${localPort} --strictPort`, url: `http://127.0.0.1:${localPort}`, reuseExistingServer: false,
+    env: { VITE_AUTH_ENABLED: 'false', VITE_SITE_BASE: '/' } },
 })

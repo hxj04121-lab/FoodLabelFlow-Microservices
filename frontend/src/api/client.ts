@@ -1,3 +1,5 @@
+import { requireLocalCatalog } from './catalog'
+
 export type HealthResponse = {
   status: string
   database: string
@@ -37,6 +39,7 @@ export class CatalogRequestError extends Error {
   constructor(public code: string, message: string, public status: number) { super(message) }
 }
 async function catalogRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  requireLocalCatalog()
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15000)
   try {
@@ -52,6 +55,7 @@ async function catalogRequest<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function getHealth(): Promise<HealthResponse> {
+  requireLocalCatalog()
   const response = await fetch('/api/health')
   if (!response.ok) {
     throw new Error(`Health request failed with status ${response.status}`)

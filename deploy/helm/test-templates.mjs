@@ -215,7 +215,7 @@ check('Frontend renders the pinned static image with non-root health checks and 
   const pod=dep.spec.template.spec;
   const container=pod.containers[0];
   assert.equal(dep.metadata.name,'frontend-frontend');
-  assert.equal(container.image,'ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:51cec191cc08899cbbe0bb8d87bbceb02562351709312f64c9254c80ccbc5492');
+  assert.equal(container.image,'ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:0cdc79235d96e0992d8aacbf048d08c9ce3d73ee68b4f5eba9179da35ae7aa29');
   assert.equal(container.ports[0].containerPort,8080);
   assert.equal(container.readinessProbe.httpGet.path,'/healthz');
   assert.equal(container.livenessProbe.httpGet.path,'/healthz');
@@ -238,7 +238,7 @@ check('Frontend renders the pinned static image with non-root health checks and 
   assert(!docs.some(d=>d.kind==='Ingress'));
 });
 check('Frontend deployment pins the published release receipt at every digest guard',()=>{
-  const release=JSON.parse(readFileSync(resolve(repo,'docs/swe5001/evidence/G1-M3-frontend-release-20261018.json'),'utf8'));
+  const release=JSON.parse(readFileSync(resolve(repo,'docs/swe5001/evidence/G1-M3-frontend-release-20261022.json'),'utf8'));
   const values=parse(readFileSync(resolve(root,'values/frontend.yaml'),'utf8'));
   const workflow=readFileSync(resolve(repo,'.github/workflows/deploy-frontend.yml'),'utf8');
   assert.equal(values.image.tag,release.sourceCommit);
@@ -398,7 +398,7 @@ check('Frontend deployment is a protected VPC release with an explicit, gated li
   const cutover=workflow.jobs.deploy.steps.find(step=>step.name==='Activate Frontend as HTTPS default and smoke-test public routes');
   const script=workflow.jobs.deploy.steps.map(step=>[step.name||'',step.run||''].join('\n')).join('\n');
   assert.match(script,/helm upgrade --install frontend/);
-  assert.match(script,/sha256:51cec191cc08899cbbe0bb8d87bbceb02562351709312f64c9254c80ccbc5492/);
+  assert.match(script,/sha256:0cdc79235d96e0992d8aacbf048d08c9ce3d73ee68b4f5eba9179da35ae7aa29/);
   assert.match(script,/--dry-run=server/);
   assert.match(script,/Target Groups to become Healthy/);
   assert.equal(cutover.if,'inputs.activate_frontend_default');

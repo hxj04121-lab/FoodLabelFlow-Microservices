@@ -10,7 +10,7 @@ for (const width of [1440, 900, 390]) {
       ['/', 'Overview', 'overview'], ['/products', 'Products', 'products'],
       ['/formulas', 'Formula versions', 'formulas'], ['/materials', 'Materials & specs', 'materials'],
       ['/suppliers', 'Suppliers', 'suppliers'], ['/labels', 'Labels', 'labels'],
-      ['/impact', 'Change impact', 'impact'], ['/reviews', 'Review workspace', 'reviews'],
+      ['/impact', 'Sign in required', 'impact'], ['/reviews', 'Sign in required', 'reviews'],
       ['/health', 'System status', 'health'],
     ]) {
       await page.goto(route)

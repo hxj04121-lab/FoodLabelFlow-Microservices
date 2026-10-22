@@ -1,0 +1,30 @@
+{
+  "verifiedAt": "2026-10-22T06:18:53.828904+00:00",
+  "sourceCommit": "cc990e22f46e8c083b8764a5ca0e8f913d9ebe16",
+  "image": "ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend:cc990e22f46e8c083b8764a5ca0e8f913d9ebe16",
+  "digestReference": "ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:0cdc79235d96e0992d8aacbf048d08c9ce3d73ee68b4f5eba9179da35ae7aa29",
+  "buildRun": 39733036986,
+  "buildJob": 119672224907,
+  "publishJob": 119672416248,
+  "anonymousRegistryPull": "PASS",
+  "tagMatchesDigest": true,
+  "savedImageConfigMatchesRegistry": true,
+  "os": "linux",
+  "architecture": "amd64",
+  "imageUser": "101",
+  "port": 8080,
+  "healthCheck": {
+    "path": "/healthz",
+    "expectedStatus": 200,
+    "scope": "Static nginx only; verified in CI"
+  },
+  "releaseMetadata": {
+    "commit": "cc990e22f46e8c083b8764a5ca0e8f913d9ebe16",
+    "gatewayOrigin": "/",
+    "authority": "https://staging.52zzx.top/auth/realms/spectrace",
+    "audience": "spectrace-api",
+    "callerPath": "/api/specifications/caller-claims",
+    "siteBase": "/"
+  },
+  "scope": "Image delivery and offline checks; no AWS deployment or live business acceptance."
+}

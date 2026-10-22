@@ -67,6 +67,8 @@ test('root SPA reload, PKCE callback and authenticated /api use the same browser
   await expect(page.getByRole('heading', { name: 'Sign in to your organisation', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Continue with Keycloak', exact: true })).toBeEnabled()
   await page.getByRole('button', { name: 'Continue with Keycloak', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Labels', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Overview', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Your organisation’s workspace', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Verify service identity', exact: true }).click()
   await expect(page.getByRole('status')).toContainText('Service identity verified: org-fixture')

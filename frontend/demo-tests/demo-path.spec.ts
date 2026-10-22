@@ -58,7 +58,7 @@ test('STCN-102 deployed public demo path: potential, explicit adoption, confirme
     return items
   }
   async function inspectFinding(page: Page, kind: string, findingId: string) {
-    await page.getByRole('button', { name: 'Impact inbox', exact: true }).click()
+    await page.getByRole('link', { name: 'Change impact', exact: true }).click()
     await page.getByLabel('Finding kind', { exact: true }).selectOption(kind)
     const listResult = () => page.waitForResponse(r => new URL(r.url()).pathname === '/api/compliance/impact-findings'
       && r.request().method() === 'GET', { timeout: 15000 })
@@ -137,7 +137,7 @@ test('STCN-102 deployed public demo path: potential, explicit adoption, confirme
       return Boolean(confirmed)
     }, { timeout: 60000, intervals: [2000] }).toBe(true)
     await inspectFinding(maker, 'CONFIRMED', confirmed.findingId)
-    await maker.getByRole('button', { name: 'Labels', exact: true }).click()
+    await maker.getByRole('link', { name: 'Labels', exact: true }).click()
     await maker.getByLabel('Product ID', { exact: true }).fill(product)
     await maker.getByLabel('Jurisdiction code', { exact: true }).fill(jurisdiction)
     const label = await action(maker, 'Create draft', '/api/labels/drafts', 201)
@@ -156,7 +156,7 @@ test('STCN-102 deployed public demo path: potential, explicit adoption, confirme
     const validated = await action(maker, 'Validate draft', `/api/labels/${label.labelVersionId}/validations`, 201)
     expect(validated.status).toBe('PASSED')
     await action(maker, 'Submit for review', `/api/labels/${label.labelVersionId}/submit`, 200)
-    await checker.getByRole('button', { name: 'Labels', exact: true }).click()
+    await checker.getByRole('link', { name: 'Labels', exact: true }).click()
     await checker.getByLabel('Label version ID', { exact: true }).fill(label.labelVersionId)
     await checker.getByRole('button', { name: 'Open label', exact: true }).click()
     await action(checker, 'Approve version', `/api/labels/${label.labelVersionId}/decisions`, 201)
