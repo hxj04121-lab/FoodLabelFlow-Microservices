@@ -315,6 +315,18 @@ jobs:
             done
             test "$healthy" = true
           done
+      - name: Print TargetGroupBinding and Load Balancer Controller diagnostics on failure (no Secret data)
+        if: failure()
+        run: |
+          set +e
+          echo '### Frontend TargetGroupBinding'
+          kubectl describe targetgroupbindings.elbv2.k8s.aws frontend-frontend --namespace frontend
+          echo '### Recent events in frontend'
+          kubectl get events --namespace frontend --sort-by=.lastTimestamp | tail -n 25
+          echo '### Load Balancer Controller'
+          kubectl get deployment aws-load-balancer-controller --namespace kube-system -o wide
+          kubectl logs deployment/aws-load-balancer-controller --namespace kube-system --since=30m --tail=400 \
+            | grep -i -E 'frontend|error|denied|targetgroupbinding' | tail -n 40
       - name: Record pre-cutover listener evidence
         if: always()
         run: |
