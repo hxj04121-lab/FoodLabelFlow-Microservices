@@ -28,7 +28,14 @@ Browser fixtures prove navigation and contract handling, not AWS acceptance. M5 
 deploy the reviewed image, then M3 must verify the live PKCE/identity/API/logout flow
 and business scenarios with valid accounts and actual Spec/Form/Label/Compliance data.
 
-The unified workspace image is published from source
+The current image adds the supplier specification editor (#147) and is published from source
+`9dc4dbd53e543156899971276a206aa7fe4fb4f4`:
+
+```text
+ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:adeecae3e33265c6171c09f2e8d551ad21d26a62b31beae299297c6c653f6c77
+```
+
+It replaces the unified workspace image published from source
 `cc990e22f46e8c083b8764a5ca0e8f913d9ebe16`:
 
 ```text
