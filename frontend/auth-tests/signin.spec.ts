@@ -376,6 +376,68 @@ test('unified Catalog supplier and non-maintainer roles cannot issue formula wri
   expect(requests.every(r => r.method === 'GET')).toBe(true)
 })
 
+async function newSpecificationVersion(page: Page) {
+  await login(page)
+  await page.getByRole('link', { name: 'Materials & specs', exact: true }).click()
+  await page.getByRole('button', { name: 'View specifications Cocoa base', exact: true }).click()
+  await page.getByRole('button', { name: 'Create new version', exact: true }).click()
+  const editor = page.getByRole('region', { name: 'Specification editor' })
+  await expect(editor.getByLabel('Supplier wording 1', { exact: true })).toHaveValue('cocoa')
+  await expect(editor.getByLabel('Provenance ID', { exact: true })).toHaveValue('prov-one')
+  await editor.getByLabel('Effective date', { exact: true }).fill('2026-11-01')
+  await editor.getByRole('button', { name: 'Add component', exact: true }).click()
+  await editor.getByLabel('Ingredient 2', { exact: true }).selectOption('ingredient-milk')
+  await editor.getByLabel('Supplier wording 2', { exact: true }).fill('Milk powder')
+  await editor.getByRole('button', { name: 'Save specification draft', exact: true }).click()
+  return editor
+}
+
+test('unified Catalog lets the owning supplier create and release a specification version', async ({ page }) => {
+  actorType = 'SUPPLIER'; actorRoles = ['ADMIN_DATA_MAINTENANCE']
+  const requests = await gatewayCatalogFixture(page, () => sentToken, 'own-material')
+  const editor = await newSpecificationVersion(page)
+  await expect(editor.getByRole('status')).toContainText('Draft version 2 saved')
+  await expect(editor).toContainText('Milk Powder · MATCHED')
+  await editor.getByRole('button', { name: 'Release specification', exact: true }).click()
+  await editor.getByRole('button', { name: 'Confirm release', exact: true }).click()
+  await expect(editor.getByRole('status')).toContainText('Specification version 2 released')
+  await capture(page, 'test-results/ui-polish/auth-specification-editor-1440.png')
+  expect(requests.filter(r => r.method === 'POST').map(r => r.path)).toEqual(['/api/specifications/versions', '/api/specifications/versions/spec-two/release'])
+})
+
+for (const scenario of ['spec-uncertain', 'wrong-spec-release'] as const) {
+  test(`unified Catalog ${scenario} never confirms or repeats a specification write`, async ({ page }) => {
+    actorType = 'SUPPLIER'; actorRoles = ['ADMIN_DATA_MAINTENANCE']
+    const requests = await gatewayCatalogFixture(page, () => sentToken, scenario)
+    const editor = await newSpecificationVersion(page)
+    if (scenario === 'wrong-spec-release') {
+      await editor.getByRole('button', { name: 'Release specification', exact: true }).click()
+      await editor.getByRole('button', { name: 'Confirm release', exact: true }).click()
+    }
+    await expect(editor.getByRole('alert')).toContainText('unconfirmed')
+    await expect(editor.getByText('Do not repeat it.')).toBeVisible()
+    await expect(editor.getByRole('button', { name: scenario === 'spec-uncertain' ? 'Save specification draft' : 'Release specification', exact: true })).toBeDisabled()
+    expect(requests.filter(r => r.method === 'POST')).toHaveLength(scenario === 'spec-uncertain' ? 1 : 2)
+  })
+}
+
+test('unified Catalog hides specification writes from manufacturers and non-owning suppliers', async ({ page }) => {
+  actorRoles = ['ADMIN_DATA_MAINTENANCE']
+  const requests = await gatewayCatalogFixture(page, () => sentToken)
+  await login(page)
+  await page.getByRole('link', { name: 'Materials & specs', exact: true }).click()
+  await page.getByRole('button', { name: 'View specifications Cocoa base', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Released specifications' })).toContainText('Cocoa')
+  await expect(page.getByRole('button', { name: 'Create new version', exact: true })).toHaveCount(0)
+  actorType = 'SUPPLIER'
+  await login(page)
+  await page.getByRole('link', { name: 'Materials & specs', exact: true }).click()
+  await page.getByRole('button', { name: 'View specifications Cocoa base', exact: true }).click()
+  await expect(page.getByText('Only the owning supplier with ADMIN_DATA_MAINTENANCE can create or release versions of this material.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Create new version', exact: true })).toHaveCount(0)
+  expect(requests.every(r => r.method === 'GET')).toBe(true)
+})
+
 test('unified Catalog refuses repeated cursors instead of displaying a partial next page', async ({ page }) => {
   await gatewayCatalogFixture(page, () => sentToken, 'repeat-cursor')
   await login(page)

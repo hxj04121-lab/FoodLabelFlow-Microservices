@@ -2,7 +2,7 @@ import { expect, type Page } from '@playwright/test'
 
 // Explicit HTTP fixtures. These are not staging resources or acceptance evidence.
 export async function gatewayCatalogFixture(page: Page, token: () => string,
-  scenario: 'ok' | 'foreign' | 'unauthorized' | 'conflict' | 'uncertain' | 'wrong-draft' | 'wrong-release' | 'wrong-current' | 'long-subject' | 'repeat-cursor' | 'empty-specs' = 'ok') {
+  scenario: 'ok' | 'foreign' | 'unauthorized' | 'conflict' | 'uncertain' | 'wrong-draft' | 'wrong-release' | 'wrong-current' | 'long-subject' | 'repeat-cursor' | 'empty-specs' | 'own-material' | 'spec-uncertain' | 'wrong-spec-release' = 'ok') {
   const requests: Array<{ method: string; path: string; body: unknown; correlation: string }> = []
   const product = { productId: 'product-one', organisationId: 'org-one', productDescription: 'North cocoa',
     brandOwner: 'North', normalizedCategory: 'Cocoa', currentFormulaVersion: { id: 'formula-one', versionNumber: 1 } }
@@ -15,6 +15,11 @@ export async function gatewayCatalogFixture(page: Page, token: () => string,
     releasedBySubject: 'old-maker', releasedAt: '2026-10-01T00:00:00Z', provenanceId: 'prov-one', items: [item] }
   let draft: (Omit<typeof original, 'releasedAt' | 'releasedBySubject'> & { releasedAt: string | null; releasedBySubject: string | null }) | null = null
   let conflict = scenario === 'conflict'
+  const supplierWrites = ['own-material', 'spec-uncertain', 'wrong-spec-release'].includes(scenario)
+  const releasedSpec = { specificationVersionId: 'spec-one', organisationId: supplierWrites ? 'org-one' : 'supplier-org', materialId: 'material-one',
+    versionNumber: 1, lifecycleStatus: 'RELEASED', effectiveDate: '2020-01-01', releasedAt: '2026-10-01T00:00:00Z', createdBySubject: 'supplier-maker', provenanceId: 'prov-one',
+    components: [{ specComponentId: 'component-one', sequenceNo: 1, ingredientId: 'ingredient-one', ingredientName: 'Cocoa', rawPhrase: 'cocoa', matchRule: 'exact', matchStatus: 'MATCHED' }] }
+  let specDraft: Record<string, unknown> | null = null
   const cors = { 'Access-Control-Allow-Origin': 'http://127.0.0.1:5191',
     'Access-Control-Allow-Headers': 'authorization,content-type,x-correlation-id', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' }
   await page.route(/http:\/\/127\.0\.0\.1:8191\/api\/(formulations|specifications)\/(?!caller-claims)/, async route => {
@@ -52,10 +57,23 @@ export async function gatewayCatalogFixture(page: Page, token: () => string,
     else if (path === '/api/formulations/formula-versions/formula-one') await json(original)
     else if (path === '/api/formulations/formula-versions/formula-two' && draft) await json(draft)
     else if (path === '/api/specifications/suppliers') await list([{ supplierId: 'supplier-one', organisationId: 'supplier-org', supplierCode: 'SUP-1', supplierName: 'Beta supplier' }])
-    else if (path === '/api/specifications/materials') await list([{ materialId: 'material-one', organisationId: 'supplier-org', supplierId: 'supplier-one', materialCode: 'MAT-1', materialName: 'Cocoa base', description: 'Cocoa', provenanceId: 'prov-one' }])
-    else if (path === '/api/specifications/versions') await list([{ specificationVersionId: 'spec-one', organisationId: 'supplier-org', materialId: 'material-one',
-      versionNumber: 1, lifecycleStatus: 'RELEASED', effectiveDate: '2020-01-01', releasedAt: '2026-10-01T00:00:00Z', createdBySubject: 'supplier-maker', provenanceId: 'prov-one',
-      components: [{ specComponentId: 'component-one', sequenceNo: 1, ingredientId: 'ingredient-one', ingredientName: 'Cocoa', rawPhrase: 'cocoa', matchRule: 'exact', matchStatus: 'MATCHED' }] }])
+    else if (path === '/api/specifications/materials') await list([{ materialId: 'material-one', organisationId: supplierWrites ? 'org-one' : 'supplier-org', supplierId: 'supplier-one', materialCode: 'MAT-1', materialName: 'Cocoa base', description: 'Cocoa', provenanceId: 'prov-one' }])
+    else if (path === '/api/specifications/versions' && method === 'GET') await list([releasedSpec])
+    else if (path === '/api/specifications/ingredients') await list([{ ingredientId: 'ingredient-one', canonicalName: 'Cocoa', ingredientKind: 'CANONICAL' },
+      { ingredientId: 'ingredient-milk', canonicalName: 'Milk Powder', ingredientKind: 'CANONICAL' }])
+    else if (path === '/api/specifications/versions' && method === 'POST') {
+      if (scenario === 'spec-uncertain') { await route.abort(); return }
+      expect(body).toEqual({ materialId: 'material-one', effectiveDate: '2026-11-01', provenanceId: 'prov-one', components: [
+        { ingredientId: 'ingredient-one', rawPhrase: 'cocoa', matchRule: 'Supplier statement' },
+        { ingredientId: 'ingredient-milk', rawPhrase: 'Milk powder', matchRule: 'Supplier statement' }] })
+      specDraft = { ...releasedSpec, specificationVersionId: 'spec-two', versionNumber: 2, lifecycleStatus: 'DRAFT', effectiveDate: '2026-11-01', releasedAt: null,
+        createdBySubject: 'test-user', components: [releasedSpec.components[0], { specComponentId: 'component-two', sequenceNo: 2, ingredientId: 'ingredient-milk',
+          ingredientName: 'Milk Powder', rawPhrase: 'Milk powder', matchRule: 'Supplier statement', matchStatus: 'MATCHED' }] }
+      await json(specDraft, 201)
+    } else if (path === '/api/specifications/versions/spec-two/release' && specDraft) {
+      const released = { ...specDraft, lifecycleStatus: 'RELEASED', releasedAt: '2026-10-22T00:00:00Z' }
+      await json(scenario === 'wrong-spec-release' ? { ...released, versionNumber: 3 } : released)
+    }
     else await json({ code: 'FIXTURE_ROUTE_NOT_FOUND' }, 404)
   })
   return requests

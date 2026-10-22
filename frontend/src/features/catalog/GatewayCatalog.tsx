@@ -3,10 +3,11 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/catalog-shared'
 import { publicApiGet, type Identity } from '@/auth/session'
-import { canReadProducts, canWriteFormulas, catalogPage, readFormula, readMaterial, readProduct, readSpecification, readSupplier, readTrace,
+import { canReadProducts, canWriteFormulas, canWriteSpecifications, catalogPage, readFormula, readMaterial, readProduct, readSpecification, readSupplier, readTrace,
   type CatalogPage, type FormulaRecord, type FormulaTrace, type MaterialRecord, type ProductRecord } from './gatewayCatalogApi'
 import { useCatalogPage, useCatalogRead } from './useCatalogRead'
 import { GatewayFormulaEditor } from './GatewayFormulaEditor'
+import { GatewaySpecificationEditor } from './GatewaySpecificationEditor'
 
 function ReadState({ busy, error, retry }: { busy: boolean; error: string; retry: () => void }) {
   return <>{busy && <p role="status">Loading catalog information…</p>}{error && <div className="error-notice" role="alert"><p>{error}</p><Button variant="outline" onClick={retry}>Retry</Button></div>}</>
@@ -129,7 +130,14 @@ export function GatewayMaterials({ identity }: { identity: Identity }) {
 }
 function MaterialSpecifications({ material, identity, close }: { material: MaterialRecord; identity: Identity; close: () => void }) {
   const listing = useCatalogPage(identity, `/api/specifications/versions?materialId=${encodeURIComponent(material.materialId)}&status=RELEASED`, v => readSpecification(v, material.materialId), s => s.specificationVersionId)
-  return <section className="panel" role="region" aria-label="Released specifications"><div className="section-head"><h2>{material.materialName} · Released specifications</h2><Button variant="outline" onClick={close}>Close specifications</Button></div>
+  const [editing, setEditing] = useState(false)
+  const writable = canWriteSpecifications(identity, material)
+  const latest = listing.page?.items.reduce<typeof listing.page.items[number] | undefined>((best, s) => !best || s.versionNumber > best.versionNumber ? s : best, undefined)
+  if (editing) return <GatewaySpecificationEditor identity={identity} material={material} latest={latest} close={() => { setEditing(false); listing.load() }} />
+  return <section className="panel" role="region" aria-label="Released specifications"><div className="section-head"><h2>{material.materialName} · Released specifications</h2><div className="formula-actions">
+    {writable && <Button disabled={listing.busy || !listing.page} onClick={() => setEditing(true)}>Create new version</Button>}
+    <Button variant="outline" onClick={close}>Close specifications</Button></div></div>
+    {!writable && identity.organisationType === 'SUPPLIER' && <p>Only the owning supplier with ADMIN_DATA_MAINTENANCE can create or release versions of this material.</p>}
     <ReadState {...listing} retry={() => listing.load()} />
     {listing.page && <>{!listing.page.items.length && <p>No released versions were returned.</p>}{listing.page.items.map(s => <article className="gateway-version" key={s.specificationVersionId}>
       <h3>Version {s.versionNumber} · {s.lifecycleStatus}</h3><code>{s.specificationVersionId}</code><p>Effective {s.effectiveDate} · Provenance {s.provenanceId}</p>
