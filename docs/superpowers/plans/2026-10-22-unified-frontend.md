@@ -43,7 +43,7 @@ specification.v1.yaml, formulation.v1.yaml and label-workflow-v1.yaml.
 - [x] Implement validated native Catalog reads and explicit formula create/release/history.
 - [x] Update existing browser navigation selectors and run auth, root/Pages, Catalog,
       type/build and relevant configuration checks. Inspect desktop/mobile results.
-- [ ] Fresh review, resolve actionable findings, update staging handoff, commit/push XFY
+- [x] Fresh review, resolve actionable findings, update staging handoff, commit/push XFY
       and create a reviewable PR. Record CI/image publication separately from deployment.
 
 ## Review focus

@@ -28,6 +28,19 @@ Browser fixtures prove navigation and contract handling, not AWS acceptance. M5 
 deploy the reviewed image, then M3 must verify the live PKCE/identity/API/logout flow
 and business scenarios with valid accounts and actual Spec/Form/Label/Compliance data.
 
+The unified workspace image is published from source
+`cc990e22f46e8c083b8764a5ca0e8f913d9ebe16`:
+
+```text
+ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:0cdc79235d96e0992d8aacbf048d08c9ce3d73ee68b4f5eba9179da35ae7aa29
+```
+
+Helm and all four protected-release digest checks pin this image. It still uses
+port **8080**, static **GET `/healthz` -> 200 `ok`**, root SPA, same-origin API,
+and the existing public `spectrace-web` PKCE client. See the
+[22 October delivery and acceptance boundary](../docs/swe5001/evidence/G1-M3-unified-frontend-20261022.md)
+and [verified image receipt](../docs/swe5001/evidence/G1-M3-frontend-release-20261022.json).
+
 ## Previous verified image — 18 October 2026
 
 This earlier image includes accepted main PR #74 and the optional-font
@@ -38,9 +51,7 @@ ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:51cec191cc08899
 ```
 
 The matching SHA tag is `ff58f59b366fed4368d183d55cf8bc93d8ea2580`.
-Both the Helm values and all four protected-release digest guards now use this
-verified image. Port **8080**, static health **GET `/healthz` -> 200 `ok`**,
-root SPA, same-origin API and PKCE client configuration are unchanged.
+This historical image has been superseded by the unified workspace image above.
 
 See the [18 October delivery and remaining acceptance steps](../docs/swe5001/evidence/G1-M3-frontend-refresh-20261018.md)
 and its [machine-readable receipt](../docs/swe5001/evidence/G1-M3-frontend-release-20261018.json).
