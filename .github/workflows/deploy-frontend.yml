@@ -304,8 +304,10 @@ jobs:
               aws elbv2 describe-target-health --target-group-arn "$tg" > "$RUNNER_TEMP/$name-target-health.json"
               if python3 - "$RUNNER_TEMP/$name-target-health.json" "$name" <<'PY'
           import json, runpy, sys
-          runpy.run_path('platform/frontend/verify-alb.py')['verify_healthy_targets'](
-              json.load(open(sys.argv[1])), sys.argv[2])
+          checks=runpy.run_path('platform/frontend/verify-alb.py')
+          # Frontend is not attached to the listener until cutover, so its targets cannot be health-checked yet.
+          check=checks['verify_registered_targets'] if sys.argv[2]=='frontend' else checks['verify_healthy_targets']
+          check(json.load(open(sys.argv[1])), sys.argv[2])
           PY
               then healthy=true; break; fi
               sleep 5
@@ -401,6 +403,18 @@ jobs:
           checks['verify_rules_unchanged'](json.load(open(sys.argv[1])),json.load(open(sys.argv[2])))
           checks['verify_default_forward'](json.load(open(sys.argv[3])),sys.argv[4])
           PY
+          # Now attached, the Frontend targets need two passing ALB checks before traffic is served; wait up to 5m.
+          frontend_healthy=false
+          for _ in $(seq 1 60); do
+            aws elbv2 describe-target-health --target-group-arn "$FRONTEND_TARGET_GROUP_ARN" > "$evidence/frontend-target-health-cutover.json"
+            if python3 - "$evidence/frontend-target-health-cutover.json" <<'PY'
+          import json, runpy, sys
+          runpy.run_path('platform/frontend/verify-alb.py')['verify_healthy_targets'](json.load(open(sys.argv[1])), 'frontend')
+          PY
+            then frontend_healthy=true; break; fi
+            sleep 5
+          done
+          test "$frontend_healthy" = true
           root_status=$(curl --silent --show-error --max-time 20 -o "$evidence/public-index.html" -D "$evidence/public-index.headers" -w '%{http_code}' https://staging.52zzx.top/)
           test "$root_status" = 200
           deep_status=$(curl --silent --show-error --max-time 20 -o "$evidence/public-deep-route.html" -w '%{http_code}' https://staging.52zzx.top/labels)

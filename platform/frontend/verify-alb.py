@@ -144,6 +144,19 @@ def verify_healthy_targets(document, description):
         raise ValueError(f"{description} must have at least one target and every registered target Healthy")
 
 
+def verify_registered_targets(document, description):
+    """Before cutover the Frontend group is not used by any listener, so ALB reports Target.NotInUse."""
+    targets = document.get("TargetHealthDescriptions", [])
+    def ready(row):
+        health = row.get("TargetHealth", {})
+        return health.get("State") == "healthy" or (
+            health.get("State") == "unused" and health.get("Reason") == "Target.NotInUse"
+        )
+    if not targets or not all(ready(row) for row in targets):
+        states = ", ".join(f"{row.get('TargetHealth', {}).get('State')}/{row.get('TargetHealth', {}).get('Reason')}" for row in targets)
+        raise ValueError(f"{description} must have registered targets that are Healthy or not yet in use (got: {states or 'none'})")
+
+
 def main():
     if len(sys.argv) != 10:
         raise SystemExit(
