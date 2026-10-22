@@ -13,6 +13,9 @@ env:
   - name: RABBITMQ_PASSWORD
     valueFrom:
       secretKeyRef: {name: specification-rabbitmq-user-credentials, key: password}
+  # Replays seeded releases as events so Compliance builds its projections (STCN-115).
+  - name: SPECTRACE_SEED_REPLAY_ENABLED
+    value: "true"
 envFrom:
   - secretRef:
       name: specification-runtime
