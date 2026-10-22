@@ -410,6 +410,7 @@ jobs:
           if ! terraform plan -input=false -no-color -var-file="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfvars.json" \
             -var=enable_eks=true -var=enable_eks_addons=true -var=manage_vpc_cni=false \
             -var=manage_load_balancer_controller=false \
+            -var=enable_frontend_target_group=true \
             -var='existing_namespaces=["gateway","keycloak","keycloak-system","rabbitmq-system"]' \
             -var=general_desired_size=3 -var=enable_compliance_node_group=true -var=compliance_desired_size=1 \
             -out="$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/staging.tfplan" > "$RUNNER_TEMP/$M5_TF_TEMP_SUFFIX/terraform-plan.log" 2>&1; then

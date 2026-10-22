@@ -88,6 +88,17 @@ variable "enable_alb" {
   default     = true
 }
 
+variable "enable_frontend_target_group" {
+  description = "Create the Frontend target group on the existing public staging ALB."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.enable_frontend_target_group || var.environment == "staging"
+    error_message = "The Frontend target group is only defined for staging."
+  }
+}
+
 variable "enable_eks_addons" {
   description = "Create only the confirmed-missing EBS CSI add-on, encrypted gp3 StorageClass, and six workload namespaces."
   type        = bool
