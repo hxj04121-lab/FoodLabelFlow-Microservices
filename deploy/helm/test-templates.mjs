@@ -238,7 +238,7 @@ check('Frontend renders the pinned static image with non-root health checks and 
   assert(!docs.some(d=>d.kind==='Ingress'));
 });
 check('Frontend deployment pins the published release receipt at every digest guard',()=>{
-  const release=JSON.parse(readFileSync(resolve(repo,'docs/swe5001/evidence/G1-M3-frontend-release-20261022.json'),'utf8'));
+  const release=JSON.parse(readFileSync(resolve(repo,'docs/swe5001/evidence/G1-M1-frontend-release-20261022-spec-editor.json'),'utf8'));
   const values=parse(readFileSync(resolve(root,'values/frontend.yaml'),'utf8'));
   const workflow=readFileSync(resolve(repo,'.github/workflows/deploy-frontend.yml'),'utf8');
   assert.equal(values.image.tag,release.sourceCommit);

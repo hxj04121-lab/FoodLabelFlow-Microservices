@@ -1,0 +1,13 @@
+{
+  "verifiedAt": "2026-10-22T08:45:00+00:00",
+  "sourceCommit": "9dc4dbd53e543156899971276a206aa7fe4fb4f4",
+  "image": "ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend:9dc4dbd53e543156899971276a206aa7fe4fb4f4",
+  "digestReference": "ghcr.io/hxj04121-lab/foodlabelflow-microservices/frontend@sha256:adeecae3e33265c6171c09f2e8d551ad21d26a62b31beae299297c6c653f6c77",
+  "buildRun": 39749309841,
+  "buildJob": 119725561503,
+  "publishJob": 119725811336,
+  "anonymousRegistryPull": "PASS",
+  "tagMatchesDigest": true,
+  "change": "Supplier specification editor (#147) on top of the unified workspace image (#145).",
+  "scope": "Image delivery and offline checks; no AWS deployment or live business acceptance."
+}
